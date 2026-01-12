@@ -870,11 +870,140 @@
 
         const PROC_KEYWORDS = /(cysto|stent|turbt|litho|laser|surgery|bx|biopsy|procedure|or|scheduled|urology|pcn|urs|nephrectomy|robotic)/i;
         const STATUS_COLORS = {
-            'To-Do': { bg: 'bg-slate-100', text: 'text-slate-600', badge: '⬜' },
-            'In-Progress': { bg: 'bg-blue-100', text: 'text-blue-700', badge: '🔵' },
-            'Completed': { bg: 'bg-emerald-100', text: 'text-emerald-700', badge: '✅' },
-            'Post-Op': { bg: 'bg-amber-100', text: 'text-amber-700', badge: '⭐' }
+            'To-Do': { bg: 'bg-gray-50 border border-gray-300', text: 'text-gray-700', badge: '⬜', bgHeavy: 'bg-gray-200' },
+            'In-Progress': { bg: 'bg-blue-50 border border-blue-300', text: 'text-blue-700', badge: '🔵', bgHeavy: 'bg-blue-200' },
+            'Completed': { bg: 'bg-emerald-50 border border-emerald-300', text: 'text-emerald-700', badge: '✅', bgHeavy: 'bg-emerald-200' },
+            'Post-Op': { bg: 'bg-amber-50 border border-amber-300', text: 'text-amber-700', badge: '⭐', bgHeavy: 'bg-amber-200' }
         };
+
+        // PRIORITY/ACUITY COLOR SCHEME (Enhanced)
+        const PRIORITY_COLORS = {
+            stat: { bg: 'bg-red-600', text: 'text-white', badge: '🔴 STAT', border: 'border-red-800', light: 'bg-red-100 border border-red-300 text-red-900' },
+            high: { bg: 'bg-orange-600', text: 'text-white', badge: '⚠️ HIGH', border: 'border-orange-800', light: 'bg-orange-100 border border-orange-300 text-orange-900' },
+            routine: { bg: 'bg-slate-400', text: 'text-white', badge: '📋 ROUTINE', border: 'border-slate-600', light: 'bg-slate-100 border border-slate-300 text-slate-900' }
+        };
+
+        // CSV IMPORT ENGINE
+        const CSVImporter = (() => {
+            // 3-Pass Parser as per architecture
+            return {
+                parse3Pass: (csvText) => {
+                    const lines = csvText.trim().split('\n').map(l => l.trim()).filter(l => l);
+                    if (lines.length < 5) throw new Error('Invalid CSV: insufficient rows');
+
+                    const result = { onCall: [], patients: [], hospitals: [] };
+
+                    try {
+                        // Pass 1: Parse on-call schedule (rows 1-3)
+                        const onCallData = [];
+                        for (let i = 0; i < Math.min(3, lines.length); i++) {
+                            const parts = lines[i].split(',').map(p => p.trim());
+                            if (parts[0] === 'Physician On-Call:' && parts.length >= 4) {
+                                onCallData.push({
+                                    date: parts[1],
+                                    provider: parts[2],
+                                    hospitals: parts[3]
+                                });
+                            }
+                        }
+                        result.onCall = onCallData;
+
+                        // Pass 2: Find header row (row 4) and map columns
+                        let headerIdx = 3;
+                        while (headerIdx < lines.length && !lines[headerIdx].includes('Date of Service')) headerIdx++;
+                        if (headerIdx >= lines.length) throw new Error('Header row not found');
+
+                        const headerRow = lines[headerIdx].split(',').map(h => h.trim());
+                        const colMap = {
+                            hospital: headerRow.indexOf('Hospital/Room #'),
+                            room: headerRow.findIndex(h => h.includes('Room') || h === 'Hospital/Room #'),
+                            dateService: headerRow.indexOf('Date of Service'),
+                            name: headerRow.findIndex(h => h.includes('Name')),
+                            dob: headerRow.findIndex(h => h.includes('DOB')),
+                            mrn: headerRow.findIndex(h => h.includes('MRN')),
+                            findings: headerRow.findIndex(h => h.includes('Dx') || h.includes('Findings')),
+                            plan: headerRow.findIndex(h => h.includes('Plan')),
+                            md: headerRow.findIndex(h => h.includes('Supervising')),
+                            pending: headerRow.findIndex(h => h.includes('Pending')),
+                            followUp: headerRow.findIndex(h => h.includes('Follow-Up'))
+                        };
+
+                        // Pass 3: Parse patient rows (rows 5+) with hospital detection
+                        let currentHospital = '';
+                        for (let i = headerIdx + 1; i < lines.length; i++) {
+                            const parts = lines[i].split(',').map(p => p.trim());
+                            
+                            // Detect hospital section header (first col filled, rest empty)
+                            const isHospitalHeader = parts[0] && parts.slice(1).every(p => !p);
+                            if (isHospitalHeader) {
+                                currentHospital = parts[0];
+                                if (!result.hospitals.includes(currentHospital)) {
+                                    result.hospitals.push(currentHospital);
+                                }
+                                continue;
+                            }
+
+                            // Skip empty rows or incomplete rows
+                            if (!parts[0] || parts.every(p => !p)) continue;
+
+                            // Parse patient record
+                            const patient = {
+                                id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                                date: parts[colMap.dateService] || new Date().toISOString().split('T')[0],
+                                room: parts[colMap.room] || parts[0],
+                                name: parts[colMap.name] || '',
+                                dob: parts[colMap.dob] || '',
+                                mrn: parts[colMap.mrn] || '',
+                                hospital: currentHospital || 'Unassigned',
+                                findingsText: parts[colMap.findings] || '',
+                                plan: parts[colMap.plan] || '',
+                                supervisingMd: parts[colMap.md] || '',
+                                pending: parts[colMap.pending] || '',
+                                followUp: parts[colMap.followUp] || '',
+                                procedureStatus: 'To-Do',
+                                priority: false,
+                                archived: false,
+                                cptPrimary: '',
+                                icdPrimary: '',
+                                chargeCodesSecondary: '',
+                                findingsCodes: [],
+                                findingsValues: {}
+                            };
+
+                            // Auto-detect priority/STAT (keywords in findings/plan)
+                            const statKeywords = /STAT|EMERGENCY|URGENT|CRITICAL|STAT|FOLLOW REMOTELY|high risk/gi;
+                            if (statKeywords.test(patient.findingsText + ' ' + patient.plan)) {
+                                patient.priority = true;
+                            }
+
+                            result.patients.push(patient);
+                        }
+
+                        return result;
+                    } catch (e) {
+                        console.error('CSV parse error:', e);
+                        throw e;
+                    }
+                },
+
+                handleFileUpload: (file) => {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            try {
+                                const csvText = e.target.result;
+                                const parsed = CSVImporter.parse3Pass(csvText);
+                                resolve(parsed);
+                            } catch (err) {
+                                reject(err);
+                            }
+                        };
+                        reader.onerror = () => reject(new Error('File read failed'));
+                        reader.readAsText(file);
+                    });
+                }
+            };
+        })();
 
         // US Federal Holidays
         const US_HOLIDAYS = {
@@ -1240,36 +1369,38 @@
                 const status = p.procedureStatus || 'To-Do';
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS['To-Do'];
                 const findingsDisplay = p.findingsCodes?.length ? p.findingsCodes.join(', ') : (p.findingsText || '-');
+                const priorityBadge = p.priority ? `<span class="inline-block ${PRIORITY_COLORS.stat.light} px-2 py-1.5 rounded font-bold text-[9px] mt-1">${PRIORITY_COLORS.stat.badge}</span>` : '';
+                
                 return `
-                <tr class="border-b border-slate-100 ${p.priority ? 'bg-red-100' : 'bg-white'} hover:bg-slate-50">
+                <tr class="border-b ${p.priority ? PRIORITY_COLORS.stat.light : 'bg-white border-slate-100'} hover:${statusObj.bgHeavy} transition-colors">
                     <td class="p-3"><input type="checkbox" onchange="window.togglePatientSelection('${p.id}')" ${selectedPatientIds.has(p.id)?'checked':''} class="w-5 h-5 rounded cursor-pointer"></td>
                     <td class="p-3">
-                        <div class="font-bold text-sm text-slate-900">${p.room}</div>
-                        ${p.priority ? '<div class="text-[10px] bg-red-600 text-white px-2 py-1 rounded mt-1 inline-block font-bold">🔴 STAT</div>' : ''}
+                        <div class="font-bold text-sm ${p.priority ? 'text-red-900' : 'text-slate-900'}">${p.room}</div>
+                        ${priorityBadge}
                     </td>
                     <td class="p-3">
                         <div class="text-sm font-bold text-slate-900">${p.name || 'Anon'}</div>
-                        <div class="text-xs text-slate-500 mt-0.5">${p.date}</div>
+                        <div class="text-xs ${p.priority ? 'text-red-600 font-semibold' : 'text-slate-500'} mt-0.5">${p.date}</div>
                     </td>
                     <td class="p-3">
-                        <div class="text-xs text-slate-600 line-clamp-2">${findingsDisplay}</div>
+                        <div class="text-xs text-slate-600 line-clamp-2 ${p.priority ? 'font-semibold' : ''}">${findingsDisplay}</div>
                     </td>
                     <td class="p-3">
                         <div class="text-xs font-bold text-slate-800 mb-1">${p.plan || '-'}</div>
                         ${isProc ? `<div class="flex items-center gap-2">
-                            <select onchange="window.updateStatusQuick('${p.id}', this.value)" class="text-[8px] rounded px-1.5 py-1 bg-white border border-slate-200 font-bold flex-1">
+                            <select onchange="window.updateStatusQuick('${p.id}', this.value)" class="text-[8px] rounded px-1.5 py-1 ${statusObj.bg} border font-bold flex-1">
                                 <option value="To-Do" ${status === 'To-Do' ? 'selected' : ''}>To-Do ⬜</option>
                                 <option value="In-Progress" ${status === 'In-Progress' ? 'selected' : ''}>In-Prog 🔵</option>
                                 <option value="Completed" ${status === 'Completed' ? 'selected' : ''}>Done ✅</option>
                                 <option value="Post-Op" ${status === 'Post-Op' ? 'selected' : ''}>Post-Op ⭐</option>
                             </select>
-                            <span class="text-xs font-bold ${statusObj.text} px-2 py-1 rounded whitespace-nowrap">${statusObj.badge}</span>
+                            <span class="inline-block ${statusObj.bg} ${statusObj.text} px-2 py-1 rounded whitespace-nowrap font-bold text-[9px]">${statusObj.badge}</span>
                         </div>` : ''}
                     </td>
                     <td class="p-3 flex gap-1 flex-col">
-                        <button onclick="window.openModal('${p.id}')" class="text-[9px] font-bold bg-blue-600 text-white px-2 py-1.5 rounded hover:bg-blue-700">Edit</button>
-                        <button onclick="window.toggleArchive('${p.id}', ${!p.archived})" class="text-[9px] font-bold bg-slate-600 text-white px-2 py-1.5 rounded hover:bg-slate-700">${p.archived ? 'Restore' : 'Archive'}</button>
-                        ${db ? `<button onclick="window.deletePatient('${p.id}')" class="text-[9px] font-bold bg-red-600 text-white px-2 py-1.5 rounded hover:bg-red-700">Delete</button>` : ''}
+                        <button onclick="window.openModal('${p.id}')" class="text-[9px] font-bold bg-blue-600 text-white px-2 py-1.5 rounded hover:bg-blue-700 transition-colors">Edit</button>
+                        <button onclick="window.toggleArchive('${p.id}', ${!p.archived})" class="text-[9px] font-bold bg-slate-600 text-white px-2 py-1.5 rounded hover:bg-slate-700 transition-colors">${p.archived ? 'Restore' : 'Archive'}</button>
+                        ${db ? `<button onclick="window.deletePatient('${p.id}')" class="text-[9px] font-bold bg-red-600 text-white px-2 py-1.5 rounded hover:bg-red-700 transition-colors">Delete</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -1399,6 +1530,56 @@
             } catch (err) { console.error("Settings update error:", err); }
         };
 
+        // CSV IMPORT HANDLER
+        window.handleCSVImport = async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            try {
+                showToast("⏳ Importing...");
+                const parsed = await CSVImporter.handleFileUpload(file);
+                
+                // Import on-call schedule
+                if (parsed.onCall.length > 0) {
+                    parsed.onCall.forEach(oc => {
+                        const idx = onCallSchedule.findIndex(s => s.date === oc.date);
+                        if (idx >= 0) {
+                            onCallSchedule[idx] = { ...onCallSchedule[idx], ...oc, id: onCallSchedule[idx].id };
+                        } else {
+                            onCallSchedule.push({ id: 'oc_' + Math.random().toString(36).substr(2, 9), ...oc });
+                        }
+                    });
+                }
+                
+                // Import patients
+                if (parsed.patients.length > 0) {
+                    parsed.patients.forEach(p => {
+                        const idx = patients.findIndex(existing => existing.mrn === p.mrn && existing.date === p.date);
+                        if (idx >= 0) {
+                            patients[idx] = { ...patients[idx], ...p };
+                        } else {
+                            patients.push(p);
+                        }
+                    });
+                }
+                
+                // Update hospitals in settings if new ones found
+                if (parsed.hospitals.length > 0) {
+                    const existingHospitals = (globalSettings.hospitals || '').split(',').map(h => h.trim()).filter(h => h);
+                    const allHospitals = [...new Set([...existingHospitals, ...parsed.hospitals])];
+                    globalSettings.hospitals = allHospitals.join(', ');
+                }
+                
+                renderUI();
+                updateStats();
+                showToast(`✓ Imported ${parsed.patients.length} patients`);
+                event.target.value = ''; // Reset file input
+            } catch (err) {
+                console.error("CSV import error:", err);
+                showToast("❌ Import failed: " + err.message);
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
             const checkboxes = document.querySelectorAll('.findings-checkbox');
             const codesInput = document.getElementById('f-findings-codes');
@@ -1462,8 +1643,14 @@
             <div class="flex-1 min-w-0">
                 <h1 class="text-xl font-black tracking-tight truncate">Clinical Rounding List</h1>
             </div>
-            <button onclick="window.openModal()" class="flex-shrink-0 px-4 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-lg ml-2">+ Add</button>
+            <div class="flex gap-2">
+                <button onclick="document.getElementById('csv-file-input').click()" class="flex-shrink-0 px-3 py-2.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700">📥 Import CSV</button>
+                <button onclick="window.openModal()" class="flex-shrink-0 px-4 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">+ Add</button>
+            </div>
         </header>
+
+        <!-- Hidden CSV File Input -->
+        <input type="file" id="csv-file-input" accept=".csv" style="display:none;" onchange="window.handleCSVImport(event)">
 
         <!-- Connection Status Bar -->
         <div id="connection-status-bar" class="px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-amber-50 border-b border-amber-200 gap-1">
