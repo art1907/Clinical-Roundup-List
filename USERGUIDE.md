@@ -1,83 +1,41 @@
 # Clinical Rounding Platform - User Guide
 
-Welcome to the Clinical Rounding Platform! This guide will help you navigate the application and make the most of its features.
+Welcome to the Clinical Rounding Platform! This guide walks you through using the application to manage patient census, rounds, and scheduling.
 
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Logging In](#logging-in)
-3. [Main Dashboard](#main-dashboard)
-4. [Managing Patient Records](#managing-patient-records)
-5. [The Census Tab](#the-census-tab)
-6. [The Surgical Tab](#the-surgical-tab)
-7. [The Calendar View](#the-calendar-view)
-8. [On-Call Scheduling](#on-call-scheduling)
-9. [Archive & History](#archive--history)
-10. [Importing & Exporting Data](#importing--exporting-data)
-11. [Tips & Shortcuts](#tips--shortcuts)
-12. [Troubleshooting](#troubleshooting)
+2. [Dashboard Overview](#dashboard-overview)
+3. [Managing Patients](#managing-patients)
+4. [Tabs & Views](#tabs--views)
+5. [CSV Import & Excel Export](#csv-import--excel-export)
+6. [On-Call Scheduling](#on-call-scheduling)
+7. [Tips & Keyboard Shortcuts](#tips--keyboard-shortcuts)
+8. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Getting Started
 
-The Clinical Rounding Platform is a web-based application that helps manage patient census, track procedures, and coordinate on-call coverage. It's designed for mobile use during rounds and works on phones, tablets, and desktops.
+### Login
 
-### System Requirements
+1. Open the app in your browser
+2. Click **Sign In** (top-right corner)
+3. Enter your organizational email (e.g., `john.smith@yourdomain.com`)
+4. Enter your password
+5. Approve multi-factor authentication (MFA) if prompted
+6. You're logged in! ✅
 
-- **Browser**: Chrome, Safari, Edge (latest versions)
-- **Internet**: Required for cloud sync; app works offline with cached data
-- **Device**: Smartphone, tablet, or laptop
-- **Account**: Organizational Entra ID account (ask your IT administrator)
+### Your First Look
 
-### Your First Visit
+Once logged in, you'll see:
 
-1. Navigate to your app URL (provided by your hospital IT)
-2. Sign in with your organizational email and password
-3. You'll see the main dashboard with today's patient census
-
----
-
-## Logging In
-
-### Sign In
-
-1. Open the app URL in your browser
-2. Click the **blue sign-in button** (appears if not logged in)
-3. Enter your **organizational email address** (e.g., `firstname.lastname@yourhospital.org`)
-4. Enter your **password**
-5. If prompted, approve the login request in your authenticator app (if MFA is enabled)
-
-### Roles & Permissions
-
-Your access level depends on your assigned role:
-
-| Role | Can View | Can Create/Edit | Can Delete | Can Export |
-|------|----------|-----------------|-----------|-----------|
-| **Clinician** | Patient records (no billing) | ✅ Patients | ❌ No | ✅ Yes |
-| **Billing** | All fields including codes | ✅ Patients | ❌ No | ✅ Yes |
-| **Administrator** | Everything | ✅ Patients | ✅ Yes | ✅ Yes |
-
-If you don't see billing codes or delete buttons, you have clinician permissions (expected for most users).
-
-### Sign Out
-
-Click the **Sign Out** button (top right of header) to exit securely. Your cached data will be cleared.
-
----
-
-## Main Dashboard
-
-### Dashboard Layout
-
-The main screen shows:
-
-- **Connection Status** (top left) - Shows "Connected (Azure)" or "Offline"
+- **Connection Status** (top left) - "Connected (Azure)" or "Offline"
 - **Tabs** (below status) - Census, Surgical, Calendar, Staffing, Archive
 - **Action Buttons** (top right) - Add Patient, Import, Export, Settings
-- **Patient Table** - Lists all active patients with status indicators
+- **Patient Table** - All active patients with status indicators
 
-### What Each Color Means
+### Patient Status Colors
 
 | Status | Color | Meaning | Icon |
 |--------|-------|---------|------|
@@ -87,20 +45,32 @@ The main screen shows:
 | **Post-Op** | Amber | Post-operative period | ⭐ |
 | **STAT** | Red | Urgent/Priority | 🔴 |
 
-### Column Headers
+---
 
-- **Room** - Patient room number
-- **Date** - Admission or current round date
-- **Hospital** - Facility (AWC, BTMC, WGMC, etc.)
-- **Name** - Patient name
-- **Findings** - Clinical notes (abbreviated in table)
-- **Plan** - Treatment plan (abbreviated in table)
-- **MD** - Supervising physician
-- **Status** - Procedure status (dropdown to change quickly)
+## Dashboard Overview
+
+The main screen provides an overview of patient census and status.
+
+### Key Sections
+
+- **Patient Table**: Lists all active patients
+- **Filters**: Narrow down by status, hospital, or provider
+- **Search**: Find patients quickly by name or MRN
+
+### Patient Table Columns
+
+- **Room**: Patient room number
+- **Date**: Admission or current round date
+- **Hospital**: Facility (AWC, BTMC, WGMC, etc.)
+- **Name**: Patient name
+- **Findings**: Clinical notes (abbreviated)
+- **Plan**: Treatment plan (abbreviated)
+- **MD**: Supervising physician
+- **Status**: Procedure status (dropdown to change)
 
 ---
 
-## Managing Patient Records
+## Managing Patients
 
 ### Adding a New Patient
 
@@ -167,78 +137,76 @@ When a patient is discharged or no longer needs active monitoring:
 
 ---
 
-## The Census Tab
+## Tabs & Views
+
+The application has several tabs to manage different aspects of patient care and scheduling.
+
+### The Census Tab
 
 The Census tab shows all **active, ongoing patient records**.
 
-### What You'll See
+#### What You'll See
 
 - All patients admitted today or before
 - Procedures and treatments in progress
 - Sorting: Patients are sorted by STAT priority first, then by date
 
-### Typical Workflow
+#### Typical Workflow
 
 1. **Morning Rounds**: Review all patients, update findings
 2. **During Rounds**: Quick status changes via dropdown
 3. **Add New Patients**: Click + Add Patient as they arrive
 4. **End of Day**: Review pending items, archive discharged patients
 
-### Keyboard Tips
+#### Keyboard Tips
 
 - **Mobile**: Tap rows to edit, use dropdown for quick status
 - **Desktop**: Click + drag to scroll through long lists
 
----
-
-## The Surgical Tab
+### The Surgical Tab
 
 The Surgical tab shows only **procedures and surgical cases** (filtered by keywords: cysto, stent, TURBT, laser, surgery, etc.).
 
-### Use Cases
+#### Use Cases
 
 - **OR Board**: View what's scheduled vs. completed
 - **Procedure Tracking**: Follow pre-op, operative, and post-op phases
 - **Coordination**: See which procedures are planned vs. in progress
 
-### Status Workflow for Procedures
+#### Status Workflow for Procedures
 
 1. **To-Do** - Scheduled, not started
 2. **In-Progress** - Actively in operating room
 3. **Completed** - Finished, monitoring post-op
 4. **Post-Op** - Recovery phase, monitoring for complications
 
-### Filtering
+#### Filtering
 
 The surgical tab **auto-filters** based on keywords in findings or plan. If your patient doesn't appear, it means the keywords didn't match. You can still add it manually to the Census tab.
 
----
-
-## The Calendar View
+### The Calendar View
 
 The Calendar tab displays a **monthly overview** of patient admissions and procedures.
 
-### Calendar Features
+#### Calendar Features
 
 - **Red dots** = Procedures/surgeries scheduled
 - **Federal holidays** = Marked with emoji (🎄 Christmas, 🦃 Thanksgiving, etc.)
 - **Click date** = See all patients admitted/discharged that day
 - **Month navigation** = Use arrows to go to previous/next months
 
-### Use Cases
+#### Use Cases
 
 - **Weekly Planning**: See OR schedule at a glance
 - **Staffing**: Identify busy days for on-call coordination
 - **Historical View**: Review what happened last month
 - **Holiday Planning**: Know when key dates fall
 
----
-
-## On-Call Scheduling
+### The Staffing Tab
 
 The Staffing tab manages **physician on-call coverage**.
 
-### Add On-Call Assignment
+#### Add On-Call Assignment
 
 1. Click **Staffing** tab
 2. Click **+ Add Schedule**
@@ -248,19 +216,19 @@ The Staffing tab manages **physician on-call coverage**.
    - **Hospitals** - Comma-separated list (e.g., "WGMC, AWC, BTMC")
 4. Click **Save**
 
-### View Schedule
+#### View Schedule
 
 - The calendar shows all on-call assignments
 - Color-coded by provider (if configured)
 - Sort by date or provider
 
-### Edit Assignment
+#### Edit Assignment
 
 1. Click on a date with an assignment
 2. Modify the provider or hospitals
 3. Click **Save**
 
-### Delete Assignment
+#### Delete Assignment
 
 1. Find the assignment
 2. Click **Delete** (admin only)
@@ -268,40 +236,7 @@ The Staffing tab manages **physician on-call coverage**.
 
 ---
 
-## Archive & History
-
-The Archive tab stores **inactive and historical records**.
-
-### Why Archive?
-
-- Keeps active census clean
-- Preserves historical data for audit/compliance
-- Maintains all patient information (not deleted)
-
-### Archive a Patient
-
-1. Open patient record
-2. Click **Archive** button
-3. Patient moves to Archive tab
-
-### View Archived Patients
-
-1. Click **Archive** tab
-2. Browse all archived records
-3. Click a patient to view full history
-
-### Restore a Patient
-
-If a patient returns:
-
-1. Go to Archive tab
-2. Click on the patient
-3. Click **Restore** button
-4. Patient returns to active census
-
----
-
-## Importing & Exporting Data
+## CSV Import & Excel Export
 
 ### Import Census from Excel
 
@@ -366,7 +301,41 @@ Export your current census as an Excel file to OneDrive.
 
 ---
 
-## Tips & Shortcuts
+## On-Call Scheduling
+
+The Staffing tab manages **physician on-call coverage**.
+
+### Add On-Call Assignment
+
+1. Click **Staffing** tab
+2. Click **+ Add Schedule**
+3. Enter:
+   - **Date** - On-call date
+   - **Provider** - Physician name (e.g., "Jain", "Larsen")
+   - **Hospitals** - Comma-separated list (e.g., "WGMC, AWC, BTMC")
+4. Click **Save**
+
+### View Schedule
+
+- The calendar shows all on-call assignments
+- Color-coded by provider (if configured)
+- Sort by date or provider
+
+### Edit Assignment
+
+1. Click on a date with an assignment
+2. Modify the provider or hospitals
+3. Click **Save**
+
+### Delete Assignment
+
+1. Find the assignment
+2. Click **Delete** (admin only)
+3. Confirm deletion
+
+---
+
+## Tips & Keyboard Shortcuts
 
 ### Mobile Tips
 

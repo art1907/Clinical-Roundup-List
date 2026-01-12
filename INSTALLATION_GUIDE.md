@@ -1,870 +1,593 @@
-# Clinical Rounding Platform - Installation Guide
+# Clinical Rounding Platform - Installation Guide (Pure M365)
 
-This guide provides step-by-step instructions to set up and deploy the Clinical Rounding Platform on Azure with SharePoint Lists backend.
+This guide provides step-by-step instructions to set up the Clinical Rounding Platform using **Microsoft 365 only** (no Azure).
 
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Architecture Overview](#architecture-overview)
-3. [Step 1: Set Up Azure Resources](#step-1-set-up-azure-resources)
-4. [Step 2: Configure Entra ID (Azure AD)](#step-2-configure-entra-id-azure-ad)
-5. [Step 3: Create SharePoint Lists](#step-3-create-sharepoint-lists)
-6. [Step 4: Deploy Azure Functions API](#step-4-deploy-azure-functions-api)
-7. [Step 5: Update HTML File](#step-5-update-html-file)
-8. [Step 6: Deploy to Azure Static Web Apps](#step-6-deploy-to-azure-static-web-apps)
-9. [Step 7: Configure Environment Variables](#step-7-configure-environment-variables)
-10. [Step 8: Verify Permissions](#step-8-verify-permissions)
-11. [Step 9: Test End-to-End](#step-9-test-end-to-end)
-12. [Post-Deployment](#post-deployment)
+2. [Step 1: Entra ID App Registration](#step-1-entra-id-app-registration)
+3. [Step 2: Create SharePoint Site & Lists](#step-2-create-sharepoint-site--lists)
+4. [Step 3: Host the HTML File](#step-3-host-the-html-file)
+5. [Step 4: Configure the App](#step-4-configure-the-app)
+6. [Step 5: Test End-to-End](#step-5-test-end-to-end)
+7. [Step 6: User Onboarding](#step-6-user-onboarding)
+8. [Troubleshooting](#troubleshooting)
+9. [Post-Deployment](#post-deployment)
 
 ---
 
 ## Prerequisites
 
-Before starting, ensure you have:
-
 ### Required Access
 
-- ✅ **Azure Subscription** - Active, with owner/contributor permissions
 - ✅ **Microsoft 365 Tenant** - With SharePoint Online access
-- ✅ **GitHub Account** - For version control (if using GitHub Actions)
-- ✅ **Administrative Access** - To create Entra ID app, SharePoint sites, etc.
+- ✅ **Entra ID (Azure AD) Admin** - To register application
+- ✅ **SharePoint Admin** - To create site and lists
+- ✅ **Global Admin or Office 365 Admin** - To grant API permissions
 
 ### Required Tools
 
-Install on your local machine:
+- 📌 **Web Browser** - Chrome, Edge, or Safari (for testing)
+- 📌 **Microsoft 365 Admin Center** - https://admin.microsoft.com
+- 📌 **Azure Portal** - https://portal.azure.com (for Entra ID only, not Azure services)
+- 📌 **Text Editor** - VS Code or Notepad (to edit HTML config)
 
-```bash
-# Azure CLI
-https://learn.microsoft.com/en-us/cli/azure/install-azure-cli
+### Verify Access
 
-# Node.js (v18 or later)
-https://nodejs.org/
-
-# Git
-https://git-scm.com/
-
-# Visual Studio Code (optional but recommended)
-https://code.visualstudio.com/
 ```
-
-### Verify Installations
-
-```bash
-az --version          # Azure CLI
-node --version        # Node.js (should be v18+)
-git --version         # Git
-npm --version         # npm (comes with Node)
+1. Go to https://admin.microsoft.com → should work (Office 365 admin)
+2. Go to https://portal.azure.com → **App Registrations** section (Entra ID admin)
+3. Go to https://yourdomain.sharepoint.com/sites → should see SharePoint sites (SharePoint admin)
 ```
 
 ---
 
-## Architecture Overview
+## Step 1: Entra ID App Registration
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Browser (HTML/JS)                         │
-│     (MSAL.js auth + polling + localStorage caching)          │
-└────────────────────┬────────────────────────────────────────┘
-                     │ HTTPS (Bearer token)
-                     │
-┌────────────────────▼────────────────────────────────────────┐
-│              Azure Static Web Apps                           │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │  Azure Functions API (/api/*)                        │   │
-│  │  ├─ /patients (CRUD)                                 │   │
-│  │  ├─ /backfeed (copy previous visit)                  │   │
-│  │  ├─ /onCallSchedule                                  │   │
-│  │  ├─ /settings                                        │   │
-│  │  └─ /export (OneDrive upload)                        │   │
-│  └──────────────────────────────────────────────────────┘   │
-└────────────────────┬────────────────────────────────────────┘
-                     │ Graph API (Managed Identity)
-         ┌───────────┴───────────┐
-         │                       │
-    ┌────▼─────┐         ┌──────▼──────┐
-    │ SharePoint│         │  OneDrive   │
-    │   Lists   │         │  (export)   │
-    └───────────┘         └─────────────┘
+### 1.1 Register New Application
 
-Authentication: Entra ID (Azure AD) with app roles
-Audit: SharePoint AuditLogs list
-```
-
----
-
-## Step 1: Set Up Azure Resources
-
-### 1.1 Create Resource Group
-
-```bash
-az group create \
-  --name clinical-rounding-rg \
-  --location eastus
-```
-
-### 1.2 Create Azure Static Web App
-
-```bash
-az staticwebapp create \
-  --name clinical-rounding-app \
-  --resource-group clinical-rounding-rg \
-  --source https://github.com/YOUR_ORG/clinical-rounding-repo \
-  --location eastus \
-  --branch main \
-  --app-location "/" \
-  --api-location "api" \
-  --output-location ""
-```
-
-**Notes**:
-- Replace `YOUR_ORG` with your GitHub organization
-- This creates the SWA resource but doesn't deploy yet
-- GitHub Actions will be configured automatically (next steps)
-
-### 1.3 Get Static Web App Details
-
-```bash
-az staticwebapp show \
-  --name clinical-rounding-app \
-  --resource-group clinical-rounding-rg \
-  --query "{id:id, name:name, defaultHostname:defaultHostname}"
-```
-
-**Note**: Save the `defaultHostname` (e.g., `calm-tree-abc123.azurestaticapps.net`)
-
-### 1.4 Enable System-Assigned Managed Identity
-
-The Functions need a Managed Identity to access SharePoint without storing secrets:
-
-```bash
-# Get the Static Web App resource ID
-SWAPP_RESOURCE_ID=$(az staticwebapp show \
-  --name clinical-rounding-app \
-  --resource-group clinical-rounding-rg \
-  --query id -o tsv)
-
-# Enable system-assigned managed identity
-az staticwebapp identity assign \
-  --name clinical-rounding-app \
-  --resource-group clinical-rounding-rg \
-  --identity-type SystemAssigned
-```
-
----
-
-## Step 2: Configure Entra ID (Azure AD)
-
-### 2.1 Register Application
-
-1. Go to **Azure Portal** → **App Registrations** → **New Registration**
-2. Name: `Clinical Rounding Platform`
-3. Supported account types: **Accounts in this organizational directory only**
-4. Redirect URI:
-   - Platform: **Web**
-   - URI: `https://<your-swa-hostname>/.auth/login/aad/callback`
-   - (Replace `<your-swa-hostname>` with your Static Web App hostname from Step 1.3)
+1. Go to **Azure Portal** → https://portal.azure.com
+2. Click **App Registrations** (left menu)
+3. Click **+ New Registration**
+4. Fill in:
+   - **Name**: `Clinical Rounding Platform`
+   - **Supported account types**: **Accounts in this organizational directory only**
+   - **Redirect URI** (Single-page application):
+     - `http://localhost:3000` (for local testing)
+     - `https://yourdomain.sharepoint.com/sites/clinical-rounding` (for production)
 5. Click **Register**
 
-### 2.2 Note Application Credentials
+### 1.2 Copy Credentials
 
-After registration, save:
+After registration, save these values (you'll need them later):
 
-- **Application (client) ID** - Under "Overview"
-- **Directory (tenant) ID** - Under "Overview"
-
-```bash
-# Save these - you'll need them later
-TENANT_ID="your-tenant-id"
-CLIENT_ID="your-client-id"
-```
-
-### 2.3 Create Client Secret
-
-1. Go to **Certificates & secrets**
-2. Click **New client secret**
-3. Description: `API Backend Authentication`
-4. Expiration: **12 months**
-5. Copy the **Value** (not the ID)
+**On the Overview page:**
+- 📋 **Application (client) ID** - Copy this
+- 📋 **Directory (tenant) ID** - Copy this
 
 ```bash
-CLIENT_SECRET="your-secret-value"
+# Save these in a text file temporarily
+CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
-⚠️ **Important**: Save this secret securely. You won't be able to see it again.
+### 1.3 Add API Permissions
 
-### 2.4 Grant API Permissions
-
-1. Go to **API permissions**
-2. Click **Add a permission**
+1. Go to **API permissions** (left menu)
+2. Click **+ Add a permission**
 3. Select **Microsoft Graph**
-4. Select **Application permissions**
-5. Search and add:
-   - ✅ `Sites.ReadWrite.All` (SharePoint access)
-   - ✅ `Files.ReadWrite.All` (OneDrive export)
-   - ✅ `User.Read.All` (for user profile info)
-6. Click **Grant admin consent**
+4. Select **Delegated permissions**
+5. Search and add these permissions:
+   - ✅ `Sites.ReadWrite.All` - SharePoint access
+   - ✅ `Files.Read.Write` - OneDrive access
+   - ✅ `User.Read` - User profile
+6. Click **Grant admin consent for [Tenant]** (blue button)
+7. Verify all permissions show green checkmarks ✅
 
-### 2.5 Create App Roles
+### 1.4 (Optional) Add App Roles for RBAC
 
-1. Go to **App roles**
+If you want role-based access control (clinician/billing/admin):
+
+1. Go to **App roles** (left menu)
 2. Click **Create app role**
 3. Create three roles:
 
-| Role Name | Value | Enabled |
-|-----------|-------|---------|
+| Display name | Value | Enabled |
+|---|---|---|
 | Clinician | `clinician` | ✅ Yes |
 | Billing | `billing` | ✅ Yes |
 | Administrator | `admin` | ✅ Yes |
 
-### 2.6 Add Users to Roles
+4. Click **Apply**
 
-1. Go to **Manage** → **Users and groups**
-2. For each user:
-   - Click **Add user**
-   - Select user
-   - Select role
-   - Click **Assign**
+### 1.5 Assign Users to Roles
 
-Example assignments:
-- Physicians: `clinician` role
-- Finance staff: `billing` role
-- IT staff: `admin` role
+1. Go to **Manage** → **Users and groups** (left menu)
+2. Click **+ Add user/group**
+3. Select users
+4. Assign roles (Clinician → clinician, etc.)
+5. Click **Assign**
 
 ---
 
-## Step 3: Create SharePoint Lists
+## Step 2: Create SharePoint Site & Lists
 
-### 3.1 Access SharePoint Site
+### 2.1 Create SharePoint Site
 
-1. Go to your **Microsoft 365 site** (e.g., `https://yourdomain.sharepoint.com/sites/clinical-rounding`)
-2. If the site doesn't exist, create it:
-   - SharePoint → **Create site**
-   - Site name: `Clinical Rounding`
-   - Site type: **Team site**
+1. Go to **SharePoint Home** - https://yourdomain.sharepoint.com
+2. Click **+ Create site**
+3. Select **Team site** (or **Communication site** if you prefer)
+4. Fill in:
+   - **Site name**: `Clinical Rounding`
+   - **Site address**: `clinical-rounding` (becomes `/sites/clinical-rounding`)
+5. Click **Next**
+6. Choose privacy: **Private** (only authorized users)
+7. Click **Finish**
 
-### 3.2 Create Patients List
+### 2.2 Get Site ID
+
+You'll need the **site ID** later. Get it now:
+
+1. Go to your new site: https://yourdomain.sharepoint.com/sites/clinical-rounding
+2. Click **Settings** (gear icon, top right)
+3. Click **Site information** (bottom of menu)
+4. Copy the **Site ID** from the URL bar
+
+```
+URL format: /sites/clinical-rounding?id=abc123...
+Site ID: yourdomain.sharepoint.com,abc123,def456
+```
+
+**Save this value:**
+```bash
+SHAREPOINT_SITE_ID=yourdomain.sharepoint.com,abc123,def456
+```
+
+### 2.3 Create Patients List
 
 1. Click **+ New** → **List**
 2. Name: `Patients`
 3. Click **Create**
-4. Add columns (click **+ Add column**):
+4. Click **+ Add column** and create these columns:
 
-| Column Name | Type | Details |
-|-------------|------|---------|
-| VisitKey | Single line of text | **Index this** (must be unique) |
+| Column Name | Type | Additional Settings |
+|---|---|---|
 | Room | Single line of text | - |
 | Date | Date and Time | - |
 | Name | Single line of text | - |
 | DOB | Single line of text | - |
-| MRN | Single line of text | **Index this** (for backfeed queries) |
-| Hospital | Choice | Options: Abrazo West, BEMC, BTMC, Westgate, CRMC, WGMC, AHD |
-| FindingsData | Multiple lines of text | **Format**: JSON |
+| MRN | Single line of text | - |
+| Hospital | Choice | Choices: `WGMC`, `AWC`, `BTMC`, `BEMC`, `CRMC`, `AHD`, `Westgate` |
+| FindingsData | Multiple lines of text | Format: JSON |
 | FindingsText | Multiple lines of text | - |
 | Plan | Multiple lines of text | - |
 | SupervisingMD | Single line of text | - |
 | Pending | Multiple lines of text | - |
 | FollowUp | Multiple lines of text | - |
-| Priority | Choice | Options: Yes, No |
-| ProcedureStatus | Choice | Options: To-Do, In-Progress, Completed, Post-Op |
+| Priority | Choice | Choices: `Yes`, `No` |
+| ProcedureStatus | Choice | Choices: `To-Do`, `In-Progress`, `Completed`, `Post-Op` |
 | CPTPrimary | Single line of text | - |
 | ICDPrimary | Single line of text | - |
-| ChargeCodesSecondary | Multiple lines of text | - |
-| Archived | Choice | Options: Yes, No |
+| ChargeCodesSecondary | Multiple lines of text | Format: JSON |
+| VisitKey | Single line of text | ⚠️ **Enforce unique values** |
+| Archived | Choice | Choices: `Yes`, `No` |
 
-**To create a unique index on VisitKey**:
-1. Click **VisitKey** column header
+**To create unique index on VisitKey:**
+1. Click the **VisitKey** column header
 2. Select **Column settings**
-3. Check **Enforce unique values**
+3. Check ✅ **Enforce unique values**
 
-### 3.3 Create OnCallSchedule List
+5. Save the list
+6. **Get the list ID:**
+   - Go to **List settings** → **Copy the list ID from the URL**
+   - Format: `/sites/clinical-rounding/Lists/{ListID}/AllItems.aspx`
 
-1. Create new list: `OnCallSchedule`
-2. Add columns:
+```bash
+PATIENTS_LIST_ID=abc123-def456-...
+```
+
+### 2.4 Create OnCallSchedule List
+
+1. Click **+ New** → **List**
+2. Name: `OnCallSchedule`
+3. Add columns:
 
 | Column Name | Type |
-|-------------|------|
+|---|---|
 | Date | Date and Time |
 | Provider | Single line of text |
 | Hospitals | Multiple lines of text |
 
-### 3.4 Create Settings List
+4. Get the list ID and save it:
+```bash
+ONCALL_LIST_ID=abc123-def456-...
+```
 
-1. Create new list: `Settings`
-2. Add columns:
+### 2.5 Create Settings List
 
-| Column Name | Type |
-|-------------|------|
-| OnCall | Single line of text |
-| Hospitals | Multiple lines of text |
-| ComplianceMode | Choice (Options: relaxed, hipaa_strict, sox_strict) |
-
-### 3.5 Create AuditLogs List
-
-1. Create new list: `AuditLogs`
-2. Add columns:
+1. Click **+ New** → **List**
+2. Name: `Settings`
+3. Add columns:
 
 | Column Name | Type |
-|-------------|------|
+|---|---|
+| Key | Single line of text |
+| Value | Multiple lines of text |
+
+4. Add sample settings (manually or via API):
+   - Row 1: Key=`defaultOnCall`, Value=`Dr. Smith`
+   - Row 2: Key=`hospitals`, Value=`WGMC,AWC,BTMC,BEMC,CRMC,AHD,Westgate`
+   - Row 3: Key=`complianceMode`, Value=`relaxed`
+
+5. Get the list ID:
+```bash
+SETTINGS_LIST_ID=abc123-def456-...
+```
+
+### 2.6 Create AuditLogs List (Optional)
+
+For compliance auditing:
+
+1. Click **+ New** → **List**
+2. Name: `AuditLogs`
+3. Add columns:
+
+| Column Name | Type |
+|---|---|
 | UserIdentity | Single line of text |
-| ActionType | Choice (Options: READ, CREATE, UPDATE, DELETE, EXPORT) |
-| AffectedRecords | Multiple lines of text |
-| Timestamp | Date and Time |
+| ActionType | Choice (Options: `CREATE`, `UPDATE`, `DELETE`, `EXPORT`, `IMPORT`) |
+| RecordId | Single line of text |
 | Details | Multiple lines of text |
+| Timestamp | Date and Time |
 
-### 3.6 Get List IDs
-
-For each list, copy the URL and extract the list ID:
-
-```
-URL format: /sites/clinical-rounding/Lists/{ListID}/AllItems.aspx
-Extract the ListID part
-```
-
-Or use Graph API:
-
+4. Get the list ID:
 ```bash
-# Authenticate to Graph API
-az login
-
-# Get site ID
-SITE_ID=$(az rest --method GET \
-  --uri "https://graph.microsoft.com/v1.0/sites/yourdomain.sharepoint.com:/sites/clinical-rounding" \
-  --query "id" -o tsv)
-
-# Get list IDs
-az rest --method GET \
-  --uri "https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists" \
-  --query "value[].{name:name, id:id}" -o table
-```
-
-Save all four list IDs:
-
-```bash
-PATIENTS_LIST_ID="..."
-ONCALL_LIST_ID="..."
-SETTINGS_LIST_ID="..."
-AUDIT_LIST_ID="..."
+AUDIT_LIST_ID=abc123-def456-...
 ```
 
 ---
 
-## Step 4: Deploy Azure Functions API
+## Step 3: Host the HTML File
 
-### 4.1 Prepare API Code
-
-```bash
-# Clone or navigate to your repo with api/ folder
-cd /path/to/clinical-rounding-repo
-
-# Navigate to api folder
-cd api
-
-# Install dependencies
-npm install
-
-# Verify functions.json exists for each endpoint
-ls -la */function.json
-```
-
-Should see:
-```
-patients/function.json
-backfeed/function.json
-onCallSchedule/function.json
-settings/function.json
-export/function.json
-```
-
-### 4.2 Test Locally (Optional)
+### Option A: Local Testing (Development)
 
 ```bash
-# Start Functions locally
-npm start
+# On your machine, navigate to the project folder
+cd "D:\Code\Clinical Roundup File"
 
-# Should output:
-# Azure Functions Core Tools
-# Worker process started and initialized
-# Functions runtime started
+# Start a simple HTTP server
+python -m http.server 3000
+
+# Or use Node.js
+npx http-server -p 3000
+
+# Access in browser
+http://localhost:3000/clinical-rounding-adaptive.html
 ```
 
-In another terminal, test an endpoint:
+### Option B: SharePoint Document Library (Production)
 
-```bash
-curl http://localhost:7071/api/patients \
-  -H "Authorization: Bearer test-token" \
-  -H "Content-Type: application/json"
-```
+1. Go to your site: https://yourdomain.sharepoint.com/sites/clinical-rounding
+2. Click **Documents** (left menu)
+3. Click **Upload** → Upload `clinical-rounding-adaptive.html`
+4. Right-click the file → **Copy link**
+5. Access via: https://yourdomain.sharepoint.com/sites/clinical-rounding/Documents/clinical-rounding-adaptive.html
 
-### 4.3 Deploy to Azure
+⚠️ **Note**: For CORS/authentication, this might not work. See Option C below.
 
-The deployment happens via GitHub Actions when you push:
+### Option C: Microsoft 365 App (Recommended)
 
-```bash
-# Commit and push to main branch
-git add .
-git commit -m "Deploy Clinical Rounding Azure migration"
-git push origin main
-```
+1. Click **+ New** → **App**
+2. Upload `clinical-rounding-adaptive.html` as a custom app
+3. Users access via Microsoft 365 app launcher
 
-GitHub Actions will:
-1. Build the Functions project
-2. Run npm install and build
-3. Deploy to your Static Web App's /api endpoint
-4. Logs available in GitHub Actions tab
-
-**Verify deployment**:
-
-```bash
-# Check Functions health endpoint (if public)
-curl https://<your-swa-hostname>/api/health
-
-# Or check Azure Portal → Static Web App → Functions
-```
+Simplest approach: use **Option A** locally during testing, then discuss deployment with your IT team.
 
 ---
 
-## Step 5: Update HTML File
+## Step 4: Configure the App
 
-Follow the detailed instructions in **`HTML_INTEGRATION_GUIDE.md`**:
+### 4.1 Edit HTML Configuration
 
-1. Replace Firebase SDK with MSAL.js
-2. Add hospital dropdown to patient modal
-3. Add "Copy from Previous Visit" button
-4. Add hospital column to table
-5. Wire up CSV import handler
-6. Add Excel export function
+Open `clinical-rounding-adaptive.html` in a text editor (VS Code recommended).
 
-**Estimated time**: 30-45 minutes
+Find the `<script>` section and locate (or add) this configuration block:
+
+```javascript
+// M365 Configuration - UPDATE THESE VALUES
+const M365_CONFIG = {
+  auth: {
+    clientId: 'PASTE_YOUR_CLIENT_ID_HERE',
+    authority: 'https://login.microsoftonline.com/PASTE_YOUR_TENANT_ID_HERE',
+    redirectUri: window.location.origin,
+    cacheLocation: 'sessionStorage',
+    scopes: ['Sites.ReadWrite.All', 'Files.ReadWrite', 'User.Read']
+  },
+  sharepoint: {
+    siteId: 'PASTE_YOUR_SITE_ID_HERE',
+    lists: {
+      patients: 'PASTE_PATIENTS_LIST_ID_HERE',
+      onCall: 'PASTE_ONCALL_LIST_ID_HERE',
+      settings: 'PASTE_SETTINGS_LIST_ID_HERE'
+    }
+  }
+};
+```
+
+### 4.2 Fill in Your Values
+
+Replace placeholders with values you saved in Steps 1 & 2:
+
+```javascript
+const M365_CONFIG = {
+  auth: {
+    clientId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    authority: 'https://login.microsoftonline.com/f1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    redirectUri: 'http://localhost:3000',
+    cacheLocation: 'sessionStorage',
+    scopes: ['Sites.ReadWrite.All', 'Files.ReadWrite', 'User.Read']
+  },
+  sharepoint: {
+    siteId: 'yourdomain.sharepoint.com,abc123,def456',
+    lists: {
+      patients: 'abc123def456-1234-5678-90ab-cdef12345678',
+      onCall: 'def456abc123-1234-5678-90ab-cdef12345678',
+      settings: '123456abcdef-1234-5678-90ab-cdef12345678'
+    }
+  }
+};
+```
+
+### 4.3 Save and Close
+
+Save the file. You're done with configuration!
 
 ---
 
-## Step 6: Deploy to Azure Static Web Apps
+## Step 5: Test End-to-End
 
-### 6.1 Prepare GitHub Repository
+### 5.1 Test Login
 
-If not already done:
+1. Open the app in browser: http://localhost:3000/clinical-rounding-adaptive.html
+2. Click **Sign In**
+3. Enter your organizational email
+4. Enter password
+5. Verify you see the dashboard ✅
 
-```bash
-# Initialize git repo (if needed)
-git init
-
-# Add remote
-git remote add origin https://github.com/YOUR_ORG/clinical-rounding-repo.git
-
-# Create main branch
-git branch -M main
-```
-
-### 6.2 Create GitHub Actions Workflow
-
-Create `.github/workflows/azure-static-web-apps.yml`:
-
-```yaml
-name: Azure Static Web Apps CI/CD
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches: [ main ]
-
-env:
-  APP_LOCATION: "/"
-  API_LOCATION: "api"
-  OUTPUT_LOCATION: ""
-
-jobs:
-  build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
-    runs-on: ubuntu-latest
-    name: Build and Deploy Job
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-
-      - name: Build And Deploy
-        id: builddeploy
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_TOKEN }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          action: "upload"
-          app_location: ${{ env.APP_LOCATION }}
-          api_location: ${{ env.API_LOCATION }}
-          output_location: ${{ env.OUTPUT_LOCATION }}
-
-  close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    name: Close Pull Request Job
-    steps:
-      - name: Close Pull Request
-        id: closepullrequest
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_TOKEN }}
-          action: "close"
-```
-
-### 6.3 Push to GitHub
-
-```bash
-# Stage all changes
-git add .
-
-# Commit
-git commit -m "Add Clinical Rounding Platform with Azure integration"
-
-# Push to main
-git push origin main
-```
-
-### 6.4 Link GitHub to Azure (if needed)
-
-If deployment doesn't auto-trigger:
-
-1. Azure Portal → Static Web Apps → Your app
-2. Click **Settings** → **Deployment**
-3. Click **Disconnect**, then **Connect**
-4. Select GitHub organization, repository, branch
-
----
-
-## Step 7: Configure Environment Variables
-
-### 7.1 Add Secrets to GitHub Actions
-
-1. GitHub → Your repo → **Settings** → **Secrets and variables** → **Actions**
-2. Click **New repository secret**
-3. Add:
-
-```
-AZURE_STATIC_WEB_APPS_TOKEN=<value from Azure Portal>
-```
-
-To get the token:
-- Azure Portal → Static Web Apps → Your app
-- Click **Manage deployment token**
-- Copy the token
-
-### 7.2 Add Environment Variables to Static Web App
-
-1. Azure Portal → Static Web App → **Configuration** → **Application settings**
-2. Click **Add** and add:
-
-| Name | Value |
-|------|-------|
-| SHAREPOINT_SITE_ID | Your SharePoint site ID |
-| PATIENTS_LIST_ID | From Step 3.6 |
-| ONCALL_LIST_ID | From Step 3.6 |
-| SETTINGS_LIST_ID | From Step 3.6 |
-| AUDIT_LIST_ID | From Step 3.6 |
-| AZURE_CLIENT_ID | From Step 2.2 |
-| AZURE_TENANT_ID | From Step 2.2 |
-| AZURE_CLIENT_SECRET | From Step 2.3 |
-
-### 7.3 Get SharePoint Site ID
-
-```bash
-# Get your site ID
-az rest --method GET \
-  --uri "https://graph.microsoft.com/v1.0/sites/yourdomain.sharepoint.com:/sites/clinical-rounding" \
-  --query "id" -o tsv
-```
-
----
-
-## Step 8: Verify Permissions
-
-### 8.1 Grant Managed Identity Permissions to SharePoint
-
-The Functions' Managed Identity needs permissions to access SharePoint Lists:
-
-```bash
-# Get the Managed Identity object ID
-IDENTITY_OBJECT_ID=$(az staticwebapp identity show \
-  --name clinical-rounding-app \
-  --resource-group clinical-rounding-rg \
-  --query principalId -o tsv)
-
-# Note: Azure doesn't directly assign SharePoint permissions via CLI
-# Instead, use the SharePoint admin center or PowerShell:
-
-# PowerShell (run as admin):
-$siteUrl = "https://yourdomain.sharepoint.com/sites/clinical-rounding"
-$spAdmin = Connect-PnPOnline -Url $siteUrl -Interactive
-
-# Grant full control to Managed Identity service principal
-# (This is complex and typically done by SharePoint admin)
-```
-
-**Easier approach**: Give your Entra ID app **Sites.ReadWrite.All** permission (already done in Step 2.4), and the Functions will use the app's identity.
-
-### 8.2 Verify Graph API Permissions
-
-Ensure the app has these permissions (check Azure Portal):
-
-- ✅ `Sites.ReadWrite.All` - Application
-- ✅ `Files.ReadWrite.All` - Delegated
-- ✅ `User.Read.All` - Application
-
----
-
-## Step 9: Test End-to-End
-
-### 9.1 Access the App
-
-1. Navigate to: `https://<your-swa-hostname>`
-2. You should see the login page
-
-### 9.2 Test Login
-
-1. Click **Sign In**
-2. Enter your organizational email
-3. Enter password
-4. Verify you can sign in
-
-### 9.3 Test Patient CRUD
+### 5.2 Test Patient CRUD
 
 1. Click **+ Add Patient**
-2. Fill in patient form
+2. Fill in:
+   - Room: `101`
+   - Date: `Today`
+   - Name: `John Doe`
+   - MRN: `12345`
+   - Hospital: `WGMC`
+   - Findings: `Asymptomatic`
+   - Plan: `Follow-up`
 3. Click **Save**
-4. Verify patient appears in table
-5. Click on patient to edit
-6. Verify edit works
-7. Test archive/restore
+4. Verify patient appears in table ✅
 
-### 9.4 Test Data Sync
+### 5.3 Test Edit
 
-1. Open app in two browser windows (same user)
-2. Add patient in Window 1
-3. Verify it appears in Window 2 after ~15 seconds
-4. Update patient in Window 2
-5. Verify it reflects in Window 1
+1. Click the patient row
+2. Modify a field (e.g., Plan)
+3. Click **Save**
+4. Verify change reflected ✅
 
-### 9.5 Test CSV Import
+### 5.4 Test CSV Import
 
-1. Download `Rounding List.csv` from your project
+1. Download `Rounding List.csv` (sample file in project)
 2. Click **Import**
 3. Select the CSV file
-4. Verify patients load
-5. Check that on-call schedule updated
+4. Verify patients load ✅
 
-### 9.6 Test Excel Export
+### 5.5 Test Excel Export
 
 1. Click **Export to OneDrive**
-2. Wait for success message
-3. Check your OneDrive:
-   - `/Clinical Rounding/Rounding List YYYY-MM-DD.xlsx`
-   - `/Clinical Rounding/Rounding List - Latest.xlsx`
-4. Verify file content
+2. Wait for success toast
+3. Check OneDrive:
+   - Folder: `/Clinical Rounding`
+   - Files: `Rounding List YYYY-MM-DD.xlsx`, `Rounding List - Latest.xlsx`
+4. Verify file content ✅
 
-### 9.7 Test Role-Based Access
+### 5.6 Test Real-Time Sync
 
-1. Assign yourself different roles (Admin → Clinician)
-2. Sign out and sign back in
-3. Verify:
-   - Clinician: Can't see billing codes (show as ***)
-   - Clinician: Can't delete patients
-   - Billing: Sees billing codes
-   - Admin: Full access
+1. Open app in two browser windows
+2. Add patient in Window 1
+3. Wait 15 seconds
+4. Verify it appears in Window 2 ✅
 
-### 9.8 Check Audit Logs
+### 5.7 Test Offline Mode
 
-1. Go to SharePoint → **AuditLogs** list
-2. Verify entries for each action (create, update, delete)
-3. Check timestamps and user identity
+1. Open DevTools (F12)
+2. Go to **Network** tab
+3. Check **Offline** checkbox
+4. Verify you can still view cached data ✅
+5. Add a test patient (stored in localStorage)
+6. Uncheck **Offline**
+7. Verify sync happens ✅
+
+---
+
+## Step 6: User Onboarding
+
+### 6.1 Create Entra ID Users
+
+If users don't exist:
+
+1. Go to **Microsoft 365 Admin Center** → https://admin.microsoft.com
+2. **Users** → **Active users** → **+ Add a user**
+3. Fill in email, name, role
+4. Click **Next**
+5. Assign licenses (Microsoft 365 E3 or higher)
+6. Click **Finish**
+
+### 6.2 Assign App Roles
+
+For each user:
+
+1. Go to **Azure Portal** → **App Registrations** → Your app
+2. Go to **Manage** → **Users and groups**
+3. Click **+ Add user/group**
+4. Select user
+5. Assign role (Clinician, Billing, Admin)
+6. Click **Assign**
+
+### 6.3 Share App Link
+
+Send users the app URL:
+
+```
+http://localhost:3000/clinical-rounding-adaptive.html
+(or production URL if hosted)
+
+First login instructions:
+1. Click "Sign In"
+2. Enter your work email
+3. Enter password
+4. Approve MFA if prompted
+5. You're logged in!
+```
+
+### 6.4 Share User Guide
+
+Send them the `USERGUIDE.md` document:
+- How to add patients
+- How to import/export
+- How to use each tab
+- Keyboard shortcuts
+- Troubleshooting tips
+
+---
+
+## Troubleshooting
+
+### Problem: "Not authorized to access this resource"
+
+**Solution:**
+1. Verify user is assigned the app in Entra ID (App Registrations → Users and groups)
+2. Grant admin consent for API permissions (Step 1.3)
+3. Check SharePoint permissions (user can access site)
+
+### Problem: "CORS error" or "Network blocked"
+
+**Solution:**
+1. If hosting from SharePoint, this is expected. Use Option A (local server) instead.
+2. Check browser console (F12) for exact error
+3. Verify Graph API scopes are granted (Step 1.3)
+
+### Problem: "List not found" or "Site not found"
+
+**Solution:**
+1. Verify site ID in config is correct (copy from SharePoint URL)
+2. Verify list IDs match actual lists (check SharePoint list settings)
+3. Re-test with Graph Explorer: https://developer.microsoft.com/graph/graph-explorer
+
+### Problem: "Patients not syncing between windows"
+
+**Solution:**
+1. Check polling is running (open DevTools → Network, should see Graph API calls every 15 sec)
+2. Verify no JavaScript errors (DevTools → Console)
+3. Check SharePoint list has new items (go to SharePoint and refresh)
+
+### Problem: "Export to OneDrive fails"
+
+**Solution:**
+1. Ensure user has OneDrive enabled (Microsoft 365 license includes it)
+2. Create `/Clinical Rounding` folder in OneDrive manually first
+3. Check `Files.ReadWrite` permission is granted (Step 1.3)
+4. Try export again
 
 ---
 
 ## Post-Deployment
 
-### 10.1 Monitoring
+### 7.1 Monitoring
 
-Set up alerts for your Static Web App:
+SharePoint automatically logs all changes:
 
-```bash
-# Azure CLI: Create alert for 5xx errors
-az monitor metrics alert create \
-  --name "Clinical Rounding 5xx Errors" \
-  --resource-group clinical-rounding-rg \
-  --scopes $(az staticwebapp show --name clinical-rounding-app --resource-group clinical-rounding-rg --query id -o tsv) \
-  --condition "avg Http5xx > 1" \
-  --window-size 5m \
-  --evaluation-frequency 1m \
-  --action myactiongroup
-```
+1. Go to **Microsoft Purview** → https://compliance.microsoft.com
+2. **Audit Log Search** → View all patient list changes
+3. Filter by: Date, user, activity type
+4. Export for compliance reviews
 
-### 10.2 Backup SharePoint Data
+### 7.2 Backup Data
 
-Set up recurring backups:
+SharePoint has built-in backup:
 
-1. SharePoint Admin Center → **Backup and migration**
-2. Configure automated backup schedule (weekly/monthly)
-3. Export to OneDrive
+1. SharePoint Admin Center → **Active sites**
+2. Your site should show **automatic backup enabled**
+3. For manual export: List settings → **Export to Excel**
 
-### 10.3 Security Hardening
+### 7.3 Performance Tuning
 
-#### Conditional Access
+If you have >10,000 patients:
 
-1. Entra ID → **Security** → **Conditional Access**
-2. Create policy:
-   - Users/groups: Clinical staff
-   - Conditions: Require MFA, restrict locations, block legacy auth
-   - Grant: Require MFA, compliant device (if needed)
+1. Reduce polling interval to 30 seconds (less frequent API calls)
+2. Filter patients by date (show last 30 days only)
+3. Implement pagination (load 200 at a time)
+4. Archive old records regularly
 
-#### API Rate Limiting
+### 7.4 Security Hardening
 
-Azure Functions automatically rate-limit. To customize:
+1. Enable **MFA** for all users:
+   - Azure Portal → Users → Enable MFA
 
-1. Azure Portal → Static Web App → **Configuration**
-2. Add custom rate limit rules (if supported)
+2. Set **Conditional Access** policies:
+   - Require MFA for clinical staff
+   - Block legacy authentication
+   - Require compliant devices (if needed)
 
-#### Enable Audit Logging
+3. Enable **Data Loss Prevention** (DLP):
+   - Microsoft Purview → Data loss prevention
+   - Prevent export of patient data outside organization
 
-Ensure SharePoint audit is enabled:
-
-1. SharePoint Admin Center → **Settings** → **Audit**
-2. Ensure **Record all activities** is selected
-
-### 10.4 User Onboarding
-
-1. Create new Entra ID users
-2. Assign app roles (clinician/billing/admin)
-3. Send them the app URL and USERGUIDE.md
-4. Schedule training session
-
-### 10.5 Documentation
-
-Keep updated:
-
-- [x] `USERGUIDE.md` - For end users
-- [x] `AZURE_MIGRATION.md` - For architects
-- [x] `HTML_INTEGRATION_GUIDE.md` - For developers
-- [x] `INSTALLATION_GUIDE.md` - This file
-- [ ] Create runbook for common admin tasks (optional)
-
-### 10.6 Regular Maintenance
-
-Schedule recurring tasks:
+### 7.5 Regular Maintenance Tasks
 
 | Task | Frequency | Owner |
-|------|-----------|-------|
-| Review audit logs | Weekly | Admin |
-| Update Entra ID roles | As needed | Admin |
-| Backup SharePoint | Monthly | IT Ops |
-| Review error logs | Daily | Dev Team |
-| Security patches | Immediately | IT Ops |
+|---|---|---|
+| Review audit logs | Weekly | Compliance officer |
+| Archive old records | Monthly | Admin |
+| Update user permissions | As needed | IT Admin |
+| Backup data | Monthly | IT Operations |
+| Review app role assignments | Quarterly | IT Admin |
 
 ---
 
-## Troubleshooting Installation
+## Verification Checklist
 
-### Problem: GitHub Actions deployment fails
-
-**Solution**:
-1. Check GitHub Actions logs (Repo → Actions tab)
-2. Verify `azure-static-web-apps.yml` exists in `.github/workflows/`
-3. Ensure `AZURE_STATIC_WEB_APPS_TOKEN` secret is set
-4. Check that `api/` folder has `function.json` for each endpoint
-
-### Problem: Functions return 401 Unauthorized
-
-**Solution**:
-1. Verify `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET` are set in configuration
-2. Check that Entra ID app has Graph API permissions
-3. Ensure app roles (clinician/billing/admin) are assigned to users
-
-### Problem: SharePoint List items not syncing
-
-**Solution**:
-1. Verify list IDs in configuration are correct (copy from URL)
-2. Check that Managed Identity has permissions
-3. Test Graph API directly with token:
-   ```bash
-   curl https://graph.microsoft.com/v1.0/sites/{SITE_ID}/lists/{LIST_ID}/items \
-     -H "Authorization: Bearer $TOKEN"
-   ```
-
-### Problem: CSV import fails
-
-**Solution**:
-1. Verify CSV format matches template (Row 1-3: on-call, Row 4: headers, Row 5+: data)
-2. Check browser console (F12) for error messages
-3. Ensure MRN is unique (no duplicates with same date)
-
-### Problem: OneDrive export shows permission error
-
-**Solution**:
-1. Verify user has OneDrive access
-2. Create `/Clinical Rounding` folder in OneDrive manually
-3. Check that `Files.ReadWrite` permission is granted to Entra ID app
-4. Run `az ad app permission admin-consent` to grant admin consent
-
----
-
-## Post-Installation Checklist
-
-- [ ] Azure Static Web App created and deployed
-- [ ] Entra ID app registered with client ID and secret
-- [ ] SharePoint site created with 4 lists
-- [ ] All list IDs captured and added to configuration
-- [ ] Managed Identity enabled on Static Web App
-- [ ] Permissions granted (Sites.ReadWrite.All, Files.ReadWrite.All)
-- [ ] GitHub Actions workflow file created
-- [ ] Environment variables configured in Static Web App
-- [ ] HTML file updated with Azure integration
-- [ ] Functions deployed successfully
+- [ ] Entra ID app registered (client ID saved)
+- [ ] API permissions granted (green checkmarks)
+- [ ] SharePoint site created
+- [ ] 4 lists created (Patients, OnCallSchedule, Settings, AuditLogs)
+- [ ] All list IDs captured
+- [ ] HTML file updated with config values
 - [ ] Login works with organizational account
-- [ ] Patient CRUD operations verified
+- [ ] Patient CRUD operations work
 - [ ] CSV import tested
 - [ ] Excel export to OneDrive tested
-- [ ] Role-based access tested (clinician/billing/admin)
-- [ ] Audit logs verified
-- [ ] User roles assigned in Entra ID
-- [ ] USERGUIDE.md shared with end users
-- [ ] Backup and monitoring configured
-- [ ] Security hardening applied (MFA, Conditional Access)
-
----
-
-## Support & Escalation
-
-### Common Issues
-
-For detailed troubleshooting, see:
-- **AZURE_MIGRATION.md** - Architecture and deployment details
-- **HTML_INTEGRATION_GUIDE.md** - Frontend troubleshooting
-- **USERGUIDE.md** - User-reported issues
-
-### Escalation Path
-
-1. **Development Issue** → Dev team → Check logs in Functions
-2. **Permission Issue** → IT Admin → Check Entra ID and SharePoint permissions
-3. **Performance Issue** → Azure support → Scale up Functions or optimize queries
-4. **Data Issue** → Backup team → Restore from SharePoint backup
+- [ ] Real-time sync tested (two windows)
+- [ ] Offline mode works
+- [ ] Users assigned app roles
+- [ ] User guide distributed
+- [ ] Audit logging verified in Purview
+- [ ] Backup confirmed
 
 ---
 
 ## References
 
-- [Azure Static Web Apps Documentation](https://learn.microsoft.com/en-us/azure/static-web-apps/)
-- [Azure Functions Node.js Guide](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-node)
-- [Microsoft Graph API](https://learn.microsoft.com/en-us/graph/api/overview)
-- [SharePoint Lists REST API](https://learn.microsoft.com/en-us/sharepoint/dev/sp-add-ins/working-with-lists-and-list-items-with-rest)
-- [Entra ID App Roles](https://learn.microsoft.com/en-us/azure/active-directory/develop/howto-add-app-roles-in-apps)
+- [Microsoft 365 Admin Center](https://admin.microsoft.com)
+- [Azure Portal (Entra ID)](https://portal.azure.com)
+- [SharePoint Online](https://yourdomain.sharepoint.com)
+- [Graph API Documentation](https://learn.microsoft.com/en-us/graph/)
+- [MSAL.js](https://learn.microsoft.com/en-us/azure/active-directory/develop/msal-browser-use-cases)
+- [Microsoft Purview Compliance](https://compliance.microsoft.com)
 
 ---
 
-## Version History
+**Version**: 1.0 (Pure M365, No Azure)  
+**Last Updated**: January 2026
 
-**v1.0** (Jan 2026) - Initial installation guide for Azure/M365 migration
-
----
-
-**Last Updated**: January 12, 2026
-
-For support, contact your IT administrator or development team.
+For support, contact your M365 administrator.
