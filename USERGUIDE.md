@@ -30,7 +30,7 @@ Welcome to the Clinical Rounding Platform! This guide walks you through using th
 
 Once logged in, you'll see:
 
-- **Connection Status** (top left) - "Connected (Azure)" or "Offline"
+- **Connection Status** (top left) - "Connected (M365)" or "Offline"
 - **Tabs** (below status) - Census, Surgical, Calendar, Staffing, Archive
 - **Action Buttons** (top right) - Add Patient, Import, Export, Settings
 - **Patient Table** - All active patients with status indicators

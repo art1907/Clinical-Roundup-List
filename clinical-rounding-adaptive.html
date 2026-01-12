@@ -758,9 +758,9 @@
                 const patients = window.getCurrentPatients();
                 const p = patients.find(x => x.id === id);
                 if (p) {
-                    ['room', 'name', 'dob', 'mrn', 'plan', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
+                    ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
-                        if (el) el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
+                        if (el) el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
                     if (dateInput) dateInput.value = p.date || "";
                     if (document.getElementById('f-findings-codes')) {
@@ -1170,7 +1170,8 @@
                 date: document.getElementById('f-date').value,
                 name: document.getElementById('f-name').value, 
                 dob: document.getElementById('f-dob').value,
-                mrn: document.getElementById('f-mrn').value, 
+                mrn: document.getElementById('f-mrn').value,
+                hospital: document.getElementById('f-hospital').value,
                 findingsCodes: findingsCodes,
                 findingsValues: findingsValues,
                 findingsText: document.getElementById('f-findings-text').value,
@@ -1361,7 +1362,7 @@
             if (!container) return;
             const filtered = getFilteredData();
             if (filtered.length === 0) {
-                container.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400 text-sm">No entries</td></tr>`;
+                container.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 text-sm">No entries</td></tr>`;
                 return;
             }
             container.innerHTML = filtered.map(p => {
@@ -1377,6 +1378,9 @@
                     <td class="p-3">
                         <div class="font-bold text-sm ${p.priority ? 'text-red-900' : 'text-slate-900'}">${p.room}</div>
                         ${priorityBadge}
+                    </td>
+                    <td class="p-3">
+                        <div class="text-xs font-semibold text-slate-700">${p.hospital || 'N/A'}</div>
                     </td>
                     <td class="p-3">
                         <div class="text-sm font-bold text-slate-900">${p.name || 'Anon'}</div>
@@ -1451,8 +1455,50 @@
             if (currentTab === 'active') f = patients.filter(p => !p.archived);
             else if (currentTab === 'procedures') f = patients.filter(p => !p.archived && PROC_KEYWORDS.test(p.plan || ''));
             else if (currentTab === 'archive') f = patients.filter(p => p.archived);
+            
+            // Apply user filters
+            const filterDate = document.getElementById('filter-date')?.value;
+            const filterHospital = document.getElementById('filter-hospital')?.value;
+            const filterRoom = document.getElementById('filter-room')?.value;
+            const filterPatient = document.getElementById('filter-patient')?.value;
+            
+            if (filterDate) {
+                f = f.filter(p => p.date === filterDate);
+            }
+            if (filterHospital) {
+                f = f.filter(p => p.hospital === filterHospital);
+            }
+            if (filterRoom) {
+                f = f.filter(p => (p.room || '').toLowerCase().includes(filterRoom.toLowerCase()));
+            }
+            if (filterPatient) {
+                const searchTerm = filterPatient.toLowerCase();
+                f = f.filter(p => 
+                    (p.name || '').toLowerCase().includes(searchTerm) || 
+                    (p.mrn || '').toLowerCase().includes(searchTerm)
+                );
+            }
+            
             return f.sort((a,b) => { if(a.priority!==b.priority) return a.priority ? -1 : 1; return new Date(b.date)-new Date(a.date); });
         }
+
+        window.applyFilters = () => {
+            renderUI();
+        };
+
+        window.clearFilters = () => {
+            const filterDate = document.getElementById('filter-date');
+            const filterHospital = document.getElementById('filter-hospital');
+            const filterRoom = document.getElementById('filter-room');
+            const filterPatient = document.getElementById('filter-patient');
+            
+            if (filterDate) filterDate.value = '';
+            if (filterHospital) filterHospital.value = '';
+            if (filterRoom) filterRoom.value = '';
+            if (filterPatient) filterPatient.value = '';
+            
+            renderUI();
+        };
 
         window.togglePatientSelection = (id) => { 
             if(selectedPatientIds.has(id)) selectedPatientIds.delete(id); 
@@ -1681,12 +1727,47 @@
         <!-- Content Area -->
         <div class="content-area">
             <div id="table-section" class="h-full">
+                <!-- Filter Controls -->
+                <div class="flex gap-2 mb-2 p-3 bg-slate-50 border-b border-slate-200 flex-wrap items-center">
+                    <div class="flex flex-col">
+                        <label class="text-[9px] font-bold text-slate-600 mb-1">Date</label>
+                        <input type="date" id="filter-date" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[9px] font-bold text-slate-600 mb-1">Hospital</label>
+                        <select id="filter-hospital" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500">
+                            <option value="">All Hospitals</option>
+                            <option value="WGMC">WGMC</option>
+                            <option value="AWC">AWC</option>
+                            <option value="BTMC">BTMC</option>
+                            <option value="Westgate">Westgate</option>
+                            <option value="CRMC">CRMC</option>
+                            <option value="AHD">AHD</option>
+                            <option value="BEMC">BEMC</option>
+                            <option value="Custom">Other</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[9px] font-bold text-slate-600 mb-1">Room</label>
+                        <input type="text" id="filter-room" placeholder="Room #" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 w-24" />
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[9px] font-bold text-slate-600 mb-1">Patient</label>
+                        <input type="text" id="filter-patient" placeholder="Name or MRN" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div class="flex gap-2 items-end">
+                        <button onclick="window.applyFilters()" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700 transition-colors">Apply</button>
+                        <button onclick="window.clearFilters()" class="px-4 py-2 bg-slate-300 text-slate-700 text-xs font-bold rounded hover:bg-slate-400 transition-colors">Clear</button>
+                    </div>
+                </div>
+                
                 <div class="overflow-x-auto h-full">
                     <table class="w-full border-collapse text-sm h-full">
                         <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
                                 <th class="p-3 w-12"><input type="checkbox" onchange="window.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer"></th>
                                 <th class="p-3 text-left font-bold text-slate-700">Room</th>
+                                <th class="p-3 text-left font-bold text-slate-700">Hospital</th>
                                 <th class="p-3 text-left font-bold text-slate-700">Patient</th>
                                 <th class="p-3 text-left font-bold text-slate-700">Findings</th>
                                 <th class="p-3 text-left font-bold text-slate-700">Plan/Status</th>
@@ -1753,6 +1834,22 @@
                 <div class="grid grid-cols-2 gap-3">
                     <input type="text" id="f-room" placeholder="Room" class="p-3 bg-slate-50 rounded-lg border border-slate-200" required>
                     <input type="date" id="f-date" class="p-3 bg-slate-50 rounded-lg border border-slate-200" required>
+                </div>
+
+                <!-- Hospital Selection -->
+                <div>
+                    <label class="text-xs font-bold text-slate-600">Hospital (Excel: Hospital/Room #)</label>
+                    <select id="f-hospital" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <option value="">Select Hospital</option>
+                        <option value="WGMC">Westgate Medical Center (WGMC)</option>
+                        <option value="AWC">Abrazo West Campus (AWC)</option>
+                        <option value="BTMC">Boswell Medical Center (BTMC)</option>
+                        <option value="Westgate">Westgate</option>
+                        <option value="CRMC">CRMC</option>
+                        <option value="AHD">AHD</option>
+                        <option value="BEMC">BEMC</option>
+                        <option value="Custom">Other (specify in notes)</option>
+                    </select>
                 </div>
 
                 <div id="stat-acuity-card" class="flex items-center justify-between p-4 bg-slate-50 text-slate-700 rounded-lg border border-slate-200 transition-colors duration-300">
