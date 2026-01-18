@@ -300,6 +300,10 @@ Simply:
 | Pure M365 Total | **$0 additional** | No new infrastructure |
 | vs. Azure Hybrid | **Saves $25/month** | No Functions, no Cosmos |
 
+## Documentation Consolidation
+
+**Note** (Jan 18, 2026): The document `MIGRATION_SUMMARY.md` has been consolidated into this file to reduce redundancy. Both documents covered the M365 migration transition; this file (`M365_MIGRATION.md`) serves as the authoritative architecture reference. The original `MIGRATION_SUMMARY.md` is archived in `_archive/` for historical reference.
+
 ## References
 
 - [Microsoft Graph API](https://learn.microsoft.com/en-us/graph/api/overview)
@@ -311,4 +315,5 @@ Simply:
 ---
 
 **Version**: 1.0 (Pure M365, no Azure)  
-**Last Updated**: January 2026
+**Last Updated**: January 2026  
+**Consolidated**: January 18, 2026 (MIGRATION_SUMMARY.md merged)

@@ -43,7 +43,9 @@ Once logged in, you'll see:
 | **In-Progress** | Blue | Currently being managed | 🔵 |
 | **Completed** | Green | Finished | ✅ |
 | **Post-Op** | Amber | Post-operative period | ⭐ |
-| **STAT** | Red | Urgent/Priority | 🔴 |
+| **STAT** | Bright Red | Urgent/Priority (entire card goes red) | 🔴 |
+
+**STAT Priority Visual**: When you toggle STAT priority ON in the patient form, the entire "Stat Acuity" card becomes bright red with a thick dark border and red glow effect. This makes urgent cases impossible to miss.
 
 ---
 
@@ -91,6 +93,42 @@ The main screen provides an overview of patient census and status.
 
 3. Click **Save** to add the patient
 4. You'll see a success message: "✓ Saved"
+
+#### Understanding Visit Keys & Same-Patient Records
+
+**What is a Visit Key?**
+
+The app uses a "Visit Key" system where each patient visit is uniquely identified by:
+- **Patient MRN** + **Visit Date**
+
+**This means:**
+- Same patient, **different date** = **New separate record**
+- Same patient, **same date** = **Update the existing record** (no duplicate)
+
+**Real-World Examples:**
+
+| Scenario | Result |
+|----------|--------|
+| Jan 16: See patient John (MRN 12345), findings "UTI suspected" | ✅ New record created for Jan 16 |
+| Jan 18: See same patient, findings now "UTI confirmed" | ✅ New separate record created for Jan 18 |
+| Jan 16 again: Update findings to "UTI ruled out" | ✅ Same record updated (no duplicate created) |
+
+**Why This Matters:**
+- ✅ No accidental duplicates for same patient on same day
+- ✅ Each visit date is tracked separately
+- ✅ Findings stay up-to-date for each visit
+- ✅ You can see history across multiple visits
+
+**"Copy from Previous Visit" Feature:**
+
+When adding the same patient on a new date, click: **"Copy from Previous Visit"**
+
+This auto-fills:
+- ✅ Room, Hospital, Name, DOB, MRN
+- ✅ Treatment Plan, Supervising MD
+- ❌ **Does NOT copy**: Findings, Pending tests, Follow-ups (fresh per visit)
+
+**Pro Tip**: Use this when rounding on the same patient across different days!
 
 ### Editing a Patient Record
 
@@ -253,13 +291,49 @@ Your CSV file should have:
 #### How to Import
 
 1. Prepare your CSV file following the format above
-2. Click **Import** button (or use file input)
-3. Select your CSV file
-4. The app will:
+2. Click **📥 Import Files** button
+3. Select one or more files (CSV, XLSX, or XLS)
+4. **Preview Modal Opens** showing:
+   - Total files selected
+   - Count of NEW records (will be added)
+   - Count of DUPLICATES (same MRN + date already exist)
+   - Per-file breakdown
+5. **Choose action**:
+   - **✓ Import All** - Add new records + replace duplicates with file data
+   - **✓ Import New Only** - Add new records, skip duplicates (preserve existing)
+   - **✗ Cancel** - Don't import anything
+6. The app will:
    - Parse on-call assignments from rows 1-3
    - Detect hospital sections automatically
-   - Create patient records for each row
-   - Show success count and any errors
+   - Create patient records (based on your choice)
+   - Show progress and success count
+
+#### Bulk Import (Multiple Files)
+
+You can import multiple workbooks at once:
+
+1. Click **📥 Import Files**
+2. Hold Ctrl (Windows) or Cmd (Mac) and select multiple files
+   - Example: Select `2024.xlsx`, `2025.xlsx`, `2026.xlsx`
+3. The app processes **all sheets** in **all files** automatically
+4. Preview shows aggregated summary across all files
+5. Choose import action (Import All or New Only)
+6. All files imported in seconds
+
+**Use Case - Historical Data**: Import 3 years of workbooks in one operation instead of one-by-one.
+
+#### Duplicate Detection
+
+The app prevents duplicate records using **compound key**: `MRN + Date`
+
+**Examples**:
+- File has: MRN 12345, Date 2025-01-16 → Already exists → **DUPLICATE** ⚠️
+- File has: MRN 12345, Date 2025-01-17 → Not in system → **NEW** ✅
+- File has: MRN 99999, Date 2025-01-16 → Not in system → **NEW** ✅
+
+**When to use "Import All"**: File has corrected/updated data, you want to replace existing records
+
+**When to use "Import New Only"**: Preserve existing data, only add new patients
 
 #### Example CSV Structure
 

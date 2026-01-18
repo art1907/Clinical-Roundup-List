@@ -1,6 +1,12 @@
 # Clinical Rounding Platform - Installation Guide (Pure M365)
 
+**Status**: ✅ Current  
+**Last Updated**: January 18, 2026  
+**Documentation**: Updated with VisitKey schema guidance
+
 This guide provides step-by-step instructions to set up the Clinical Rounding Platform using **Microsoft 365 only** (no Azure).
+
+> **Note (Jan 18, 2026)**: Documentation was consolidated to reduce redundancy. This guide remains the authoritative **Installation** reference. See [DOCUMENTATION_INDEX.md](./DOCUMENTATION_INDEX.md) for complete documentation map.
 
 ## Table of Contents
 
@@ -148,34 +154,60 @@ SHAREPOINT_SITE_ID=yourdomain.sharepoint.com,abc123,def456
 1. Click **+ New** → **List**
 2. Name: `Patients`
 3. Click **Create**
-4. Click **+ Add column** and create these columns:
+4. Add columns per the schema below
 
-| Column Name | Type | Additional Settings |
-|---|---|---|
-| Room | Single line of text | - |
-| Date | Date and Time | - |
-| Name | Single line of text | - |
-| DOB | Single line of text | - |
-| MRN | Single line of text | - |
-| Hospital | Choice | Choices: `WGMC`, `AWC`, `BTMC`, `BEMC`, `CRMC`, `AHD`, `Westgate` |
-| FindingsData | Multiple lines of text | Format: JSON |
-| FindingsText | Multiple lines of text | - |
-| Plan | Multiple lines of text | - |
-| SupervisingMD | Single line of text | - |
-| Pending | Multiple lines of text | - |
-| FollowUp | Multiple lines of text | - |
-| Priority | Choice | Choices: `Yes`, `No` |
-| ProcedureStatus | Choice | Choices: `To-Do`, `In-Progress`, `Completed`, `Post-Op` |
-| CPTPrimary | Single line of text | - |
-| ICDPrimary | Single line of text | - |
-| ChargeCodesSecondary | Multiple lines of text | Format: JSON |
-| VisitKey | Single line of text | ⚠️ **Enforce unique values** |
-| Archived | Choice | Choices: `Yes`, `No` |
+#### Patients List Schema (19 Columns)
 
-**To create unique index on VisitKey:**
-1. Click the **VisitKey** column header
-2. Select **Column settings**
-3. Check ✅ **Enforce unique values**
+Create all columns listed below. **VisitKey is critical** for data integrity!
+
+| Column Name | Type | Settings | Purpose |
+|---|---|---|---|
+| **VisitKey** | **Single line text** | **⚠️ UNIQUE CONSTRAINT (see below)** | Compound key: `{MRN}\|{yyyy-mm-dd}` |
+| Room | Single line text | - | Patient room/bed number |
+| Date | Date and Time | - | Visit date (required) |
+| Name | Single line text | - | Patient name |
+| DOB | Single line text | - | Date of birth |
+| MRN | Single line text | - | Medical record number |
+| Hospital | Choice | Choices: WGMC, BTMC, AWC, Westgate, CRMC, AHD, BEMC, Other | Facility name |
+| FindingsData | Multiple lines of text | - | JSON: clinical findings (app-managed) |
+| FindingsText | Multiple lines of text | - | Plain-text findings summary |
+| Plan | Multiple lines of text | - | Treatment plan |
+| SupervisingMD | Single line text | - | Attending physician |
+| Pending | Multiple lines of text | - | Pending tests/procedures |
+| FollowUp | Multiple lines of text | - | Follow-up appointments |
+| Priority | Choice | Choices: Yes, No | STAT/urgent flag |
+| ProcedureStatus | Choice | Choices: To-Do, In-Progress, Completed, Post-Op | Procedure phase |
+| CPTPrimary | Single line text | - | Primary CPT billing code |
+| ICDPrimary | Single line text | - | Primary ICD diagnosis code |
+| ChargeCodesSecondary | Multiple lines of text | - | Additional codes (JSON array) |
+| Archived | Choice | Choices: Yes, No | Soft-delete flag |
+
+#### ⚠️ CRITICAL: Enable VisitKey Unique Constraint
+
+This step **must be completed** for the app to work correctly:
+
+1. After adding VisitKey column, go to **List settings** (gear icon)
+2. Go to **Columns** and select **VisitKey**
+3. Check: **Enforce unique values** ✅
+4. Click **Save**
+
+**Why VisitKey is Critical:**
+
+The VisitKey system prevents duplicate records:
+
+| Scenario | VisitKey Example | Result |
+|----------|------------------|--------|
+| Patient MRN 12345 on Jan 16 | `12345\|2026-01-16` | New record created |
+| Same patient on Jan 18 | `12345\|2026-01-18` | New separate record (different date) |
+| Same patient on Jan 16 again | `12345\|2026-01-16` | Same record updated (unique constraint prevents duplicate) |
+
+**How Users Experience This:**
+- App automatically generates VisitKey = `{MRN}|{Date}`
+- SharePoint rejects duplicate VisitKeys
+- Users don't see VisitKey field (app manages it)
+- Result: No accidental duplicate records
+
+See [USERGUIDE.md - Visit Keys Section](./USERGUIDE.md#understanding-visit-keys--same-patient-records) for user-facing explanation
 
 5. Save the list
 6. **Get the list ID:**

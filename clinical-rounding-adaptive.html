@@ -818,10 +818,14 @@
 
             card.classList.toggle('bg-red-600', isActive);
             card.classList.toggle('text-white', isActive);
-            card.classList.toggle('border-red-700', isActive);
+            card.classList.toggle('border-red-800', isActive);
+            card.classList.toggle('border-4', isActive);
+            card.classList.toggle('shadow-lg', isActive);
+            card.classList.toggle('shadow-red-500/50', isActive);
             card.classList.toggle('bg-slate-50', !isActive);
             card.classList.toggle('text-slate-700', !isActive);
             card.classList.toggle('border-slate-200', !isActive);
+            card.classList.toggle('border', !isActive);
 
             track.classList.toggle('bg-red-500', isActive);
             track.classList.toggle('bg-slate-300', !isActive);
@@ -851,10 +855,37 @@
         });
     </script>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <script>
+        // ============================================================================
+        // M365 CONFIGURATION - UPDATE THESE VALUES AFTER SETTING UP M365
+        // ============================================================================
+        const M365_CONFIG = {
+            // From Entra ID App Registration
+            clientId: 'YOUR_CLIENT_ID_HERE',          // Copy from Azure Portal → App Registrations → Your App → Overview
+            tenantId: 'YOUR_TENANT_ID_HERE',          // Copy from Azure Portal → App Registrations → Your App → Overview
+            
+            // SharePoint configuration
+            siteId: 'YOUR_SITE_ID_HERE',              // Get from SharePoint site → Site Settings → or use Graph API
+            lists: {
+                patients: 'YOUR_PATIENTS_LIST_ID_HERE',           // Get list ID from SharePoint List settings
+                onCallSchedule: 'YOUR_ONCALL_LIST_ID_HERE',       // Get list ID from SharePoint List settings
+                settings: 'YOUR_SETTINGS_LIST_ID_HERE',           // Get list ID from SharePoint List settings
+                auditLogs: 'YOUR_AUDIT_LIST_ID_HERE'              // Optional - Get list ID from SharePoint List settings
+            },
+            
+            // Redirect URI - must match what you set in Entra ID app registration
+            redirectUri: window.location.origin + window.location.pathname
+        };
+        
+        // Include m365-integration.js - either inline the content below or include via <script src="">
+        // For now, we'll define the M365 integration functions directly
+    </script>
+
+    <script src="m365-integration.js"></script>
+
+    <script>
+        // Global state for the application
+        // Note: These will be updated by M365 polling or local mode
 
         let patients = [];
         let onCallSchedule = [];
@@ -1059,104 +1090,49 @@
             return US_HOLIDAYS[key] || variableHolidaysCache[year][key] || null;
         }
 
-        let db, auth;
-        const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'urology-rounding-platform-v1';
+        // M365 Integration: Authentication & Polling
+        // ============================================================================
         
-        try {
-            const configRaw = typeof window.__firebase_config !== 'undefined' ? window.__firebase_config : '{}';
-            const firebaseConfig = JSON.parse(configRaw);
-            
-            let retryAttempt = 0;
-            const MAX_AUTO_RETRIES = 2;
-            const CONNECTION_TIMEOUT = 5000;
-            const getRetryDelay = (attempt) => Math.min(3000 * Math.pow(2, attempt), 6000);
-            
-            if (firebaseConfig.apiKey) {
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-
-                const initSync = async () => {
-                    try {
-                        const token = typeof window.__initial_auth_token !== 'undefined' ? window.__initial_auth_token : null;
-                        const authPromise = token ? signInWithCustomToken(auth, token) : signInAnonymously(auth);
-                        const timeoutPromise = new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error('Connection timeout')), CONNECTION_TIMEOUT)
-                        );
-                        await Promise.race([authPromise, timeoutPromise]);
-                        
-                        onAuthStateChanged(auth, (user) => {
-                            currentUser = user;
-                            if (user) {
-                                isConnected = true;
-                                document.getElementById('sync-indicator').innerHTML = `<span class="inline-flex h-2 w-2 rounded-full bg-green-500"></span>`;
-                                document.getElementById('status-indicator').className = 'inline-flex h-3 w-3 rounded-full bg-green-500';
-                                document.getElementById('status-text').innerText = 'Connected Mode';
-                                document.getElementById('status-text').className = 'text-sm font-bold text-green-900 uppercase tracking-wide';
-                                document.getElementById('status-detail').innerText = 'Syncing to cloud';
-                                document.getElementById('status-detail').className = 'text-xs text-green-700 font-semibold';
-                                document.getElementById('connection-status-bar').className = 'px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-green-50 border-b border-green-200 gap-1';
-                                startRealtimeListeners();
-                            }
-                        });
-                    } catch (err) {
-                        isConnected = false;
-                        retryAttempt++;
-                        console.warn(`Firebase Auth Error (attempt ${retryAttempt}):`, err.message);
-                        document.getElementById('sync-indicator').innerHTML = `<span class="inline-flex h-2 w-2 rounded-full bg-amber-400"></span>`;
-                        document.getElementById('status-indicator').className = 'inline-flex h-2.5 w-2.5 rounded-full bg-amber-400';
-                        
-                        if (retryAttempt < MAX_AUTO_RETRIES) {
-                            const delay = getRetryDelay(retryAttempt - 1);
-                            document.getElementById('status-text').innerText = `Reconnecting in ${delay/1000}s...`;
-                            document.getElementById('status-detail').innerHTML = `Attempt ${retryAttempt}/${MAX_AUTO_RETRIES}`;
-                            setTimeout(initSync, delay);
-                        } else {
-                            document.getElementById('status-text').innerText = 'Connection Failed';
-                            document.getElementById('status-detail').innerHTML = `<button onclick="window.retryConnection()" class="text-blue-600 hover:text-blue-800 underline font-semibold">Retry Now</button>`;
-                        }
-                    }
-                };
-                
-                window.retryConnection = () => {
-                    retryAttempt = 0;
-                    document.getElementById('status-text').innerText = 'Connecting...';
-                    document.getElementById('status-detail').innerText = 'Initializing...';
-                    initSync();
-                };
-                
-                initSync();
-            } else {
-                // No Firebase config - stays in Local Mode (already set in HTML)
+        // Check if M365 config is populated, otherwise fall back to local mode
+        const useM365 = M365_CONFIG.clientId !== 'YOUR_CLIENT_ID_HERE' && M365_CONFIG.siteId !== 'YOUR_SITE_ID_HERE';
+        
+        let retryAttempt = 0;
+        const MAX_AUTO_RETRIES = 2;
+        const CONNECTION_TIMEOUT = 5000;
+        const getRetryDelay = (attempt) => Math.min(3000 * Math.pow(2, attempt), 6000);
+        
+        // Initialize M365 when page loads (if credentials are configured)
+        if (useM365 && typeof initializeMSAL === 'function') {
+            try {
+                // Initialize MSAL after DOM is ready
+                document.addEventListener('DOMContentLoaded', () => {
+                    initializeMSAL();
+                }, { once: true });
+            } catch (e) {
+                console.error("M365 Initialization Error:", e);
                 isConnected = false;
             }
-        } catch (e) { 
-            console.error("Firebase Setup Error:", e); 
+        } else {
+            // Local mode - no M365 config, stays in offline mode
+            isConnected = false;
+            console.log("M365 config not configured - running in Local Mode");
         }
-
-        function startRealtimeListeners() {
-            if (!currentUser || !db) return;
-            try {
-                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'patients'), (snapshot) => {
-                    patients = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    renderUI();
-                }, (err) => console.warn("Patients listener error:", err.message));
-
-                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'onCallSchedule'), (snapshot) => {
-                    onCallSchedule = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    updateOnCallDashboard();
-                }, (err) => console.warn("OnCall listener error:", err.message));
-
-                onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), (docSnap) => {
-                    if (docSnap.exists()) {
-                        globalSettings = docSnap.data();
-                        updateOnCallDashboard();
-                    }
-                }, (err) => console.warn("Settings listener error:", err.message));
-            } catch (e) {
-                console.error("Listener setup error:", e);
-            }
-        }
+        
+        // Callback functions that m365-integration.js will call to update UI
+        window.updatePatientsFromM365 = function(patientsData) {
+            patients = patientsData;
+            renderUI();
+        };
+        
+        window.updateOnCallFromM365 = function(onCallData) {
+            onCallSchedule = onCallData;
+            updateOnCallDashboard();
+        };
+        
+        window.updateSettingsFromM365 = function(settingsData) {
+            globalSettings = { onCall: settingsData.defaultOnCall || '', hospitals: settingsData.hospitals || '' };
+            updateOnCallDashboard();
+        };
 
         window.savePatient = async (e) => {
             e.preventDefault();
@@ -1184,44 +1160,53 @@
                 cptPrimary: document.getElementById('f-cpt-primary').value,
                 icdPrimary: document.getElementById('f-icd-primary').value,
                 chargeCodesSecondary: document.getElementById('f-charge-codes-secondary').value,
-                archived: false, 
-                lastUpdated: serverTimestamp()
+                archived: false
             };
             
             try {
                 const editId = document.getElementById('edit-id').value;
-                if (!db) {
+                
+                if (!isConnected || !useM365) {
                     // Local mode: store in memory
                     if (editId) {
                         const index = patients.findIndex(p => p.id === editId);
                         if (index !== -1) {
-                            patients[index] = { ...data, id: editId };
+                            patients[index] = { ...data, id: editId, lastUpdated: new Date().toISOString() };
                         }
                     } else {
                         const newId = 'local-' + Date.now();
-                        patients.push({ ...data, id: newId });
+                        patients.push({ ...data, id: newId, lastUpdated: new Date().toISOString() });
                     }
                     renderUI();
                     window.closeModal();
                     showToast("✓ Saved (Local)");
                     return false;
                 }
-                if (editId) {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'patients', editId), data);
+                
+                // M365 mode: use Graph API via m365-integration.js
+                if (typeof window.m365SavePatient === 'function') {
+                    if (editId) {
+                        data.id = editId;
+                    }
+                    await window.m365SavePatient(data);
+                    window.closeModal();
+                    showToast("✓ Saved");
+                    // Refetch data to update UI
+                    if (typeof window.m365FetchPatients === 'function') {
+                        await window.m365FetchPatients();
+                    }
                 } else {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'patients'), data);
+                    throw new Error('M365 save function not available');
                 }
-                window.closeModal();
-                showToast("✓ Saved");
             } catch (err) { 
                 console.error("Save error:", err);
-                showToast("Error");
+                showToast("Error: " + (err.message || "Failed to save"));
             }
             return false;
         };
 
         window.toggleArchive = async (id, shouldArchive) => {
-            if (!db) {
+            if (!isConnected || !useM365) {
                 // Local mode: update in memory
                 const p = patients.find(x => x.id === id);
                 if (p) {
@@ -1232,15 +1217,21 @@
                 return;
             }
             try {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'patients', id), { archived: shouldArchive, lastUpdated: serverTimestamp() });
-                showToast(shouldArchive ? "Archived" : "Restored");
+                if (typeof window.m365SavePatient === 'function') {
+                    const patient = patients.find(p => p.id === id);
+                    if (patient) {
+                        patient.archived = shouldArchive;
+                        await window.m365SavePatient(patient);
+                        showToast(shouldArchive ? "Archived" : "Restored");
+                    }
+                }
             } catch (err) {
                 console.error("Archive error:", err);
             }
         };
 
         window.updateStatusQuick = async (id, newStatus) => {
-            if (!db) {
+            if (!isConnected || !useM365) {
                 // Local mode: update in memory
                 const p = patients.find(x => x.id === id);
                 if (p) {
@@ -1250,7 +1241,13 @@
                 return;
             }
             try {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'patients', id), { procedureStatus: newStatus, lastUpdated: serverTimestamp() });
+                if (typeof window.m365SavePatient === 'function') {
+                    const patient = patients.find(p => p.id === id);
+                    if (patient) {
+                        patient.procedureStatus = newStatus;
+                        await window.m365SavePatient(patient);
+                    }
+                }
             } catch (err) {
                 console.error("Status update error:", err);
             }
@@ -1258,7 +1255,9 @@
 
         window.deletePatient = async (id) => {
             if (!confirm("Delete this patient record? This cannot be undone.")) return;
-            if (!db) {
+            
+            if (!isConnected || !useM365) {
+                // Local mode
                 const index = patients.findIndex(p => p.id === id);
                 if (index !== -1) {
                     patients.splice(index, 1);
@@ -1268,11 +1267,17 @@
                 return;
             }
             try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'patients', id));
-                showToast("✓ Deleted");
+                if (typeof window.m365DeletePatient === 'function') {
+                    await window.m365DeletePatient(id);
+                    showToast("✓ Deleted");
+                    // Refetch to update UI
+                    if (typeof window.m365FetchPatients === 'function') {
+                        await window.m365FetchPatients();
+                    }
+                }
             } catch (err) {
                 console.error("Delete error:", err);
-                showToast("Error");
+                showToast("Error: " + (err.message || "Failed to delete"));
             }
         };
 
@@ -1626,6 +1631,293 @@
             }
         };
 
+        // PREVIEW BULK IMPORT (Parse files, compare with existing, show summary)
+        window.previewBulkImport = async (files) => {
+            const preview = {
+                files: [],
+                totalNewRecords: 0,
+                totalDuplicates: 0,
+                totalSchedules: 0,
+                errors: [],
+                allPatients: [],
+                allSchedules: []
+            };
+
+            try {
+                showToast(`🔍 Analyzing ${files.length} file(s)...`);
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const fileName = file.name;
+                    let fileOnCall = [];
+                    let filePatients = [];
+                    let fileHospitals = [];
+
+                    try {
+                        if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                            const arrayBuffer = await file.arrayBuffer();
+                            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                            for (const sheetName of workbook.SheetNames) {
+                                const sheet = workbook.Sheets[sheetName];
+                                const csvText = XLSX.utils.sheet_to_csv(sheet);
+                                try {
+                                    const parsed = CSVImporter.parse3Pass(csvText);
+                                    fileOnCall = fileOnCall.concat(parsed.onCall);
+                                    filePatients = filePatients.concat(parsed.patients);
+                                    fileHospitals = [...new Set([...fileHospitals, ...parsed.hospitals])];
+                                } catch (sheetErr) {
+                                    console.warn(`Skipped sheet "${sheetName}" in ${fileName}`);
+                                }
+                            }
+                        } else if (fileName.endsWith('.csv')) {
+                            const csvText = await file.text();
+                            const parsed = CSVImporter.parse3Pass(csvText);
+                            fileOnCall = parsed.onCall;
+                            filePatients = parsed.patients;
+                            fileHospitals = parsed.hospitals;
+                        }
+
+                        // Analyze: count new vs. duplicates
+                        let newInFile = 0;
+                        let duplicatesInFile = 0;
+                        const filePreviewDetails = [];
+
+                        filePatients.forEach(p => {
+                            const visitKey = `${p.mrn}|${p.date}`;
+                            const isDuplicate = patients.some(existing => existing.mrn === p.mrn && existing.date === p.date);
+                            if (isDuplicate) {
+                                duplicatesInFile++;
+                                filePreviewDetails.push({
+                                    status: 'duplicate',
+                                    mrn: p.mrn,
+                                    date: p.date,
+                                    name: p.name || 'Unknown'
+                                });
+                            } else {
+                                newInFile++;
+                                filePreviewDetails.push({
+                                    status: 'new',
+                                    mrn: p.mrn,
+                                    date: p.date,
+                                    name: p.name || 'Unknown'
+                                });
+                            }
+                        });
+
+                        preview.files.push({
+                            fileName,
+                            newRecords: newInFile,
+                            duplicates: duplicatesInFile,
+                            schedules: fileOnCall.length,
+                            details: filePreviewDetails
+                        });
+
+                        preview.totalNewRecords += newInFile;
+                        preview.totalDuplicates += duplicatesInFile;
+                        preview.totalSchedules += fileOnCall.length;
+                        preview.allPatients = preview.allPatients.concat(filePatients);
+                        preview.allSchedules = preview.allSchedules.concat(fileOnCall);
+
+                    } catch (fileErr) {
+                        preview.errors.push(`${fileName}: ${fileErr.message}`);
+                        console.error(`Error previewing ${fileName}:`, fileErr);
+                    }
+                }
+
+                return preview;
+            } catch (err) {
+                console.error("Preview error:", err);
+                throw err;
+            }
+        };
+
+        // SHOW BULK IMPORT PREVIEW MODAL
+        window.showBulkImportPreview = (preview, onConfirm) => {
+            const duplicateCount = preview.totalDuplicates;
+            const newCount = preview.totalNewRecords;
+            const totalCount = duplicateCount + newCount;
+
+            const detailsHtml = preview.files.map(f => `
+                <div class="bg-slate-50 p-3 rounded border border-slate-200 mb-2">
+                    <div class="font-semibold text-sm text-slate-800">${f.fileName}</div>
+                    <div class="text-xs text-slate-600 mt-1">
+                        <span class="text-green-700 font-semibold">✓ ${f.newRecords} new</span> | 
+                        <span class="text-amber-700 font-semibold">⚠ ${f.duplicates} duplicates</span> | 
+                        <span class="text-blue-700 font-semibold">📅 ${f.schedules} schedules</span>
+                    </div>
+                </div>
+            `).join('');
+
+            const html = `
+                <div class="modal-header border-b border-slate-200 pb-3 mb-4">
+                    <h2 class="text-xl font-bold text-slate-900">📊 Import Preview</h2>
+                </div>
+                <div class="space-y-3 mb-6 max-h-96 overflow-y-auto">
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
+                        <div class="text-sm font-semibold text-blue-900">Summary</div>
+                        <div class="text-xs text-blue-800 mt-2 space-y-1">
+                            <div>📁 <strong>${preview.files.length} file(s)</strong> ready to import</div>
+                            <div>✅ <strong>${newCount} new record(s)</strong> will be added</div>
+                            <div>⚠️ <strong>${duplicateCount} duplicate(s)</strong> found (same MRN + date)</div>
+                            <div>📅 <strong>${preview.totalSchedules} schedule update(s)</strong></div>
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-200 pt-3">
+                        <div class="text-xs font-semibold text-slate-600 mb-2">Files:</div>
+                        ${detailsHtml}
+                    </div>
+                    ${preview.errors.length > 0 ? `
+                        <div class="bg-red-50 border-l-4 border-red-500 p-3 rounded">
+                            <div class="text-xs font-semibold text-red-900">⚠️ Errors:</div>
+                            <div class="text-xs text-red-800 mt-1">${preview.errors.join('<br>')}</div>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="space-y-2">
+                    <div class="text-xs font-semibold text-slate-700 mb-3">How to proceed?</div>
+                    <button onclick="window.proceedBulkImport('replace', ${newCount}, ${duplicateCount})" class="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">
+                        ✓ Import All (${newCount} new + ${duplicateCount} replace)
+                    </button>
+                    <button onclick="window.proceedBulkImport('newonly', ${newCount}, ${duplicateCount})" class="w-full px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700">
+                        ✓ Import New Only (${newCount} only, skip ${duplicateCount})
+                    </button>
+                    <button onclick="window.closeModal('bulk-preview-modal')" class="w-full px-4 py-2.5 bg-slate-300 text-slate-800 text-sm font-semibold rounded-lg hover:bg-slate-400">
+                        ✗ Cancel
+                    </button>
+                </div>
+            `;
+
+            const modal = document.getElementById('patient-modal');
+            modal.innerHTML = html;
+            modal.style.display = 'flex';
+        };
+
+        // EXECUTE BULK IMPORT with chosen action
+        window.proceedBulkImport = async (action, newCount, dupCount) => {
+            const files = document.getElementById('csv-file-input').files;
+            const modal = document.getElementById('patient-modal');
+            modal.style.display = 'none';
+
+            let totalPatients = 0;
+            let totalOnCall = 0;
+            let fileCount = 0;
+            const errors = [];
+
+            try {
+                showToast(`⏳ Importing with action: ${action}...`);
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const fileName = file.name;
+
+                    try {
+                        let fileOnCall = [];
+                        let filePatients = [];
+                        let fileHospitals = [];
+
+                        if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                            const arrayBuffer = await file.arrayBuffer();
+                            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                            for (const sheetName of workbook.SheetNames) {
+                                const sheet = workbook.Sheets[sheetName];
+                                const csvText = XLSX.utils.sheet_to_csv(sheet);
+                                try {
+                                    const parsed = CSVImporter.parse3Pass(csvText);
+                                    fileOnCall = fileOnCall.concat(parsed.onCall);
+                                    filePatients = filePatients.concat(parsed.patients);
+                                    fileHospitals = [...new Set([...fileHospitals, ...parsed.hospitals])];
+                                } catch (sheetErr) {
+                                    console.warn(`Skipped sheet "${sheetName}" in ${fileName}`);
+                                }
+                            }
+                        } else if (fileName.endsWith('.csv')) {
+                            const csvText = await file.text();
+                            const parsed = CSVImporter.parse3Pass(csvText);
+                            fileOnCall = parsed.onCall;
+                            filePatients = parsed.patients;
+                            fileHospitals = parsed.hospitals;
+                        }
+
+                        // Import schedules
+                        fileOnCall.forEach(oc => {
+                            const idx = onCallSchedule.findIndex(s => s.date === oc.date);
+                            if (idx >= 0) {
+                                onCallSchedule[idx] = { ...onCallSchedule[idx], ...oc, id: onCallSchedule[idx].id };
+                            } else {
+                                onCallSchedule.push({ id: 'oc_' + Math.random().toString(36).substr(2, 9), ...oc });
+                            }
+                        });
+
+                        // Import patients based on chosen action
+                        filePatients.forEach(p => {
+                            const idx = patients.findIndex(existing => existing.mrn === p.mrn && existing.date === p.date);
+                            if (idx >= 0) {
+                                // Duplicate found
+                                if (action === 'replace') {
+                                    // Replace with new data
+                                    patients[idx] = { ...patients[idx], ...p };
+                                    totalPatients++;
+                                }
+                                // If 'newonly', skip this record
+                            } else {
+                                // New record
+                                patients.push(p);
+                                totalPatients++;
+                            }
+                        });
+
+                        // Update hospitals
+                        if (fileHospitals.length > 0) {
+                            const existingHospitals = (globalSettings.hospitals || '').split(',').map(h => h.trim()).filter(h => h);
+                            const allHospitals = [...new Set([...existingHospitals, ...fileHospitals])];
+                            globalSettings.hospitals = allHospitals.join(', ');
+                        }
+
+                        totalOnCall += fileOnCall.length;
+                        fileCount++;
+                        showToast(`⏳ Processing ${i + 1}/${files.length}: ${fileName}`);
+
+                    } catch (fileErr) {
+                        errors.push(`${fileName}: ${fileErr.message}`);
+                        console.error(`Error processing ${fileName}:`, fileErr);
+                    }
+                }
+
+                renderUI();
+                updateStats();
+
+                const actionText = action === 'replace' ? 'All' : 'New Only';
+                showToast(`✅ Import complete (${actionText}): ${fileCount} file(s), ${totalPatients} record(s)`);
+
+                if (errors.length > 0) {
+                    console.warn('Import errors:', errors);
+                    showToast(`⚠️ ${errors.length} file(s) had issues - check console`);
+                }
+
+                document.getElementById('csv-file-input').value = '';
+
+            } catch (err) {
+                console.error("Import error:", err);
+                showToast("❌ Import failed: " + err.message);
+            }
+        };
+
+        // BULK IMPORT HANDLER (Multiple files: CSV + XLSX)
+        window.handleBulkImport = async (event) => {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            try {
+                const preview = await window.previewBulkImport(files);
+                window.showBulkImportPreview(preview);
+            } catch (err) {
+                console.error("Bulk import error:", err);
+                showToast("❌ Failed to analyze files: " + err.message);
+            }
+        };
+
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
             const checkboxes = document.querySelectorAll('.findings-checkbox');
             const codesInput = document.getElementById('f-findings-codes');
@@ -1690,13 +1982,13 @@
                 <h1 class="text-xl font-black tracking-tight truncate">Clinical Rounding List</h1>
             </div>
             <div class="flex gap-2">
-                <button onclick="document.getElementById('csv-file-input').click()" class="flex-shrink-0 px-3 py-2.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700">📥 Import CSV</button>
+                <button onclick="document.getElementById('csv-file-input').click()" class="flex-shrink-0 px-3 py-2.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700">📥 Import Files</button>
                 <button onclick="window.openModal()" class="flex-shrink-0 px-4 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">+ Add</button>
             </div>
         </header>
 
         <!-- Hidden CSV File Input -->
-        <input type="file" id="csv-file-input" accept=".csv" style="display:none;" onchange="window.handleCSVImport(event)">
+        <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" multiple style="display:none;" onchange="window.handleBulkImport(event)">
 
         <!-- Connection Status Bar -->
         <div id="connection-status-bar" class="px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-amber-50 border-b border-amber-200 gap-1">
@@ -1807,7 +2099,6 @@
         <!-- Footer -->
         <div class="border-t border-slate-200 px-3 py-2 bg-white flex gap-2 flex-shrink-0">
             <button id="handoff-generate-btn" disabled onclick="window.generateHandoff()" class="flex-1 px-3 py-2.5 bg-slate-900 text-white text-xs font-bold rounded disabled:opacity-30">Handoff</button>
-            <label class="flex-1 px-3 py-2.5 bg-white text-slate-700 text-xs font-bold rounded border border-slate-200 text-center cursor-pointer">Import <input type="file" accept=".csv" class="hidden"></label>
         </div>
     </div>
 
