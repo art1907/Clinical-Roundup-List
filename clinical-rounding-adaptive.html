@@ -753,6 +753,12 @@
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
             if (statusInput) statusInput.value = 'To-Do';
             if (priorityInput) priorityInput.checked = false;
+            
+            // Auto-fill Created By with current user for new records
+            const createdByField = document.getElementById('f-created-by');
+            if (createdByField && !id) {
+                createdByField.value = currentUser || 'Local User';
+            }
 
             if (id && typeof window.getCurrentPatients === 'function') {
                 const patients = window.getCurrentPatients();
@@ -771,6 +777,12 @@
                     }
                     if (priorityInput) priorityInput.checked = p.priority || false;
                     if (statusInput) statusInput.value = p.procedureStatus || 'To-Do';
+                    
+                    // Show who created the record when editing
+                    const createdByField = document.getElementById('f-created-by');
+                    if (createdByField) {
+                        createdByField.value = p.createdBy || 'Unknown';
+                    }
                     
                     if (p.findingsCodes && p.findingsCodes.length > 0) {
                         document.querySelectorAll('.findings-checkbox').forEach(cb => {
@@ -857,28 +869,10 @@
 
     <script>
         // ============================================================================
-        // M365 CONFIGURATION - UPDATE THESE VALUES AFTER SETTING UP M365
+        // M365 CONFIGURATION - Now defined in m365-integration.js
         // ============================================================================
-        const M365_CONFIG = {
-            // From Entra ID App Registration
-            clientId: 'YOUR_CLIENT_ID_HERE',          // Copy from Azure Portal → App Registrations → Your App → Overview
-            tenantId: 'YOUR_TENANT_ID_HERE',          // Copy from Azure Portal → App Registrations → Your App → Overview
-            
-            // SharePoint configuration
-            siteId: 'YOUR_SITE_ID_HERE',              // Get from SharePoint site → Site Settings → or use Graph API
-            lists: {
-                patients: 'YOUR_PATIENTS_LIST_ID_HERE',           // Get list ID from SharePoint List settings
-                onCallSchedule: 'YOUR_ONCALL_LIST_ID_HERE',       // Get list ID from SharePoint List settings
-                settings: 'YOUR_SETTINGS_LIST_ID_HERE',           // Get list ID from SharePoint List settings
-                auditLogs: 'YOUR_AUDIT_LIST_ID_HERE'              // Optional - Get list ID from SharePoint List settings
-            },
-            
-            // Redirect URI - must match what you set in Entra ID app registration
-            redirectUri: window.location.origin + window.location.pathname
-        };
-        
-        // Include m365-integration.js - either inline the content below or include via <script src="">
-        // For now, we'll define the M365 integration functions directly
+        // NOTE: M365_CONFIG is defined in m365-integration.js to avoid duplication
+        // If you need to customize config, edit m365-integration.js instead
     </script>
 
     <script src="m365-integration.js"></script>
@@ -1094,7 +1088,7 @@
         // ============================================================================
         
         // Check if M365 config is populated, otherwise fall back to local mode
-        const useM365 = M365_CONFIG.clientId !== 'YOUR_CLIENT_ID_HERE' && M365_CONFIG.siteId !== 'YOUR_SITE_ID_HERE';
+        const useM365 = M365_CONFIG.auth.clientId !== 'YOUR_CLIENT_ID_HERE' && M365_CONFIG.sharepoint.siteId !== 'YOUR_SITE_ID_HERE';
         
         let retryAttempt = 0;
         const MAX_AUTO_RETRIES = 2;
@@ -1160,6 +1154,7 @@
                 cptPrimary: document.getElementById('f-cpt-primary').value,
                 icdPrimary: document.getElementById('f-icd-primary').value,
                 chargeCodesSecondary: document.getElementById('f-charge-codes-secondary').value,
+                createdBy: document.getElementById('f-created-by').value || currentUser || 'Unknown',
                 archived: false
             };
             
@@ -1296,7 +1291,7 @@
 
             ['active', 'procedures', 'calendar', 'oncall', 'archive'].forEach(b => {
                 const el = document.getElementById(`tab-${b}-btn`);
-                if (el) el.className = (b === tab) ? "flex-1 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" : "flex-1 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase";
+                if (el) el.className = (b === tab) ? "flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" : "flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase";
             });
             renderUI();
         };
@@ -1916,9 +1911,15 @@
             }
         };
 
-        };
-
-        document.addEventListener('DOMContentLoaded', () => {
+        // Wait for all DOM and scripts to be ready before initializing
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            // DOM already loaded
+            initializeApp();
+        }
+        
+        function initializeApp() {
             const checkboxes = document.querySelectorAll('.findings-checkbox');
             const codesInput = document.getElementById('f-findings-codes');
             const valuesInput = document.getElementById('f-findings-values');
@@ -1970,8 +1971,13 @@
             priorityCheckbox?.addEventListener('change', updateStatUI);
             updateSelectedCodes();
             
-            window.setTab('active');
-        });
+            // Ensure setTab is defined before calling it
+            if (typeof window.setTab === 'function') {
+                window.setTab('active');
+            } else {
+                console.error('setTab function not defined yet');
+            }
+        }
     </script>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -2143,6 +2149,18 @@
                     </select>
                 </div>
 
+                <!-- Provider/Attending Physician -->
+                <div>
+                    <label class="text-xs font-bold text-slate-600">👨‍⚕️ Provider / Attending Physician</label>
+                    <input type="text" id="f-md" placeholder="Dr. Smith" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                </div>
+
+                <!-- Created By (Auto-filled from login) -->
+                <div>
+                    <label class="text-xs font-bold text-slate-400">📝 Created By</label>
+                    <input type="text" id="f-created-by" placeholder="Auto-filled from login" class="w-full mt-2 p-3 bg-slate-100 rounded-lg border border-slate-200 text-slate-600" readonly>
+                </div>
+
                 <div id="stat-acuity-card" class="flex items-center justify-between p-4 bg-slate-50 text-slate-700 rounded-lg border border-slate-200 transition-colors duration-300">
                     <div>
                         <label for="f-priority" class="font-bold text-lg block">Stat Acuity</label>
@@ -2256,10 +2274,7 @@
                     <input type="text" id="f-charge-codes-secondary" placeholder="Secondary codes" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
-                    <input type="text" id="f-md" placeholder="MD" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <input type="text" id="f-fu" placeholder="Follow-Up" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                </div>
+                <input type="text" id="f-fu" placeholder="Follow-Up" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200">
 
                 <textarea id="f-pending" placeholder="Pending Tests" class="w-full p-3 bg-amber-50 rounded-lg border border-amber-200 text-sm" rows="2"></textarea>
                 </div>
