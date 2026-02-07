@@ -31,6 +31,25 @@ Deployments are triggered automatically when:
 
 ## Manual Deployment
 
+### Option 1: Using the Deployment Script (Recommended)
+
+The easiest way to manually deploy is using the provided script:
+
+```bash
+./deploy-to-gh-pages.sh
+```
+
+This script will:
+1. Save your current branch
+2. Switch to main and pull latest changes
+3. Copy SPA files to a temporary directory
+4. Switch to gh-pages branch
+5. Copy files and commit changes
+6. Push to origin
+7. Switch back to your original branch
+
+### Option 2: Manual Steps
+
 If you need to manually deploy the SPA files to `gh-pages`:
 
 ```bash
@@ -51,7 +70,8 @@ git checkout gh-pages
 cp /tmp/spa-deploy/* .
 
 # 5. Commit and push
-git add clinical-rounding-adaptive.html azure-integration.js m365-integration.js staticwebapp.config.json
+git add clinical-rounding-adaptive.html azure-integration.js \
+        m365-integration.js staticwebapp.config.json
 git commit -m "Manual deployment from main"
 git push origin gh-pages
 
