@@ -1475,14 +1475,14 @@
         let lastSaveTime = 0;  // Timestamp of last save to prevent rapid fires
         
         // Version marker for debugging
-        console.log('%c🔄 App Version: 2026-02-07 11:22 - Save Lock V2 + Debounce', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
+        console.log('%c🔄 App Version: 2026-02-07 11:30 - Save Debug V3', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         window.savePatient = async (e) => {
             const now = Date.now();
             
-            // Debounce: Ignore saves within 500ms of last save
-            if (now - lastSaveTime < 500) {
-                console.warn('Save debounced - too soon after last save');
+            // Debounce: Ignore saves within 200ms of last save (reduced from 500ms)
+            if (now - lastSaveTime < 200) {
+                console.warn('⏭️ Save debounced - too soon after last save (within 200ms)');
                 return false;
             }
             
@@ -1493,11 +1493,12 @@
             
             // Prevent concurrent saves
             if (isSaving) {
-                console.warn('Save already in progress, skipping');
+                console.warn('⏭️ Save already in progress, skipping');
                 return false;
             }
             
             console.log('💾 Starting save...');
+            console.log('🔍 Save context:', { isConnected, useM365, hasM365SaveFunction: typeof window.m365SavePatient === 'function' });
             isSaving = true;
             lastSaveTime = now;
             
@@ -1535,7 +1536,15 @@
             try {
                 const editId = document.getElementById('edit-id').value;
                 
+                console.log('🔍 Save decision:', { 
+                    isConnected, 
+                    useM365, 
+                    willUseLocalMode: !isConnected || !useM365,
+                    editId: editId || 'none (new record)'
+                });
+                
                 if (!isConnected || !useM365) {
+                    console.log('📂 Using LOCAL MODE (in-memory storage)');
                     // Local mode: store in memory
                     if (editId) {
                         const index = patients.findIndex(p => p.id === editId);
@@ -1551,8 +1560,10 @@
                     showToast("✓ Saved (Local)");
                     setTimeout(() => window.closeModal(), 100); // Slight delay to let toast show
                 } else {
+                    console.log('☁️ Using M365 MODE (SharePoint)');
                     // M365 mode: use Graph API via m365-integration.js
                     if (typeof window.m365SavePatient === 'function') {
+                        console.log('✅ m365SavePatient function available, calling it now...');
                         if (editId) {
                             data.id = editId;
                         }
@@ -1565,6 +1576,7 @@
                             await window.m365FetchPatients();
                         }
                     } else {
+                        console.error('❌ m365SavePatient function NOT available!');
                         throw new Error('M365 save function not available');
                     }
                 }
