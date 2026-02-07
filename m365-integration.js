@@ -440,14 +440,11 @@ async function fetchPatients(dateFilter = null) {
 }
 
 async function savePatient(patientData) {
-    console.log('🌟 === ENTER m365SavePatient ===');
-    console.log('   patientData:', { mrn: patientData?.mrn, name: patientData?.name, has_id: !!patientData?.id });
-    console.log('📤 M365: Saving patient to SharePoint...', { mrn: patientData.mrn, name: patientData.name });
-    
+    console.log('"'"'SAVE enter'"'"', {mrn: patientData?.mrn, name: patientData?.name, has_id: !!patientData?.id});
+
     const listId = M365_CONFIG.sharepoint.lists.patients;
     const siteId = M365_CONFIG.sharepoint.siteId;
-    
-    // Build SharePoint list item fields
+
     const fields = {
         Room: patientData.room || '',
         Date: patientData.date || '',
@@ -455,7 +452,7 @@ async function savePatient(patientData) {
         DOB: patientData.dob || '',
         MRN: patientData.mrn || '',
         Hospital: patientData.hospital || '',
-        VisitKey: `${patientData.mrn}|${patientData.date}`,  // Compound unique key
+        VisitKey: `${patientData.mrn}|${patientData.date}`,
         FindingsCodes: patientData.findingsCodes ? patientData.findingsCodes.join(',') : '',
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
         FindingsText: patientData.findingsText || '',
@@ -463,60 +460,53 @@ async function savePatient(patientData) {
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
-        Priority: patientData.priority ? 'Yes' : 'No',
-        ProcedureStatus: patientData.procedureStatus || 'To-Do',
+        Priority: patientData.priority ? '"'"'Yes'"'"' : '"'"'No'"'"',
+        ProcedureStatus: patientData.procedureStatus || '"'"'To-Do'"'"',
         CPTPrimary: patientData.cptPrimary || '',
         ICDPrimary: patientData.icdPrimary || '',
-        ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '[]',
-        Archived: patientData.archived ? 'Yes' : 'No'
+        ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '"'"'[]'"'"',
+        Archived: patientData.archived ? '"'"'Yes'"'"' : '"'"'No'"'"'
     };
-    
-    console.log('📋 SharePoint fields prepared:', { visitKey: fields.VisitKey, hospital: fields.Hospital });
-    
+
+    console.log('"'"'SAVE fields'"'"', {visitKey: fields.VisitKey, hospital: fields.Hospital});
+
+    const logAndValidateResponse = (resp, context) => {
+        console.log(`RESP ${context}`, resp);
+        if (!resp || !resp.id) {
+            throw new Error(`${context} did not return an id; response=${JSON.stringify(resp)}`);
+        }
+        return resp.id;
+    };
+
     try {
-        if (patientData.id && patientData.id.startsWith('local-')) {
-            // New record (local ID) - create in SharePoint
-            console.log('➕ Creating new patient in SharePoint (had local ID)');
+        if (patientData.id && patientData.id.startsWith('"'"'local-'"'"')) {
+            console.log('"'"'SAVE create (local id)'"'"');
             const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-            const body = { fields: fields };
-            console.log('📡 Graph API POST to endpoint:', endpoint);
-            const response = await graphRequest(endpoint, 'POST', body);
-            console.log('✅ Graph API response received:', { id: response.id, status: response.status });
-            console.log('✅ Created in SharePoint with ID:', response.id);
-            console.log('🌟 === EXIT m365SavePatient (new record) with ID:', response.id, '===');
-            return response.id;
+            const body = { fields };
+            const response = await graphRequest(endpoint, '"'"'POST'"'"', body);
+            const newId = logAndValidateResponse(response, '"'"'create-local'"'"');
+            console.log('"'"'SAVE created id'"'"', newId);
+            return newId;
         } else if (patientData.id) {
-            // Update existing record
-            console.log('✏️ Updating existing patient in SharePoint, ID:', patientData.id);
+            console.log('"'"'SAVE update id'"'"', patientData.id);
             const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientData.id}/fields`;
-            console.log('📡 Graph API PATCH to endpoint:', endpoint);
-            const response = await graphRequest(endpoint, 'PATCH', fields);
-            console.log('✅ Graph API response received:', { status: response });
-            console.log('✅ Updated in SharePoint');
-            console.log('🌟 === EXIT m365SavePatient (update) with ID:', patientData.id, '===');
+            const response = await graphRequest(endpoint, '"'"'PATCH'"'"', fields);
+            console.log('"'"'SAVE patch response'"'"', response);
             return patientData.id;
         } else {
-            // New record (no ID) - create in SharePoint
-            console.log('➕ Creating new patient in SharePoint (no ID)');
+            console.log('"'"'SAVE create (no id)'"'"');
             const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-            const body = { fields: fields };
-            console.log('📡 Graph API POST to endpoint:', endpoint);
-            const response = await graphRequest(endpoint, 'POST', body);
-            console.log('✅ Graph API response received:', { id: response.id, status: response.status });
-            console.log('✅ Created in SharePoint with ID:', response.id);
-            console.log('🌟 === EXIT m365SavePatient (create no-ID) with ID:', response.id, '===');
-            return response.id;
+            const body = { fields };
+            const response = await graphRequest(endpoint, '"'"'POST'"'"', body);
+            const newId = logAndValidateResponse(response, '"'"'create-noid'"'"');
+            console.log('"'"'SAVE created id'"'"', newId);
+            return newId;
         }
     } catch (err) {
-        console.error('🌟 === EXIT m365SavePatient (ERROR) ===');
-        console.error('❌ Graph API call failed in savePatient:', err.message);
-        console.error('   Full error:', err);
-        console.error('   Error type:', err.name);
-        console.error('   Error stack:', err.stack);
-        throw err; // Re-throw so caller knows it failed
+        console.error('"'"'SAVE error'"'"', err);
+        throw err;
     }
 }
-
 async function deletePatient(patientId) {
     const listId = M365_CONFIG.sharepoint.lists.patients;
     const siteId = M365_CONFIG.sharepoint.siteId;
@@ -964,3 +954,4 @@ if (typeof module !== 'undefined' && module.exports) {
         importFromCSV
     };
 }
+
