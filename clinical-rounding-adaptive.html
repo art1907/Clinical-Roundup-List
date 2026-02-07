@@ -1245,9 +1245,26 @@
         const CONNECTION_TIMEOUT = 5000;
         const getRetryDelay = (attempt) => Math.min(3000 * Math.pow(2, attempt), 6000);
         
+        // Version enforcement to prevent cache reversion
+        const EXPECTED_VERSION = '2026-02-07T12:15:00Z';
+        const CURRENT_VERSION = '2026-02-07T12:15:00Z';
+        const storedVersion = sessionStorage.getItem('appVersion');
+        
+        // Detect and fix version mismatches
+        if (storedVersion && storedVersion !== CURRENT_VERSION) {
+            console.warn('⚠️  Version mismatch detected! Stored:', storedVersion, 'Current:', CURRENT_VERSION);
+            console.log('🔄 Forcing fresh page load...');
+            sessionStorage.setItem('appVersion', CURRENT_VERSION);
+            // Clear query params and reload
+            window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
+        } else {
+            sessionStorage.setItem('appVersion', CURRENT_VERSION);
+        }
+        
         // Initialize M365 after all scripts have loaded
         window.addEventListener('load', () => {
             console.group('🔧 HTML Initialization (window load event)');
+
             console.log('⏱️  Timestamp:', new Date().toISOString());
             
             // Check callback availability FIRST
@@ -1477,8 +1494,7 @@
         let isSaving = false;  // Prevent concurrent saves
         
         // Version marker for debugging - includes timestamp to prevent cache reversion
-        const buildTime = '2026-02-07T12:15:00Z';
-        console.log('%c🔄 App Version: 2026-02-07 12:15 - Save Fix V6 (Button Disable + Force Deploy) [' + buildTime + ']', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
+        console.log('%c🔄 App Version: 2026-02-07 12:15 - Save Fix V6 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         window.savePatient = async (e) => {
             // SET LOCK FIRST - before anything else
