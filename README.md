@@ -59,6 +59,15 @@ See **INSTALLATION_GUIDE.md** and **M365_MIGRATION.md** for step-by-step instruc
 
 ---
 
+## 🚀 Deployment
+
+### GitHub Pages
+The application is automatically deployed to GitHub Pages via a GitHub Actions workflow. When SPA files are updated on the `main` branch, they are automatically copied to the `gh-pages` branch for hosting.
+
+See **DEPLOYMENT.md** for details on the automated deployment process and manual deployment instructions.
+
+---
+
 ## 🛣️ Roadmap
 
 - [x] Full Microsoft 365 Integration (**Complete!**)

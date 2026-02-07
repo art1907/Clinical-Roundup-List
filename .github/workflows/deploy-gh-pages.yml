@@ -1,0 +1,88 @@
+---
+name: Deploy to GitHub Pages
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - 'clinical-rounding-adaptive.html'
+      - 'azure-integration.js'
+      - 'm365-integration.js'
+      - 'staticwebapp.config.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Copy SPA files to temporary directory
+        run: |
+          mkdir -p /tmp/spa-deploy
+          cp clinical-rounding-adaptive.html /tmp/spa-deploy/
+          cp azure-integration.js /tmp/spa-deploy/
+          cp m365-integration.js /tmp/spa-deploy/
+          cp staticwebapp.config.json /tmp/spa-deploy/
+
+          # Create an index.html that redirects to the main app
+          cat > /tmp/spa-deploy/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta http-equiv="refresh" \
+              content="0; url=clinical-rounding-adaptive.html">
+            <title>Clinical Rounding List</title>
+          </head>
+          <body>
+            <p>Redirecting to \
+              <a href="clinical-rounding-adaptive.html">Clinical \
+              Rounding List</a>...</p>
+          </body>
+          </html>
+          EOF
+
+          # Create a .nojekyll file to prevent Jekyll processing
+          touch /tmp/spa-deploy/.nojekyll
+
+          echo "SPA files prepared for deployment:"
+          ls -lh /tmp/spa-deploy/
+
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages-repo
+
+      - name: Update gh-pages branch
+        run: |
+          cd gh-pages-repo
+
+          # Copy SPA files from temporary directory
+          cp /tmp/spa-deploy/* .
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Add and commit changes
+          git add clinical-rounding-adaptive.html \
+            azure-integration.js m365-integration.js \
+            staticwebapp.config.json index.html .nojekyll
+
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Deploy SPA files from main (automated)"
+            git push origin gh-pages
+            echo "Successfully deployed to gh-pages"
+          fi
