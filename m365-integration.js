@@ -15,10 +15,10 @@
 // =============================================================================
 
 const M365_CONFIG = {
-    // MSAL Configuration - Update these values after Entra ID app registration
+    // MSAL Configuration - Configured with your Entra ID app
     auth: {
-        clientId: '2030acbd-8796-420d-8990-acdf468227a6',  // From Entra ID app registration
-        authority: 'https://login.microsoftonline.com/d4402872-0ebc-4758-9c54-71923320c29d',
+        clientId: '2030acbd-8796-420d-8990-acdf468227a6',  // Your Entra ID Client ID
+        authority: 'https://login.microsoftonline.com/d4402872-0ebc-4758-9c54-71923320c29d',  // Your Tenant ID
         // IMPORTANT: This exact URL must be registered in Azure Portal → App Registration → Authentication
         // Use the page you're actually running on to avoid silent auth failures (Local Mode symptom)
         redirectUri: (() => {
@@ -40,14 +40,14 @@ const M365_CONFIG = {
     // Microsoft Graph API endpoints
     graphBaseUrl: 'https://graph.microsoft.com/v1.0',
     
-    // SharePoint configuration - Update after creating SharePoint site and lists
+    // SharePoint configuration - Configured with your SharePoint site & lists
     sharepoint: {
-        siteId: 'bf8b1313-2fb7-4a22-8775-1f0acd899909',  // Get via Graph API: /sites/{hostname}:/sites/{sitename}
+        siteId: 'bf8b1313-2fb7-4a22-8775-1f0acd899909',  // Your SharePoint Site ID
         lists: {
-            patients: 'c475a404-97fa-44b1-8cca-7dfaec391049',
-            onCallSchedule: '7e99100a-aeb4-4fe6-9fb0-3f8188904174',
-            settings: '57fbe18d-6fa3-4fff-bc39-5937001e1a0b',
-            auditLogs: '36a95571-80dd-4ceb-94d3-36db0be54eae'  // Optional
+            patients: 'c475a404-97fa-44b1-8cca-7dfaec391049',           // Patients List ID
+            onCallSchedule: '7e99100a-aeb4-4fe6-9fb0-3f8188904174',    // OnCall List ID
+            settings: '57fbe18d-6fa3-4fff-bc39-5937001e1a0b',          // Settings List ID
+            auditLogs: '36a95571-80dd-4ceb-94d3-36db0be54eae'          // Audit Logs List ID
         }
     },
     
