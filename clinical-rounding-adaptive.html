@@ -1485,11 +1485,23 @@
             isSaving = true;  // Lock immediately
             console.log('🔒 Save lock acquired');
             
+            // Disable save button to prevent re-submission
+            const saveBtn = document.getElementById('save-button');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.style.opacity = '0.5';
+                console.log('🔓 Save button disabled');
+            }
+            
             // Set a timeout to force-release lock after 30 seconds (safety net)
             const saveTimeout = setTimeout(() => {
                 if (isSaving) {
                     console.error('⏱️  Save timeout after 30s - forcibly releasing lock');
                     isSaving = false;
+                    if (saveBtn) {
+                        saveBtn.disabled = false;
+                        saveBtn.style.opacity = '1';
+                    }
                 }
             }, 30000);
             
@@ -1601,6 +1613,13 @@
             } finally {
                 clearTimeout(saveTimeout);  // Clear the safety timeout
                 isSaving = false;  // Always release lock
+                // Re-enable save button
+                const saveBtn = document.getElementById('save-button');
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.style.opacity = '1';
+                    console.log('🔓 Save button re-enabled');
+                }
                 console.log('🔓 Save lock released');
             }
             return false; // Prevent default form submission
@@ -2707,7 +2726,7 @@
                 <button onclick="window.closeModal()" class="text-2xl">×</button>
             </div>
             
-            <form id="patient-form" onsubmit="return window.savePatient(event);" class="flex-1 overflow-y-auto flex flex-col min-h-0">
+            <form id="patient-form" novalidate onsubmit="return window.savePatient(event);" class="flex-1 overflow-y-auto flex flex-col min-h-0">
                 <input type="hidden" id="edit-id">
                 
                 <!-- Scrollable content area with consistent padding -->
@@ -3057,7 +3076,7 @@
             </form>
 
             <div class="flex-shrink-0 relative">
-                <button type="submit" form="patient-form" class="w-full p-4 bg-blue-600 text-white font-bold active:bg-blue-700 hover:bg-blue-700 transition-colors cursor-pointer select-none min-h-[56px] flex items-center justify-center border-t border-blue-700 gap-2 group" title="Save record (Ctrl+S or Enter)">
+                <button id="save-button" type="submit" form="patient-form" class="w-full p-4 bg-blue-600 text-white font-bold active:bg-blue-700 hover:bg-blue-700 transition-colors cursor-pointer select-none min-h-[56px] flex items-center justify-center border-t border-blue-700 gap-2 group" title="Save record (Ctrl+S or Enter)">
                     <span>Save Record</span>
                     <span class="text-xs opacity-75 hidden md:inline">⌨️ Ctrl+S</span>
                 </button>
