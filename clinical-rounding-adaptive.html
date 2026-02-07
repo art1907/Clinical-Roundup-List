@@ -1471,11 +1471,20 @@
             loginPrompt.style.display = 'flex';
         }
 
+        let isSaving = false;  // Prevent concurrent saves
+        
         window.savePatient = async (e) => {
             if (e && typeof e.preventDefault === 'function') {
                 e.preventDefault();
                 e.stopPropagation();
             }
+            
+            // Prevent concurrent saves
+            if (isSaving) {
+                console.log('Save already in progress, skipping');
+                return false;
+            }
+            isSaving = true;
             
             const codesInput = document.getElementById('f-findings-codes');
             const findingsCodes = codesInput.value ? codesInput.value.split(',').map(c => c.trim()).filter(c => c) : [];
@@ -1547,6 +1556,8 @@
             } catch (err) { 
                 console.error("Save error:", err);
                 showToast("❌ Error: " + (err.message || "Failed to save"));
+            } finally {
+                isSaving = false;  // Always release lock
             }
             return false; // Prevent default form submission
         };
