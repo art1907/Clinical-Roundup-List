@@ -440,7 +440,7 @@ async function fetchPatients(dateFilter = null) {
 }
 
 async function savePatient(patientData) {
-    console.log('"'"'SAVE enter'"'"', {mrn: patientData?.mrn, name: patientData?.name, has_id: !!patientData?.id});
+    console.log('SAVE enter', { mrn: patientData?.mrn, name: patientData?.name, has_id: !!patientData?.id });
 
     const listId = M365_CONFIG.sharepoint.lists.patients;
     const siteId = M365_CONFIG.sharepoint.siteId;
@@ -460,15 +460,15 @@ async function savePatient(patientData) {
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
-        Priority: patientData.priority ? '"'"'Yes'"'"' : '"'"'No'"'"',
-        ProcedureStatus: patientData.procedureStatus || '"'"'To-Do'"'"',
+        Priority: patientData.priority ? 'Yes' : 'No',
+        ProcedureStatus: patientData.procedureStatus || 'To-Do',
         CPTPrimary: patientData.cptPrimary || '',
         ICDPrimary: patientData.icdPrimary || '',
-        ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '"'"'[]'"'"',
-        Archived: patientData.archived ? '"'"'Yes'"'"' : '"'"'No'"'"'
+        ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '[]',
+        Archived: patientData.archived ? 'Yes' : 'No'
     };
 
-    console.log('"'"'SAVE fields'"'"', {visitKey: fields.VisitKey, hospital: fields.Hospital});
+    console.log('SAVE fields', { visitKey: fields.VisitKey, hospital: fields.Hospital });
 
     const logAndValidateResponse = (resp, context) => {
         console.log(`RESP ${context}`, resp);
@@ -479,31 +479,31 @@ async function savePatient(patientData) {
     };
 
     try {
-        if (patientData.id && patientData.id.startsWith('"'"'local-'"'"')) {
-            console.log('"'"'SAVE create (local id)'"'"');
+        if (patientData.id && patientData.id.startsWith('local-')) {
+            console.log('SAVE create (local id)');
             const endpoint = `/sites/${siteId}/lists/${listId}/items`;
             const body = { fields };
-            const response = await graphRequest(endpoint, '"'"'POST'"'"', body);
-            const newId = logAndValidateResponse(response, '"'"'create-local'"'"');
-            console.log('"'"'SAVE created id'"'"', newId);
+            const response = await graphRequest(endpoint, 'POST', body);
+            const newId = logAndValidateResponse(response, 'create-local');
+            console.log('SAVE created id', newId);
             return newId;
         } else if (patientData.id) {
-            console.log('"'"'SAVE update id'"'"', patientData.id);
+            console.log('SAVE update id', patientData.id);
             const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientData.id}/fields`;
-            const response = await graphRequest(endpoint, '"'"'PATCH'"'"', fields);
-            console.log('"'"'SAVE patch response'"'"', response);
+            const response = await graphRequest(endpoint, 'PATCH', fields);
+            console.log('SAVE patch response', response);
             return patientData.id;
         } else {
-            console.log('"'"'SAVE create (no id)'"'"');
+            console.log('SAVE create (no id)');
             const endpoint = `/sites/${siteId}/lists/${listId}/items`;
             const body = { fields };
-            const response = await graphRequest(endpoint, '"'"'POST'"'"', body);
-            const newId = logAndValidateResponse(response, '"'"'create-noid'"'"');
-            console.log('"'"'SAVE created id'"'"', newId);
+            const response = await graphRequest(endpoint, 'POST', body);
+            const newId = logAndValidateResponse(response, 'create-noid');
+            console.log('SAVE created id', newId);
             return newId;
         }
     } catch (err) {
-        console.error('"'"'SAVE error'"'"', err);
+        console.error('SAVE error', err);
         throw err;
     }
 }
