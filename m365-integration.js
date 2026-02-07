@@ -22,7 +22,7 @@ const M365_CONFIG = {
         redirectUri: window.location.origin + window.location.pathname  // Use exact current URL
     },
     cache: {
-        cacheLocation: 'localStorage',
+        cacheLocation: 'sessionStorage',  // Use sessionStorage to match MSAL state storage
         storeAuthStateInCookie: true  // Required for redirect flow reliability
     },
     
@@ -68,6 +68,10 @@ function initializeMSAL() {
             .then(response => {
                 if (response) {
                     currentAccount = response.account;
+                    // Clear URL hash to prevent re-processing
+                    if (window.location.hash) {
+                        history.replaceState(null, '', window.location.pathname);
+                    }
                     handleSuccessfulLogin();
                 } else {
                     // Check if user is already signed in
@@ -76,6 +80,11 @@ function initializeMSAL() {
                         currentAccount = accounts[0];
                         handleSuccessfulLogin();
                     } else {
+                        // Clear any stale hash/state to prevent loops
+                        if (window.location.hash && window.location.hash.includes('code=')) {
+                            console.warn('Clearing stale authentication state');
+                            history.replaceState(null, '', window.location.pathname);
+                        }
                         // No existing session - update auth state to false
                         if (typeof window.updateAuthState === 'function') {
                             window.updateAuthState(false, '');
@@ -85,7 +94,18 @@ function initializeMSAL() {
             })
             .catch(err => {
                 console.error('MSAL redirect error:', err);
-                showToast('Authentication error: ' + err.message);
+                
+                // Clear hash on state errors to prevent loop
+                if (err.errorCode === 'state_not_found' && window.location.hash) {
+                    console.warn('State mismatch - clearing hash to prevent loop');
+                    history.replaceState(null, '', window.location.pathname);
+                }
+                
+                // Show user-friendly error (not state_not_found which is internal)
+                if (err.errorCode !== 'state_not_found') {
+                    showToast('Authentication error: ' + err.message);
+                }
+                
                 // Update auth state to false on error
                 if (typeof window.updateAuthState === 'function') {
                     window.updateAuthState(false, '');
@@ -108,8 +128,24 @@ async function login() {
             prompt: 'select_account'
         };
         
-        // Use redirect flow (more reliable than popup)
-        await msalInstance.loginRedirect(loginRequest);
+        // Try popup on mobile if redirect has issues, otherwise use redirect
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            // Popup might work better on some mobile browsers
+            try {
+                const response = await msalInstance.loginPopup(loginRequest);
+                currentAccount = response.account;
+                handleSuccessfulLogin();
+            } catch (popupErr) {
+                // Fallback to redirect if popup fails
+                console.warn('Popup failed, trying redirect:', popupErr);
+                await msalInstance.loginRedirect(loginRequest);
+            }
+        } else {
+            // Desktop: use redirect flow
+            await msalInstance.loginRedirect(loginRequest);
+        }
     } catch (err) {
         console.error('Login error:', err);
         showToast('Login failed: ' + err.message);
