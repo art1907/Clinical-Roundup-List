@@ -62,7 +62,10 @@ let pollTimer = null;
 
 function initializeMSAL() {
     try {
-        msalInstance = new msal.PublicClientApplication(M365_CONFIG.auth);
+        msalInstance = new msal.PublicClientApplication({
+            auth: M365_CONFIG.auth,
+            cache: M365_CONFIG.cache
+        });
         
         // Handle redirect response
         msalInstance.handleRedirectPromise()
