@@ -204,12 +204,53 @@ function handleSuccessfulLogin() {
 }
 
 function updateConnectionStatus(connected, username = '') {
+    // Update right-side connection status
     const statusEl = document.getElementById('connection-status');
     if (statusEl) {
         if (connected) {
             statusEl.innerHTML = `<span class="text-green-600 font-bold">● Connected (M365)</span> <span class="text-slate-600">${username}</span>`;
         } else {
             statusEl.innerHTML = '<span class="text-red-600 font-bold">● Offline</span>';
+        }
+    }
+    
+    // Update left-side status banner
+    const statusBar = document.getElementById('connection-status-bar');
+    const statusIndicator = document.getElementById('status-indicator');
+    const statusText = document.getElementById('status-text');
+    const statusDetail = document.getElementById('status-detail');
+    
+    if (connected) {
+        // Change to green "Connected (M365)" mode
+        if (statusBar) {
+            statusBar.className = 'px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-green-50 border-b border-green-200 gap-1';
+        }
+        if (statusIndicator) {
+            statusIndicator.className = 'inline-flex h-3 w-3 rounded-full bg-green-600';
+        }
+        if (statusText) {
+            statusText.className = 'text-sm font-bold text-green-900 uppercase tracking-wide';
+            statusText.innerText = 'Connected (M365)';
+        }
+        if (statusDetail) {
+            statusDetail.className = 'text-xs text-green-700 font-semibold';
+            statusDetail.innerText = username || 'Authenticated';
+        }
+    } else {
+        // Revert to amber "Local Mode"
+        if (statusBar) {
+            statusBar.className = 'px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-amber-50 border-b border-amber-200 gap-1';
+        }
+        if (statusIndicator) {
+            statusIndicator.className = 'inline-flex h-3 w-3 rounded-full bg-amber-600';
+        }
+        if (statusText) {
+            statusText.className = 'text-sm font-bold text-amber-900 uppercase tracking-wide';
+            statusText.innerText = 'Local Mode';
+        }
+        if (statusDetail) {
+            statusDetail.className = 'text-xs text-amber-700 font-semibold';
+            statusDetail.innerText = 'No persistence';
         }
     }
 }
