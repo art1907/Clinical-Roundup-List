@@ -1474,24 +1474,25 @@
         let isSaving = false;  // Prevent concurrent saves
         
         // Version marker for debugging
-        console.log('%c🔄 App Version: 2026-02-07 11:35 - Save Fix V4 (No Debounce)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
+        console.log('%c🔄 App Version: 2026-02-07 11:40 - Save Fix V5 (Set Lock First)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         window.savePatient = async (e) => {
-            // Prevent default and stop propagation FIRST
+            // SET LOCK FIRST - before anything else
+            if (isSaving) {
+                console.warn('⏭️ Save already in progress, skipping duplicate call');
+                return false;
+            }
+            isSaving = true;  // Lock immediately
+            console.log('🔒 Save lock acquired');
+            
+            // Prevent default and stop propagation  
             if (e && typeof e.preventDefault === 'function') {
                 e.preventDefault();
                 e.stopPropagation();
             }
             
-            // Prevent concurrent saves (simple lock)
-            if (isSaving) {
-                console.warn('⏭️ Save already in progress, skipping duplicate call');
-                return false;
-            }
-            
             console.log('💾 Starting save...');
             console.log('🔍 Save context:', { isConnected, useM365, hasM365SaveFunction: typeof window.m365SavePatient === 'function' });
-            isSaving = true;
             
             const codesInput = document.getElementById('f-findings-codes');
             const findingsCodes = codesInput.value ? codesInput.value.split(',').map(c => c.trim()).filter(c => c) : [];
@@ -1555,15 +1556,19 @@
                     // M365 mode: use Graph API via m365-integration.js
                     if (typeof window.m365SavePatient === 'function') {
                         console.log('✅ m365SavePatient function available, calling it now...');
+                        console.log('📦 Data being sent:', { mrn: data.mrn, name: data.name, date: data.date, hospital: data.hospital });
                         if (editId) {
                             data.id = editId;
                         }
-                        await window.m365SavePatient(data);
+                        console.log('📤 About to call window.m365SavePatient...');
+                        const result = await window.m365SavePatient(data);
+                        console.log('✅ m365SavePatient returned:', result);
                         clearDraft(); // Clear draft on successful save
                         showToast("✓ Saved");
                         setTimeout(() => window.closeModal(), 100); // Slight delay to let toast show
                         // Refetch data to update UI
                         if (typeof window.m365FetchPatients === 'function') {
+                            console.log('🔄 Refetching patients...');
                             await window.m365FetchPatients();
                         }
                     } else {
@@ -1572,10 +1577,12 @@
                     }
                 }
             } catch (err) { 
-                console.error("Save error:", err);
+                console.error("❌ Save error:", err);
+                console.error("Error stack:", err.stack);
                 showToast("❌ Error: " + (err.message || "Failed to save"));
             } finally {
                 isSaving = false;  // Always release lock
+                console.log('🔓 Save lock released');
             }
             return false; // Prevent default form submission
         };
