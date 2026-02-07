@@ -20,9 +20,17 @@ const M365_CONFIG = {
         clientId: '2030acbd-8796-420d-8990-acdf468227a6',  // From Entra ID app registration
         authority: 'https://login.microsoftonline.com/d4402872-0ebc-4758-9c54-71923320c29d',
         // IMPORTANT: This exact URL must be registered in Azure Portal → App Registration → Authentication
-        redirectUri: window.location.hostname === 'localhost' 
-            ? 'http://localhost:3000/clinical-rounding-adaptive.html'
-            : 'https://art1907.github.io/Clinical-Roundup-List/clinical-rounding-adaptive.html'
+        // Use the page you're actually running on to avoid silent auth failures (Local Mode symptom)
+        redirectUri: (() => {
+            const currentUri = `${window.location.origin}${window.location.pathname}`;
+            // Known good URIs kept for clarity; Entra app must list every value you run from
+            const allowed = [
+                'http://localhost:3000/clinical-rounding-adaptive.html',
+                'https://art1907.github.io/Clinical-Roundup-List/clinical-rounding-adaptive.html'
+            ];
+            // Prefer exact current page; fallback to first known dev URI to avoid empty string
+            return currentUri || allowed[0];
+        })()
     },
     cache: {
         cacheLocation: 'sessionStorage',  // Use sessionStorage to match MSAL state storage
@@ -90,29 +98,47 @@ function initializeMSAL() {
             })
             .catch(err => {
                 console.error('MSAL redirect error:', err);
+                console.error('Error details:', { code: err.errorCode, message: err.message });
                 
                 // Clear URL (both hash and query) on state errors to prevent loop
                 if (err.errorCode === 'state_not_found') {
                     console.warn('State mismatch detected - clearing auth code from URL');
                     // Clear search AND hash to remove auth code
                     window.history.replaceState({}, document.title, window.location.pathname);
-                    showToast('Authentication failed. Please try again.');
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('Authentication failed. Please try again.');
+                    } else {
+                        console.error('showToast not available for error display');
+                    }
                 } else {
                     // Show other auth errors
-                    showToast('Authentication error: ' + err.message);
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('Authentication error: ' + err.message);
+                    } else {
+                        console.error('showToast not available for error display');
+                    }
                 }
                 
                 // Update auth state to false on error
                 if (typeof window.updateAuthState === 'function') {
+                    console.log('Calling updateAuthState(false) due to MSAL error');
                     window.updateAuthState(false, '');
+                } else {
+                    console.error('updateAuthState not available!');
                 }
             });
     } catch (err) {
         console.error('MSAL initialization error:', err);
-        showToast('Failed to initialize authentication');
+        if (typeof window.showToast === 'function') {
+            window.showToast('Failed to initialize authentication');
+        } else {
+            console.error('showToast not available for error display');
+        }
         // Update auth state to false on error
         if (typeof window.updateAuthState === 'function') {
             window.updateAuthState(false, '');
+        } else {
+            console.error('updateAuthState not available!');
         }
     }
 }
@@ -147,7 +173,11 @@ async function login() {
         }
     } catch (err) {
         console.error('Login error:', err);
-        showToast('Login failed: ' + err.message);
+        if (typeof window.showToast === 'function') {
+            window.showToast('Login failed: ' + err.message);
+        } else {
+            console.error('showToast not available, login error:', err.message);
+        }
     }
 }
 
@@ -189,29 +219,65 @@ async function getAccessToken() {
 }
 
 function handleSuccessfulLogin() {
-    console.log('User authenticated:', currentAccount.username);
-    updateConnectionStatus(true, currentAccount.username);
+    console.log('🎯 User authenticated:', currentAccount.username);
+    console.log('🔄 Calling updateConnectionStatus(true, ...)...');
     
-    // Update auth state in main HTML
-    if (typeof window.updateAuthState === 'function') {
-        window.updateAuthState(true, currentAccount.username);
+    try {
+        updateConnectionStatus(true, currentAccount.username);
+        console.log('✓ updateConnectionStatus succeeded');
+    } catch (e) {
+        console.error('❌ updateConnectionStatus failed:', e);
     }
     
+    console.log('🔄 Calling window.updateAuthState(true, ...)...');
+    // Update auth state in main HTML
+    if (typeof window.updateAuthState === 'function') {
+        try {
+            window.updateAuthState(true, currentAccount.username);
+            console.log('✓ updateAuthState succeeded');
+        } catch (e) {
+            console.error('❌ updateAuthState failed:', e);
+        }
+    } else {
+        console.error('❌ window.updateAuthState not available!');
+    }
+    
+    console.log('🔄 Starting polling...');
     startPolling();
     
+    console.log('🔄 Fetching initial data...');
     // Trigger initial data load
     fetchAllData();
+    
+    console.log('✅ handleSuccessfulLogin complete');
 }
 
 function updateConnectionStatus(connected, username = '') {
+    console.log('🔄 updateConnectionStatus called:', { connected, username });
+    
+    // Safe toast function wrapper
+    const safeToast = (msg) => {
+        if (typeof window.showToast === 'function') {
+            try {
+                window.showToast(msg);
+            } catch (e) {
+                console.warn('Toast failed:', e);
+            }
+        }
+    };
+    
     // Update right-side connection status
     const statusEl = document.getElementById('connection-status');
     if (statusEl) {
         if (connected) {
             statusEl.innerHTML = `<span class="text-green-600 font-bold">● Connected (M365)</span> <span class="text-slate-600">${username}</span>`;
+            console.log('✓ Updated connection-status element');
         } else {
             statusEl.innerHTML = '<span class="text-red-600 font-bold">● Offline</span>';
+            console.log('✓ Updated connection-status (offline)');
         }
+    } else {
+        console.warn('⚠️ Element not found: #connection-status');
     }
     
     // Update left-side status banner
@@ -220,10 +286,16 @@ function updateConnectionStatus(connected, username = '') {
     const statusText = document.getElementById('status-text');
     const statusDetail = document.getElementById('status-detail');
     
+    if (!statusBar) console.warn('⚠️ Element not found: #connection-status-bar');
+    if (!statusIndicator) console.warn('⚠️ Element not found: #status-indicator');
+    if (!statusText) console.warn('⚠️ Element not found: #status-text');
+    if (!statusDetail) console.warn('⚠️ Element not found: #status-detail');
+    
     if (connected) {
         // Change to green "Connected (M365)" mode
         if (statusBar) {
             statusBar.className = 'px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-green-50 border-b border-green-200 gap-1';
+            console.log('✓ Updated statusBar to Connected (green)');
         }
         if (statusIndicator) {
             statusIndicator.className = 'inline-flex h-3 w-3 rounded-full bg-green-600';
@@ -231,10 +303,12 @@ function updateConnectionStatus(connected, username = '') {
         if (statusText) {
             statusText.className = 'text-sm font-bold text-green-900 uppercase tracking-wide';
             statusText.innerText = 'Connected (M365)';
+            console.log('✓ Updated statusText to "Connected (M365)"');
         }
         if (statusDetail) {
             statusDetail.className = 'text-xs text-green-700 font-semibold';
             statusDetail.innerText = username || 'Authenticated';
+            console.log('✓ Updated statusDetail to:', username);
         }
     } else {
         // Revert to amber "Local Mode"
@@ -252,7 +326,9 @@ function updateConnectionStatus(connected, username = '') {
             statusDetail.className = 'text-xs text-amber-700 font-semibold';
             statusDetail.innerText = 'No persistence';
         }
+        console.log('✓ Reverted statusBar to Local Mode (amber)');
     }
+    console.log('✅ updateConnectionStatus complete');
 }
 
 // =============================================================================
@@ -749,9 +825,27 @@ function getCachedData(key) {
 
 // Get current authenticated user
 function getCurrentUser() {
+    console.log('📧 getCurrentUser called:', {
+        currentAccountExists: !!currentAccount,
+        username: currentAccount?.username,
+        msalAccountsCount: msalInstance?.getAllAccounts?.()?.length
+    });
+    
     if (currentAccount && currentAccount.username) {
+        console.log('✅ Returning username:', currentAccount.username);
         return currentAccount.username;
     }
+    
+    // Fallback: try to get from MSAL directly
+    if (msalInstance) {
+        const accounts = msalInstance.getAllAccounts();
+        if (accounts.length > 0) {
+            console.log('✅ Found account in MSAL, returning:', accounts[0].username);
+            return accounts[0].username;
+        }
+    }
+    
+    console.warn('⚠️ No current user found, returning null');
     return null;
 }
 
@@ -761,6 +855,8 @@ function getCurrentUser() {
 
 // Expose functions once DOM is ready (initialization triggered from clinical-rounding-adaptive.html)
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('📦 M365 Integration: Registering global functions...');
+    
     window.m365Login = login;
     window.m365Logout = logout;
     window.m365FetchPatients = fetchPatients;
@@ -774,6 +870,13 @@ document.addEventListener('DOMContentLoaded', () => {
     window.m365GetCurrentUser = getCurrentUser;
     window.m365ExportToOneDrive = exportToOneDrive;
     window.m365ImportFromCSV = importFromCSV;
+    window.m365UpdateConnectionStatus = updateConnectionStatus;  // NEW: Export connection status updater
+    
+    console.log('✓ M365 Integration functions registered:', {
+        login: typeof window.m365Login,
+        updateConnectionStatus: typeof window.m365UpdateConnectionStatus,
+        getCurrentUser: typeof window.m365GetCurrentUser
+    });
 });
 
 // =============================================================================

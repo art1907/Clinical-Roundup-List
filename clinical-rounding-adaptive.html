@@ -773,21 +773,36 @@
             // Auto-fill Created By with current user for new records
             const createdByField = document.getElementById('f-created-by');
             if (createdByField && !id) {
-                // Use authenticated username if available, otherwise fall back to currentUser or 'Local User'
-                let username = currentUser || 'Local User';
+                console.log('🔍 Auto-filling Created By field:', {
+                    isAuthenticated,
+                    currentUser,
+                    isConnected,
+                    m365GetCurrentUserAvailable: typeof window.m365GetCurrentUser === 'function'
+                });
                 
-                // Try to get username from M365 if authenticated
-                if (isAuthenticated && typeof window.m365GetCurrentUser === 'function') {
+                // Priority order: M365 user → currentUser → Local User
+                let username = 'Local User';
+                
+                // First, try M365 directly
+                if (typeof window.m365GetCurrentUser === 'function') {
                     try {
                         const m365User = window.m365GetCurrentUser();
+                        console.log('📧 m365GetCurrentUser returned:', m365User);
                         if (m365User) {
                             username = m365User;
                         }
                     } catch (e) {
-                        console.warn('Could not get M365 user:', e);
+                        console.warn('⚠️ Could not get M365 user:', e);
                     }
                 }
                 
+                // Fallback to currentUser if M365 didn't work
+                if (username === 'Local User' && currentUser) {
+                    console.log('📧 Using currentUser:', currentUser);
+                    username = currentUser;
+                }
+                
+                console.log('✅ Setting Created By to:', username);
                 createdByField.value = username;
             }
 
@@ -1237,83 +1252,149 @@
         
         // Initialize M365 after all scripts have loaded
         window.addEventListener('load', () => {
-            console.log("Window load event - checking M365_CONFIG");
+            console.group('🔧 HTML Initialization (window load event)');
+            console.log('⏱️  Timestamp:', new Date().toISOString());
+            
+            // Check callback availability FIRST
+            console.log('📡 Callback check:', {
+                updateAuthState: typeof window.updateAuthState,
+                showToast: typeof window.showToast,
+                m365Login: typeof window.m365Login
+            });
             
             // Wait for M365_CONFIG to be available
             if (typeof M365_CONFIG !== 'undefined') {
-                console.log("M365_CONFIG found:", M365_CONFIG.auth.clientId);
-                useM365 = M365_CONFIG.auth.clientId !== 'YOUR_CLIENT_ID_HERE' && M365_CONFIG.sharepoint.siteId !== 'YOUR_SITE_ID_HERE';
-                console.log("useM365 set to:", useM365);
+                console.log('✅ M365_CONFIG found');
+                console.log('📋 Config details:', {
+                    clientId: M365_CONFIG.auth.clientId.substring(0, 8) + '...',
+                    authority: M365_CONFIG.auth.authority.substring(0, 30) + '...',
+                    siteId: M365_CONFIG.sharepoint.siteId.substring(0, 8) + '...'
+                });
+                
+                const hasValidClientId = M365_CONFIG.auth.clientId !== 'YOUR_CLIENT_ID_HERE';
+                const hasValidSiteId = M365_CONFIG.sharepoint.siteId !== 'YOUR_SITE_ID_HERE';
+                useM365 = hasValidClientId && hasValidSiteId;
+                
+                console.log('🔍 M365 Config Validation:', {
+                    hasValidClientId,
+                    hasValidSiteId,
+                    useM365: useM365
+                });
                 
                 if (useM365 && typeof initializeMSAL === 'function') {
                     try {
-                        console.log("M365 config detected - initializing MSAL");
+                        console.log('🚀 M365 config valid - initializing MSAL...');
                         initializeMSAL();
+                        console.log('✅ MSAL initialized');
+                        
                         // Start with auth UI hidden
                         toggleAuthUIElements();
                         showLoginPrompt();
+                        console.log('✅ Auth UI toggled and login prompt shown');
                     } catch (e) {
-                        console.error("M365 Initialization Error:", e);
+                        console.error('❌ M365 Initialization Error:', e);
+                        console.error('📍 Stack:', e.stack);
                         isConnected = false;
                         useM365 = false;
                         isAuthenticated = false;
                         showLoginPrompt();
                     }
-                } else {
+                } else if (!useM365) {
                     // Local mode - no M365 config, stays in offline mode
                     isConnected = false;
                     useM365 = false;
                     isAuthenticated = false;
-                    console.log("M365 config not configured - running in Local Mode");
+                    console.log('⚠️  M365 config incomplete - running in Local Mode');
+                    console.log('ℹ️  Required:');
+                    console.log('    - clientId:', hasValidClientId ? '✅' : '❌ set to YOUR_CLIENT_ID_HERE');
+                    console.log('    - siteId:', hasValidSiteId ? '✅' : '❌ set to YOUR_SITE_ID_HERE');
                     showLoginPrompt();
+                } else {
+                    console.error('❌ initializeMSAL function not available');
+                    isConnected = false;
+                    useM365 = false;
                 }
             } else {
-                console.error("M365_CONFIG not found - m365-integration.js may not have loaded");
+                console.error('❌ M365_CONFIG not found - m365-integration.js may not have loaded');
                 isConnected = false;
                 useM365 = false;
             }
+            console.groupEnd();
         });
         
         // Callback functions that m365-integration.js will call to update UI
         window.updatePatientsFromM365 = function(patientsData) {
+            console.log('📊 updatePatientsFromM365 called with', patientsData.length, 'patients');
             patients = patientsData;
             renderUI();
         };
         
         window.updateOnCallFromM365 = function(onCallData) {
+            console.log('📅 updateOnCallFromM365 called with', onCallData.length, 'on-call shifts');
             onCallSchedule = onCallData;
             updateOnCallDashboard();
         };
         
         window.updateSettingsFromM365 = function(settingsData) {
+            console.log('⚙️  updateSettingsFromM365 called:', settingsData);
             globalSettings = { onCall: settingsData.defaultOnCall || '', hospitals: settingsData.hospitals || '' };
             updateOnCallDashboard();
         };
         
         // Callback for authentication state changes
         window.updateAuthState = function(authenticated, username = '') {
+            console.group('🔐 updateAuthState called');
+            console.log('authenticated:', authenticated);
+            console.log('username:', username);
+            
             isAuthenticated = authenticated;
             currentUser = username;
             isConnected = authenticated;
             
+            console.log('📍 State updated:', {
+                isAuthenticated,
+                currentUser,
+                isConnected,
+                useM365
+            });
+            
             // Update UI elements based on auth state
-            toggleAuthUIElements();
+            try {
+                toggleAuthUIElements();
+                console.log('✅ toggleAuthUIElements succeeded');
+            } catch (e) {
+                console.error('❌ toggleAuthUIElements failed:', e);
+            }
             
             if (authenticated) {
+                console.log('✅ User authenticated - rendering UI');
                 renderUI();  // Show data after login
             } else {
+                console.log('ℹ️  User not authenticated - showing login prompt');
                 showLoginPrompt();  // Show login prompt when not authenticated
             }
+            console.groupEnd();
         };
         
         // Toggle UI elements based on authentication
         function toggleAuthUIElements() {
+            console.log('🔄 toggleAuthUIElements called, isAuthenticated:', isAuthenticated);
+            
             const importBtn = document.querySelector('button[onclick*="csv-file-input"]');
             const addBtn = document.querySelector('button[onclick*="openModal"]');
             const loginBtn = document.getElementById('m365-login-btn');
             const contentArea = document.querySelector('.content-area');
             const statsArea = document.querySelector('.px-4.py-3.bg-white.border-b.border-slate-100.grid.grid-cols-4');
             const tabNav = document.querySelector('nav.px-2.py-2.bg-white.border-b');
+            
+            console.log('🔍 Elements found:', {
+                importBtn: !!importBtn,
+                addBtn: !!addBtn,
+                loginBtn: !!loginBtn,
+                contentArea: !!contentArea,
+                statsArea: !!statsArea,
+                tabNav: !!tabNav
+            });
             
             if (isAuthenticated) {
                 // Show import and add buttons
@@ -1329,6 +1410,9 @@
                 // Hide login prompt
                 const loginPrompt = document.getElementById('login-prompt');
                 if (loginPrompt) loginPrompt.style.display = 'none';
+                
+                console.log('✅ Showed: content area, stats, tabs, import/add buttons');
+                console.log('✅ Hidden: login prompt, login button');
             } else {
                 // Hide import and add buttons
                 if (importBtn) importBtn.style.display = 'none';
@@ -1343,6 +1427,9 @@
                 // Show login prompt
                 const loginPrompt = document.getElementById('login-prompt');
                 if (loginPrompt) loginPrompt.style.display = 'flex';
+                
+                console.log('✅ Showed: login prompt, login button');
+                console.log('✅ Hidden: content area, stats, tabs, import/add buttons');
             }
         }
         
