@@ -440,6 +440,8 @@ async function fetchPatients(dateFilter = null) {
 }
 
 async function savePatient(patientData) {
+    console.log('🌟 === ENTER m365SavePatient ===');
+    console.log('   patientData:', { mrn: patientData?.mrn, name: patientData?.name, has_id: !!patientData?.id });
     console.log('📤 M365: Saving patient to SharePoint...', { mrn: patientData.mrn, name: patientData.name });
     
     const listId = M365_CONFIG.sharepoint.lists.patients;
@@ -481,6 +483,7 @@ async function savePatient(patientData) {
             const response = await graphRequest(endpoint, 'POST', body);
             console.log('✅ Graph API response received:', { id: response.id, status: response.status });
             console.log('✅ Created in SharePoint with ID:', response.id);
+            console.log('🌟 === EXIT m365SavePatient (new record) with ID:', response.id, '===');
             return response.id;
         } else if (patientData.id) {
             // Update existing record
@@ -490,6 +493,7 @@ async function savePatient(patientData) {
             const response = await graphRequest(endpoint, 'PATCH', fields);
             console.log('✅ Graph API response received:', { status: response });
             console.log('✅ Updated in SharePoint');
+            console.log('🌟 === EXIT m365SavePatient (update) with ID:', patientData.id, '===');
             return patientData.id;
         } else {
             // New record (no ID) - create in SharePoint
@@ -500,9 +504,11 @@ async function savePatient(patientData) {
             const response = await graphRequest(endpoint, 'POST', body);
             console.log('✅ Graph API response received:', { id: response.id, status: response.status });
             console.log('✅ Created in SharePoint with ID:', response.id);
+            console.log('🌟 === EXIT m365SavePatient (create no-ID) with ID:', response.id, '===');
             return response.id;
         }
     } catch (err) {
+        console.error('🌟 === EXIT m365SavePatient (ERROR) ===');
         console.error('❌ Graph API call failed in savePatient:', err.message);
         console.error('   Full error:', err);
         console.error('   Error type:', err.name);
@@ -916,7 +922,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.m365Login = login;
     window.m365Logout = logout;
     window.m365FetchPatients = fetchPatients;
+    console.log('📌 About to assign savePatient as window.m365SavePatient...');
     window.m365SavePatient = savePatient;
+    console.log('📌 m365SavePatient assigned successfully');
     window.m365DeletePatient = deletePatient;
     window.m365GetBackfeed = getBackfeedData;
     window.m365FetchOnCall = fetchOnCallSchedule;
