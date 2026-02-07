@@ -2656,7 +2656,7 @@
                 <button onclick="window.closeModal()" class="text-2xl">×</button>
             </div>
             
-            <form id="patient-form" onsubmit="return window.savePatient(event)" class="flex-1 overflow-y-auto flex flex-col min-h-0">
+            <form id="patient-form" onsubmit="event.preventDefault(); window.savePatient(event); return false;" class="flex-1 overflow-y-auto flex flex-col min-h-0">
                 <input type="hidden" id="edit-id">
                 
                 <!-- Scrollable content area with consistent padding -->
