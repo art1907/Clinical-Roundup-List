@@ -875,20 +875,11 @@
         window.closeModal = () => {
             const modal = document.getElementById('patient-modal');
             if (modal) {
-                // Check if there's unsaved data
-                const hasData = document.getElementById('f-name')?.value || 
-                               document.getElementById('f-mrn')?.value ||
-                               document.getElementById('f-plan')?.value;
-                
-                if (hasData && !document.getElementById('edit-id').value) {
-                    if (!confirm('You have unsaved changes. Close without saving?')) {
-                        return; // Don't close
-                    }
-                }
-                
                 modal.classList.add('hidden');
                 document.body.classList.remove('no-scroll');
-                clearDraft(); // Clear draft on close
+                clearDraft();// Clear draft on close
+                const form = document.getElementById('patient-form');
+                if (form) form.reset(); // Clear form on close
             }
         };
         
@@ -1533,8 +1524,8 @@
                     }
                     renderUI();
                     clearDraft(); // Clear draft on successful save
-                    window.closeModal();
                     showToast("✓ Saved (Local)");
+                    setTimeout(() => window.closeModal(), 100); // Slight delay to let toast show
                 } else {
                     // M365 mode: use Graph API via m365-integration.js
                     if (typeof window.m365SavePatient === 'function') {
@@ -1543,8 +1534,8 @@
                         }
                         await window.m365SavePatient(data);
                         clearDraft(); // Clear draft on successful save
-                        window.closeModal();
                         showToast("✓ Saved");
+                        setTimeout(() => window.closeModal(), 100); // Slight delay to let toast show
                         // Refetch data to update UI
                         if (typeof window.m365FetchPatients === 'function') {
                             await window.m365FetchPatients();
