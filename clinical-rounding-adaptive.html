@@ -1496,6 +1496,16 @@
         // Version marker for debugging - includes timestamp to prevent cache reversion
         console.log('%c🔄 App Version: 2026-02-07 12:15 - Save Fix V6 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
+        // Global form submission blocker - prevents double submissions
+        document.addEventListener('submit', (e) => {
+            if (isSaving && e.target.id === 'patient-form') {
+                console.warn('🚫 Form submission blocked - save already in progress');
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);  // Use capture phase to intercept before any handlers
+        
         window.savePatient = async (e) => {
             // SET LOCK FIRST - before anything else
             if (isSaving) {
@@ -1605,9 +1615,13 @@
                             const result = await window.m365SavePatient(data);
                             console.log('✅ m365SavePatient returned:', result);
                             console.log('📊 Save result type:', typeof result, 'value:', result);
-                            if (!result && result !== 0) {
-                                throw new Error('m365SavePatient returned empty/null: ' + JSON.stringify(result));
+                            
+                            // If result is falsy (but not a number), it might be blocked or errored
+                            if (result === null || result === undefined) {
+                                throw new Error('m365SavePatient returned empty/null');
                             }
+                            
+                            // Success - result should be an ID (string/number)
                             clearDraft(); // Clear draft on successful save
                             showToast("✓ Saved");
                             setTimeout(() => window.closeModal(), 100); // Slight delay to let toast show
