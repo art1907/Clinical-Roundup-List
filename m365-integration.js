@@ -126,6 +126,9 @@ function initializeMSAL() {
 
 async function login() {
     try {
+        // Clear any previous auth error flags when user tries again
+        sessionStorage.removeItem('msal_auth_error');
+        
         const loginRequest = {
             scopes: M365_CONFIG.scopes,
             prompt: 'select_account'
