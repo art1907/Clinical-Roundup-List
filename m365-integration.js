@@ -19,15 +19,11 @@ const M365_CONFIG = {
     auth: {
         clientId: '2030acbd-8796-420d-8990-acdf468227a6',  // From Entra ID app registration
         authority: 'https://login.microsoftonline.com/d4402872-0ebc-4758-9c54-71923320c29d',
-        redirectUri: window.location.href.includes('localhost') 
-            ? 'http://localhost:3000/clinical-rounding-adaptive.html'
-            : window.location.href.includes('github.io')
-                ? 'https://art1907.github.io/Clinical-Roundup-List/'
-                : 'https://azurology.sharepoint.com/sites/clinical-rounding/AppAssets/clinical-rounding-adaptive.html'
+        redirectUri: window.location.origin + window.location.pathname  // Use exact current URL
     },
     cache: {
         cacheLocation: 'localStorage',
-        storeAuthStateInCookie: false
+        storeAuthStateInCookie: true  // Required for redirect flow reliability
     },
     
     // Microsoft Graph API endpoints
