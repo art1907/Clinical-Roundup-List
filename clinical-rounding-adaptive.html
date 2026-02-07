@@ -2307,6 +2307,7 @@
         };
 
         // Wait for all DOM and scripts to be ready before initializing
+        let appInitialized = false;
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initializeApp);
         } else {
@@ -2315,6 +2316,12 @@
         }
         
         function initializeApp() {
+            if (appInitialized) {
+                console.log('App already initialized, skipping');
+                return;
+            }
+            appInitialized = true;
+            
             const checkboxes = document.querySelectorAll('.findings-checkbox');
             const codesInput = document.getElementById('f-findings-codes');
             const valuesInput = document.getElementById('f-findings-values');
@@ -2408,10 +2415,8 @@
                     e.preventDefault();
                     const modal = document.getElementById('patient-modal');
                     if (modal && !modal.classList.contains('hidden')) {
-                        const form = document.getElementById('patient-form');
-                        if (form) {
-                            form.dispatchEvent(new Event('submit'));
-                        }
+                        // Call savePatient directly instead of dispatching event to avoid recursion
+                        window.savePatient(e);
                     }
                 }
                 // Escape to close modal
@@ -3009,46 +3014,6 @@
     <div id="toast" class="fixed bottom-20 left-4 right-4 bg-slate-900 text-white px-4 py-3 rounded-lg text-xs font-bold transition-opacity opacity-0 z-50">Done</div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const checkboxes = document.querySelectorAll('.findings-checkbox');
-            const codesInput = document.getElementById('f-findings-codes');
-            const valuesInput = document.getElementById('f-findings-values');
-            
-            function updateSelectedCodes() {
-                const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
-                codesInput.value = selected.join(',');
-                const values = {};
-                checkboxes.forEach(cb => {
-                    if (cb.checked) {
-                        const valueInput = document.querySelector(`input.findings-value[data-code="${cb.value}"]`);
-                        if (valueInput) values[cb.value] = valueInput.value;
-                    }
-                });
-                valuesInput.value = JSON.stringify(values);
-            }
-            
-            checkboxes.forEach(cb => {
-                cb.addEventListener('change', (e) => {
-                    const valueInput = document.querySelector(`input.findings-value[data-code="${cb.value}"]`);
-                    if (valueInput) {
-                        if (cb.checked) {
-                            valueInput.disabled = false;
-                            valueInput.focus();
-                        } else {
-                            valueInput.disabled = true;
-                            valueInput.value = '';
-                        }
-                    }
-                    updateSelectedCodes();
-                });
-                const valueInput = document.querySelector(`input.findings-value[data-code="${cb.value}"]`);
-                if (valueInput) {
-                    valueInput.disabled = true;
-                    valueInput.addEventListener('input', updateSelectedCodes);
-                }
-            });
-        });
-
         // ========== Phase 0 Property Tests: Policy Enforcement ==========
         // Property 1: MFA Enforcement for Financial Operations
         window.testMFAEnforcement = () => {
