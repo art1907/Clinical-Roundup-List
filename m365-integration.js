@@ -71,10 +71,8 @@ function initializeMSAL() {
             .then(response => {
                 if (response) {
                     currentAccount = response.account;
-                    // Clear URL hash to prevent re-processing
-                    if (window.location.hash) {
-                        history.replaceState(null, '', window.location.pathname);
-                    }
+                    // Clear URL params after successful login
+                    window.history.replaceState({}, document.title, window.location.pathname);
                     handleSuccessfulLogin();
                 } else {
                     // Check if user is already signed in
@@ -83,12 +81,7 @@ function initializeMSAL() {
                         currentAccount = accounts[0];
                         handleSuccessfulLogin();
                     } else {
-                        // Clear any stale hash/state to prevent loops
-                        if (window.location.hash && window.location.hash.includes('code=')) {
-                            console.warn('Clearing stale authentication state');
-                            history.replaceState(null, '', window.location.pathname);
-                        }
-                        // No existing session - update auth state to false
+                        // No existing session
                         if (typeof window.updateAuthState === 'function') {
                             window.updateAuthState(false, '');
                         }
@@ -98,14 +91,14 @@ function initializeMSAL() {
             .catch(err => {
                 console.error('MSAL redirect error:', err);
                 
-                // Clear hash on state errors to prevent loop
-                if (err.errorCode === 'state_not_found' && window.location.hash) {
-                    console.warn('State mismatch - clearing hash to prevent loop');
-                    history.replaceState(null, '', window.location.pathname);
-                }
-                
-                // Show user-friendly error (not state_not_found which is internal)
-                if (err.errorCode !== 'state_not_found') {
+                // Clear URL (both hash and query) on state errors to prevent loop
+                if (err.errorCode === 'state_not_found') {
+                    console.warn('State mismatch detected - clearing auth code from URL');
+                    // Clear search AND hash to remove auth code
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    showToast('Authentication failed. Please try again.');
+                } else {
+                    // Show other auth errors
                     showToast('Authentication error: ' + err.message);
                 }
                 
