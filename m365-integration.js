@@ -717,11 +717,8 @@ function getCachedData(key) {
 // INITIALIZATION
 // =============================================================================
 
-// Initialize on page load
+// Expose functions once DOM is ready (initialization triggered from clinical-rounding-adaptive.html)
 document.addEventListener('DOMContentLoaded', () => {
-    initializeMSAL();
-    
-    // Expose functions to window for HTML onclick handlers
     window.m365Login = login;
     window.m365Logout = logout;
     window.m365FetchPatients = fetchPatients;
