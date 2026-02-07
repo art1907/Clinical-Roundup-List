@@ -1472,35 +1472,26 @@
         }
 
         let isSaving = false;  // Prevent concurrent saves
-        let lastSaveTime = 0;  // Timestamp of last save to prevent rapid fires
         
         // Version marker for debugging
-        console.log('%c🔄 App Version: 2026-02-07 11:30 - Save Debug V3', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
+        console.log('%c🔄 App Version: 2026-02-07 11:35 - Save Fix V4 (No Debounce)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         window.savePatient = async (e) => {
-            const now = Date.now();
-            
-            // Debounce: Ignore saves within 200ms of last save (reduced from 500ms)
-            if (now - lastSaveTime < 200) {
-                console.warn('⏭️ Save debounced - too soon after last save (within 200ms)');
-                return false;
-            }
-            
+            // Prevent default and stop propagation FIRST
             if (e && typeof e.preventDefault === 'function') {
                 e.preventDefault();
                 e.stopPropagation();
             }
             
-            // Prevent concurrent saves
+            // Prevent concurrent saves (simple lock)
             if (isSaving) {
-                console.warn('⏭️ Save already in progress, skipping');
+                console.warn('⏭️ Save already in progress, skipping duplicate call');
                 return false;
             }
             
             console.log('💾 Starting save...');
             console.log('🔍 Save context:', { isConnected, useM365, hasM365SaveFunction: typeof window.m365SavePatient === 'function' });
             isSaving = true;
-            lastSaveTime = now;
             
             const codesInput = document.getElementById('f-findings-codes');
             const findingsCodes = codesInput.value ? codesInput.value.split(',').map(c => c.trim()).filter(c => c) : [];
