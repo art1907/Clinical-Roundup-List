@@ -59,6 +59,38 @@ See **INSTALLATION_GUIDE.md** and **M365_MIGRATION.md** for step-by-step instruc
 
 ---
 
+## 🌐 Deployment Options
+
+### Option 1: Local/Simple Web Server
+Perfect for testing or small teams:
+- Open HTML file directly in browser (Local Mode)
+- Host on IIS, Apache, or any static web server
+- See [release/DEPLOYMENT_README.md](./release/DEPLOYMENT_README.md)
+
+### Option 2: Azure Static Web Apps (Recommended for Production)
+**Production-ready hosting with authentication, API backend, and auto-deployment:**
+- ✅ Free tier (sufficient for most teams)
+- ✅ HTTPS automatic
+- ✅ Built-in Entra ID authentication
+- ✅ Azure Functions API backend
+- ✅ GitHub Actions CI/CD
+- ✅ Global CDN distribution
+- 💰 **Cost: $0-5/month**
+
+**Quick Deploy:**
+1. Create Azure Static Web App (links to your GitHub repo)
+2. Configure Entra ID authentication
+3. Create SharePoint Lists
+4. Push code → Auto-deploy ✨
+
+📖 **See: [AZURE_DEPLOY_QUICKSTART.md](./AZURE_DEPLOY_QUICKSTART.md)** for 15-minute setup guide  
+📖 **Full guide: [AZURE_STATIC_WEB_APP_DEPLOYMENT.md](./AZURE_STATIC_WEB_APP_DEPLOYMENT.md)**
+
+### Option 3: Netlify (Alternative)
+- See [release/NETLIFY_DEPLOYMENT.md](./release/NETLIFY_DEPLOYMENT.md)
+
+---
+
 ## 🛣️ Roadmap
 
 - [x] Full Microsoft 365 Integration (**Complete!**)

@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://alcdn.msauth.net/browser/2.32.2/js/msal-browser.min.js"></script>
+    <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
     
     <style>
         * { -webkit-tap-highlight-color: transparent; }
@@ -24,6 +24,22 @@
         textarea { font-size: 16px !important; resize: vertical; }
         details summary { list-style: none; cursor: pointer; }
         details summary::-webkit-details-marker { display: none; }
+        
+        /* Findings section enhancements */
+        textarea.findings-value {
+            overflow-y: hidden;
+            transition: height 0.1s ease;
+        }
+        
+        textarea.findings-value:disabled {
+            background-color: #f3f4f6;
+            cursor: not-allowed;
+        }
+        
+        input.findings-date:disabled {
+            background-color: #f3f4f6;
+            cursor: not-allowed;
+        }
         
         .main-container {
             display: flex;
@@ -775,6 +791,9 @@
                     if (document.getElementById('f-findings-values')) {
                         document.getElementById('f-findings-values').value = p.findingsValues ? JSON.stringify(p.findingsValues) : "";
                     }
+                    if (document.getElementById('f-findings-dates')) {
+                        document.getElementById('f-findings-dates').value = p.findingsDates ? JSON.stringify(p.findingsDates) : "";
+                    }
                     if (priorityInput) priorityInput.checked = p.priority || false;
                     if (statusInput) statusInput.value = p.procedureStatus || 'To-Do';
                     
@@ -787,19 +806,34 @@
                     if (p.findingsCodes && p.findingsCodes.length > 0) {
                         document.querySelectorAll('.findings-checkbox').forEach(cb => {
                             cb.checked = p.findingsCodes.includes(cb.value);
-                            const valueInput = document.querySelector(`input.findings-value[data-code="${cb.value}"]`);
+                            const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
+                            const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
                             if (valueInput) {
                                 if (cb.checked) {
                                     valueInput.disabled = false;
                                     if (p.findingsValues && p.findingsValues[cb.value]) {
                                         valueInput.value = p.findingsValues[cb.value];
+                                        autoResizeTextarea(valueInput);
                                     }
                                 } else {
                                     valueInput.disabled = true;
                                 }
                             }
+                            if (dateInput) {
+                                if (cb.checked) {
+                                    dateInput.disabled = false;
+                                    if (p.findingsDates && p.findingsDates[cb.value]) {
+                                        dateInput.value = p.findingsDates[cb.value];
+                                    }
+                                } else {
+                                    dateInput.disabled = true;
+                                }
+                            }
                         });
                     }
+                } else {
+                    // New record - check for draft
+                    loadDraft();
                 }
             }
             updateStatAcuityVisual(priorityInput?.checked || false);
@@ -808,9 +842,100 @@
         };
 
         window.closeModal = () => {
-            document.body.classList.remove('no-scroll');
-            document.getElementById('patient-modal')?.classList.add('hidden');
+            const modal = document.getElementById('patient-modal');
+            if (modal) {
+                // Check if there's unsaved data
+                const hasData = document.getElementById('f-name')?.value || 
+                               document.getElementById('f-mrn')?.value ||
+                               document.getElementById('f-plan')?.value;
+                
+                if (hasData && !document.getElementById('edit-id').value) {
+                    if (!confirm('You have unsaved changes. Close without saving?')) {
+                        return; // Don't close
+                    }
+                }
+                
+                modal.classList.add('hidden');
+                document.body.classList.remove('no-scroll');
+                clearDraft(); // Clear draft on close
+            }
         };
+        
+        // Auto-save draft functionality
+        function saveDraft() {
+            const editId = document.getElementById('edit-id')?.value;
+            if (editId) return; // Don't save draft for existing records
+            
+            const draft = {
+                room: document.getElementById('f-room')?.value || '',
+                date: document.getElementById('f-date')?.value || '',
+                name: document.getElementById('f-name')?.value || '',
+                dob: document.getElementById('f-dob')?.value || '',
+                mrn: document.getElementById('f-mrn')?.value || '',
+                hospital: document.getElementById('f-hospital')?.value || '',
+                plan: document.getElementById('f-plan')?.value || '',
+                supervisingMd: document.getElementById('f-md')?.value || '',
+                pending: document.getElementById('f-pending')?.value || '',
+                followUp: document.getElementById('f-fu')?.value || '',
+                cptPrimary: document.getElementById('f-cpt-primary')?.value || '',
+                icdPrimary: document.getElementById('f-icd-primary')?.value || '',
+                timestamp: Date.now()
+            };
+            
+            // Only save if there's actual data
+            const hasData = Object.values(draft).some(v => v && v !== '');
+            if (hasData) {
+                localStorage.setItem('patientDraft', JSON.stringify(draft));
+                showDraftIndicator('Draft saved');
+            }
+        }
+        
+        function loadDraft() {
+            const draftStr = localStorage.getItem('patientDraft');
+            if (!draftStr) return false;
+            
+            try {
+                const draft = JSON.parse(draftStr);
+                const age = Date.now() - draft.timestamp;
+                const oneHour = 60 * 60 * 1000;
+                
+                // Only load drafts less than 1 hour old
+                if (age > oneHour) {
+                    clearDraft();
+                    return false;
+                }
+                
+                if (confirm('Found unsaved draft from earlier. Restore it?')) {
+                    Object.keys(draft).forEach(key => {
+                        const fieldId = 'f-' + key.replace(/([A-Z])/g, '-$1').toLowerCase()
+                            .replace('supervising-md', 'md')
+                            .replace('follow-up', 'fu')
+                            .replace('cpt-primary', 'cpt-primary')
+                            .replace('icd-primary', 'icd-primary');
+                        const field = document.getElementById(fieldId);
+                        if (field && draft[key]) field.value = draft[key];
+                    });
+                    showToast('✓ Draft restored');
+                    return true;
+                }
+            } catch (err) {
+                console.error('Draft load error:', err);
+            }
+            return false;
+        }
+        
+        function clearDraft() {
+            localStorage.removeItem('patientDraft');
+        }
+        
+        function showDraftIndicator(message) {
+            const indicator = document.getElementById('draft-indicator');
+            if (indicator) {
+                indicator.textContent = message;
+                indicator.classList.remove('opacity-0');
+                setTimeout(() => indicator.classList.add('opacity-0'), 2000);
+            }
+        }
         window.closeMapper = () => {
             document.body.classList.remove('no-scroll');
             document.getElementById('mapper-modal')?.classList.add('hidden');
@@ -890,6 +1015,7 @@
         let rawImportData = null; 
         let calDate = new Date();
         let isConnected = false;
+        let isAuthenticated = false;  // Track authentication state
 
         window.getCurrentPatients = () => patients;
 
@@ -1087,30 +1213,51 @@
         // M365 Integration: Authentication & Polling
         // ============================================================================
         
-        // Check if M365 config is populated, otherwise fall back to local mode
-        const useM365 = M365_CONFIG.auth.clientId !== 'YOUR_CLIENT_ID_HERE' && M365_CONFIG.sharepoint.siteId !== 'YOUR_SITE_ID_HERE';
+        let useM365 = false;  // Will be set after m365-integration.js loads
         
         let retryAttempt = 0;
         const MAX_AUTO_RETRIES = 2;
         const CONNECTION_TIMEOUT = 5000;
         const getRetryDelay = (attempt) => Math.min(3000 * Math.pow(2, attempt), 6000);
         
-        // Initialize M365 when page loads (if credentials are configured)
-        if (useM365 && typeof initializeMSAL === 'function') {
-            try {
-                // Initialize MSAL after DOM is ready
-                document.addEventListener('DOMContentLoaded', () => {
-                    initializeMSAL();
-                }, { once: true });
-            } catch (e) {
-                console.error("M365 Initialization Error:", e);
+        // Initialize M365 after all scripts have loaded
+        window.addEventListener('load', () => {
+            console.log("Window load event - checking M365_CONFIG");
+            
+            // Wait for M365_CONFIG to be available
+            if (typeof M365_CONFIG !== 'undefined') {
+                console.log("M365_CONFIG found:", M365_CONFIG.auth.clientId);
+                useM365 = M365_CONFIG.auth.clientId !== 'YOUR_CLIENT_ID_HERE' && M365_CONFIG.sharepoint.siteId !== 'YOUR_SITE_ID_HERE';
+                console.log("useM365 set to:", useM365);
+                
+                if (useM365 && typeof initializeMSAL === 'function') {
+                    try {
+                        console.log("M365 config detected - initializing MSAL");
+                        initializeMSAL();
+                        // Start with auth UI hidden
+                        toggleAuthUIElements();
+                        showLoginPrompt();
+                    } catch (e) {
+                        console.error("M365 Initialization Error:", e);
+                        isConnected = false;
+                        useM365 = false;
+                        isAuthenticated = false;
+                        showLoginPrompt();
+                    }
+                } else {
+                    // Local mode - no M365 config, stays in offline mode
+                    isConnected = false;
+                    useM365 = false;
+                    isAuthenticated = false;
+                    console.log("M365 config not configured - running in Local Mode");
+                    showLoginPrompt();
+                }
+            } else {
+                console.error("M365_CONFIG not found - m365-integration.js may not have loaded");
                 isConnected = false;
+                useM365 = false;
             }
-        } else {
-            // Local mode - no M365 config, stays in offline mode
-            isConnected = false;
-            console.log("M365 config not configured - running in Local Mode");
-        }
+        });
         
         // Callback functions that m365-integration.js will call to update UI
         window.updatePatientsFromM365 = function(patientsData) {
@@ -1127,13 +1274,104 @@
             globalSettings = { onCall: settingsData.defaultOnCall || '', hospitals: settingsData.hospitals || '' };
             updateOnCallDashboard();
         };
+        
+        // Callback for authentication state changes
+        window.updateAuthState = function(authenticated, username = '') {
+            isAuthenticated = authenticated;
+            currentUser = username;
+            isConnected = authenticated;
+            
+            // Update UI elements based on auth state
+            toggleAuthUIElements();
+            
+            if (authenticated) {
+                renderUI();  // Show data after login
+            } else {
+                showLoginPrompt();  // Show login prompt when not authenticated
+            }
+        };
+        
+        // Toggle UI elements based on authentication
+        function toggleAuthUIElements() {
+            const importBtn = document.querySelector('button[onclick*="csv-file-input"]');
+            const addBtn = document.querySelector('button[onclick*="openModal"]');
+            const loginBtn = document.getElementById('m365-login-btn');
+            const contentArea = document.querySelector('.content-area');
+            const statsArea = document.querySelector('.px-4.py-3.bg-white.border-b.border-slate-100.grid.grid-cols-4');
+            const tabNav = document.querySelector('nav.px-2.py-2.bg-white.border-b');
+            
+            if (isAuthenticated) {
+                // Show import and add buttons
+                if (importBtn) importBtn.style.display = '';
+                if (addBtn) addBtn.style.display = '';
+                if (loginBtn) loginBtn.style.display = 'none';
+                
+                // Show content, stats, and tabs
+                if (contentArea) contentArea.style.display = '';
+                if (statsArea) statsArea.style.display = '';
+                if (tabNav) tabNav.style.display = '';
+                
+                // Hide login prompt
+                const loginPrompt = document.getElementById('login-prompt');
+                if (loginPrompt) loginPrompt.style.display = 'none';
+            } else {
+                // Hide import and add buttons
+                if (importBtn) importBtn.style.display = 'none';
+                if (addBtn) addBtn.style.display = 'none';
+                if (loginBtn) loginBtn.style.display = '';
+                
+                // Hide content, stats, and tabs
+                if (contentArea) contentArea.style.display = 'none';
+                if (statsArea) statsArea.style.display = 'none';
+                if (tabNav) tabNav.style.display = 'none';
+                
+                // Show login prompt
+                const loginPrompt = document.getElementById('login-prompt');
+                if (loginPrompt) loginPrompt.style.display = 'flex';
+            }
+        }
+        
+        // Show login prompt when not authenticated
+        function showLoginPrompt() {
+            let loginPrompt = document.getElementById('login-prompt');
+            if (!loginPrompt) {
+                // Create login prompt if it doesn't exist
+                loginPrompt = document.createElement('div');
+                loginPrompt.id = 'login-prompt';
+                loginPrompt.className = 'flex flex-col items-center justify-center h-full p-8 text-center bg-white';
+                loginPrompt.innerHTML = `
+                    <div class="max-w-md">
+                        <div class="text-6xl mb-6">🔐</div>
+                        <h2 class="text-2xl font-bold text-slate-900 mb-4">Authentication Required</h2>
+                        <p class="text-slate-600 mb-8">Please sign in with your Microsoft 365 account to access the Clinical Rounding platform.</p>
+                        <button onclick="window.m365Login && window.m365Login()" class="px-6 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-lg">
+                            Sign In with Microsoft 365
+                        </button>
+                        <p class="text-xs text-slate-500 mt-6">This application requires organizational authentication for HIPAA compliance and audit logging.</p>
+                    </div>
+                `;
+                
+                // Insert after connection status bar
+                const statusBar = document.getElementById('connection-status-bar');
+                if (statusBar && statusBar.nextSibling) {
+                    statusBar.parentNode.insertBefore(loginPrompt, statusBar.nextSibling);
+                }
+            }
+            loginPrompt.style.display = 'flex';
+        }
 
         window.savePatient = async (e) => {
-            e.preventDefault();
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
             const codesInput = document.getElementById('f-findings-codes');
             const findingsCodes = codesInput.value ? codesInput.value.split(',').map(c => c.trim()).filter(c => c) : [];
             const valuesInput = document.getElementById('f-findings-values');
             const findingsValues = valuesInput.value ? JSON.parse(valuesInput.value) : {};
+            const datesInput = document.getElementById('f-findings-dates');
+            const findingsDates = datesInput.value ? JSON.parse(datesInput.value) : {};
             
             const data = {
                 room: document.getElementById('f-room').value, 
@@ -1144,6 +1382,7 @@
                 hospital: document.getElementById('f-hospital').value,
                 findingsCodes: findingsCodes,
                 findingsValues: findingsValues,
+                findingsDates: findingsDates,
                 findingsText: document.getElementById('f-findings-text').value,
                 plan: document.getElementById('f-plan').value, 
                 supervisingMd: document.getElementById('f-md').value,
@@ -1173,31 +1412,32 @@
                         patients.push({ ...data, id: newId, lastUpdated: new Date().toISOString() });
                     }
                     renderUI();
+                    clearDraft(); // Clear draft on successful save
                     window.closeModal();
                     showToast("✓ Saved (Local)");
-                    return false;
-                }
-                
-                // M365 mode: use Graph API via m365-integration.js
-                if (typeof window.m365SavePatient === 'function') {
-                    if (editId) {
-                        data.id = editId;
-                    }
-                    await window.m365SavePatient(data);
-                    window.closeModal();
-                    showToast("✓ Saved");
-                    // Refetch data to update UI
-                    if (typeof window.m365FetchPatients === 'function') {
-                        await window.m365FetchPatients();
-                    }
                 } else {
-                    throw new Error('M365 save function not available');
+                    // M365 mode: use Graph API via m365-integration.js
+                    if (typeof window.m365SavePatient === 'function') {
+                        if (editId) {
+                            data.id = editId;
+                        }
+                        await window.m365SavePatient(data);
+                        clearDraft(); // Clear draft on successful save
+                        window.closeModal();
+                        showToast("✓ Saved");
+                        // Refetch data to update UI
+                        if (typeof window.m365FetchPatients === 'function') {
+                            await window.m365FetchPatients();
+                        }
+                    } else {
+                        throw new Error('M365 save function not available');
+                    }
                 }
             } catch (err) { 
                 console.error("Save error:", err);
-                showToast("Error: " + (err.message || "Failed to save"));
+                showToast("❌ Error: " + (err.message || "Failed to save"));
             }
-            return false;
+            return false; // Prevent default form submission
         };
 
         window.toggleArchive = async (id, shouldArchive) => {
@@ -1285,6 +1525,24 @@
             } else if (tab === 'oncall') {
                 document.getElementById('oncall-section')?.classList.remove('hidden');
                 renderOnCallSchedule();
+                // Auto-backfill provider and hospitals from last entry or global settings
+                const lastShift = onCallSchedule.length > 0 ? onCallSchedule[onCallSchedule.length - 1] : null;
+                const providerInput = document.getElementById('oc-provider');
+                const dateInput = document.getElementById('oc-date');
+                const hospitalCheckboxes = document.querySelectorAll('.oc-hospital-checkbox');
+                
+                if (providerInput && !providerInput.value) {
+                    providerInput.value = lastShift ? lastShift.provider : (globalSettings.onCall || '');
+                }
+                if (dateInput && !dateInput.value) {
+                    dateInput.value = new Date().toISOString().split('T')[0];
+                }
+                if (hospitalCheckboxes.length > 0 && lastShift?.hospitals) {
+                    const lastHospitals = lastShift.hospitals.split(',').map(h => h.trim());
+                    hospitalCheckboxes.forEach(cb => {
+                        cb.checked = lastHospitals.includes(cb.value);
+                    });
+                }
             } else {
                 document.getElementById('table-section')?.classList.remove('hidden');
             }
@@ -1541,28 +1799,50 @@
         };
 
         window.saveOnCallShift = async () => {
-            if (!db || !currentUser) { showToast("Connecting..."); return; }
             const date = document.getElementById('oc-date').value;
             const provider = document.getElementById('oc-provider').value;
-            const hospitals = document.getElementById('oc-hospitals').value;
-            if (!date || !provider) return showToast("Missing info");
+            const hospitalCheckboxes = document.querySelectorAll('.oc-hospital-checkbox:checked');
+            const selectedOptions = Array.from(hospitalCheckboxes).map(cb => cb.value);
+            const hospitals = selectedOptions.join(', ');
+            
+            if (!date || !provider) return showToast("⚠️ Date and Provider required");
+            if (selectedOptions.length === 0) return showToast("⚠️ Select at least one hospital");
+            
             try {
                 const existing = onCallSchedule.find(s => s.date === date);
                 if (existing) {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'onCallSchedule', existing.id), { provider, hospitals });
+                    // Update existing
+                    existing.provider = provider;
+                    existing.hospitals = hospitals;
+                    if (isConnected && typeof window.m365SaveOnCallShift === 'function') {
+                        await window.m365SaveOnCallShift(existing);
+                    }
                 } else {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'onCallSchedule'), { date, provider, hospitals });
+                    // Create new
+                    const newShift = { id: Date.now().toString(), date, provider, hospitals };
+                    onCallSchedule.push(newShift);
+                    if (isConnected && typeof window.m365SaveOnCallShift === 'function') {
+                        await window.m365SaveOnCallShift(newShift);
+                    }
                 }
-                showToast("✓ Saved");
-            } catch (err) { console.error("Shift save error:", err); showToast("Error"); }
+                renderOnCallSchedule();
+                showToast("✓ Shift saved");
+            } catch (err) { console.error("Shift save error:", err); showToast("❌ Save failed"); }
         };
 
         window.deleteShift = async (id) => { 
-            if (!db) return;
-            if (confirm("Remove?")) {
+            if (confirm("Remove this shift?")) {
                 try {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'onCallSchedule', id));
-                } catch (err) { console.error("Delete error:", err); }
+                    const index = onCallSchedule.findIndex(s => s.id === id);
+                    if (index !== -1) {
+                        onCallSchedule.splice(index, 1);
+                        if (isConnected && typeof window.m365DeleteOnCallShift === 'function') {
+                            await window.m365DeleteOnCallShift(id);
+                        }
+                        renderOnCallSchedule();
+                        showToast("✓ Shift deleted");
+                    }
+                } catch (err) { console.error("Delete error:", err); showToast("❌ Delete failed"); }
             }
         };
 
@@ -1923,23 +2203,59 @@
             const checkboxes = document.querySelectorAll('.findings-checkbox');
             const codesInput = document.getElementById('f-findings-codes');
             const valuesInput = document.getElementById('f-findings-values');
+            const datesInput = document.getElementById('f-findings-dates');
             
             function updateSelectedCodes() {
                 const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
                 codesInput.value = selected.join(', ');
                 const values = {};
-                document.querySelectorAll('.findings-value').forEach(input => {
+                const dates = {};
+                document.querySelectorAll('textarea.findings-value').forEach(input => {
                     if (input.value) values[input.dataset.code] = input.value;
                 });
+                document.querySelectorAll('input.findings-date').forEach(input => {
+                    if (input.value) dates[input.dataset.code] = input.value;
+                });
                 valuesInput.value = JSON.stringify(values);
-                document.querySelectorAll('.findings-value').forEach(input => {
+                datesInput.value = JSON.stringify(dates);
+                document.querySelectorAll('textarea.findings-value').forEach(input => {
                     const cb = document.querySelector(`.findings-checkbox[value="${input.dataset.code}"]`);
-                    input.style.display = cb?.checked ? 'block' : 'none';
+                    const dateInput = document.querySelector(`input.findings-date[data-code="${input.dataset.code}"]`);
+                    if (cb?.checked) {
+                        input.disabled = false;
+                        input.style.display = 'block';
+                        if (dateInput) {
+                            dateInput.disabled = false;
+                            dateInput.style.display = 'inline-block';
+                        }
+                    } else {
+                        input.disabled = true;
+                        input.style.display = 'none';
+                        if (dateInput) {
+                            dateInput.disabled = true;
+                            dateInput.style.display = 'none';
+                        }
+                    }
                 });
             }
             
+            function autoResizeTextarea(textarea) {
+                textarea.style.height = 'auto';
+                const newHeight = Math.min(textarea.scrollHeight, 120);
+                textarea.style.height = newHeight + 'px';
+            }
+            
             checkboxes.forEach(cb => cb.addEventListener('change', updateSelectedCodes));
-            document.querySelectorAll('.findings-value').forEach(input => input.addEventListener('change', updateSelectedCodes));
+            document.querySelectorAll('textarea.findings-value').forEach(input => {
+                input.addEventListener('change', updateSelectedCodes);
+                input.addEventListener('input', (e) => autoResizeTextarea(e.target));
+                input.addEventListener('focus', (e) => autoResizeTextarea(e.target));
+            });
+            document.querySelectorAll('input.findings-date').forEach(input => {
+                input.addEventListener('change', updateSelectedCodes);
+            });
+            
+            window.autoResizeTextarea = autoResizeTextarea;
             
             const priorityCheckbox = document.getElementById('f-priority');
             const statCard = document.getElementById('stat-acuity-card');
@@ -1969,7 +2285,51 @@
             }
             
             priorityCheckbox?.addEventListener('change', updateStatUI);
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                // Ctrl/Cmd + S to save
+                if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                    e.preventDefault();
+                    const modal = document.getElementById('patient-modal');
+                    if (modal && !modal.classList.contains('hidden')) {
+                        const form = document.getElementById('patient-form');
+                        if (form) {
+                            form.dispatchEvent(new Event('submit'));
+                        }
+                    }
+                }
+                // Escape to close modal
+                if (e.key === 'Escape') {
+                    const modal = document.getElementById('patient-modal');
+                    if (modal && !modal.classList.contains('hidden')) {
+                        window.closeModal();
+                    }
+                }
+            });
+            
+            // Auto-save draft on input change (debounced)
+            let draftTimer;
+            const formInputs = document.querySelectorAll('#patient-form input, #patient-form textarea, #patient-form select');
+            formInputs.forEach(input => {
+                input.addEventListener('input', () => {
+                    clearTimeout(draftTimer);
+                    draftTimer = setTimeout(saveDraft, 1500); // Save draft 1.5s after typing stops
+                });
+            });
+            
+            // Initialize findings fields visibility
             updateSelectedCodes();
+            
+            // Initially hide all findings value inputs and date inputs
+            document.querySelectorAll('textarea.findings-value').forEach(input => {
+                input.style.display = 'none';
+                input.disabled = true;
+            });
+            document.querySelectorAll('input.findings-date').forEach(input => {
+                input.style.display = 'none';
+                input.disabled = true;
+            });
             
             // Ensure setTab is defined before calling it
             if (typeof window.setTab === 'function') {
@@ -1988,6 +2348,7 @@
                 <h1 class="text-xl font-black tracking-tight truncate">Clinical Rounding List</h1>
             </div>
             <div class="flex gap-2">
+                <button id="m365-login-btn" onclick="window.m365Login && window.m365Login()" class="flex-shrink-0 px-3 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-700">🔐 Login</button>
                 <button onclick="document.getElementById('csv-file-input').click()" class="flex-shrink-0 px-3 py-2.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700">📥 Import Files</button>
                 <button onclick="window.openModal()" class="flex-shrink-0 px-4 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">+ Add</button>
             </div>
@@ -1998,9 +2359,12 @@
 
         <!-- Connection Status Bar -->
         <div id="connection-status-bar" class="px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-amber-50 border-b border-amber-200 gap-1">
-            <div class="flex items-center gap-2">
-                <span id="status-indicator" class="inline-flex h-3 w-3 rounded-full bg-amber-600"></span>
-                <span id="status-text" class="text-sm font-bold text-amber-900 uppercase tracking-wide">Local Mode</span>
+            <div class="flex items-center gap-2 justify-between w-full">
+                <div class="flex items-center gap-2">
+                    <span id="status-indicator" class="inline-flex h-3 w-3 rounded-full bg-amber-600"></span>
+                    <span id="status-text" class="text-sm font-bold text-amber-900 uppercase tracking-wide">Local Mode</span>
+                </div>
+                <span id="connection-status" class="text-xs"></span>
             </div>
             <span id="status-detail" class="text-xs text-amber-700 font-semibold">No persistence</span>
         </div>
@@ -2092,10 +2456,51 @@
                 <div class="space-y-4">
                     <div class="bg-white rounded-lg p-4 flex-shrink-0">
                         <h3 class="text-sm font-bold mb-3">Coverage Assignment</h3>
-                        <input type="date" id="oc-date" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm mb-3">
-                        <input type="text" id="oc-provider" placeholder="Provider" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm mb-3" onchange="window.updateGlobalSettings()">
-                        <input type="text" id="oc-hospitals" placeholder="Hospitals" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm mb-3" onchange="window.updateGlobalSettings()">
-                        <button onclick="window.saveOnCallShift()" class="w-full p-3 bg-blue-600 text-white font-bold rounded-lg text-sm">Save Shift</button>
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <label class="text-xs font-bold text-slate-600 block mb-1">Date</label>
+                                <input type="date" id="oc-date" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-600 block mb-1">Provider</label>
+                                <input type="text" id="oc-provider" placeholder="Dr. Name" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="text-xs font-bold text-slate-600 block mb-2">Hospitals (Select multiple)</label>
+                            <div id="oc-hospitals-container" class="bg-slate-50 rounded-lg border border-slate-200 p-3 space-y-2 max-h-[160px] overflow-y-auto">
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
+                                    <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="WGMC">
+                                    <span class="text-sm">Westgate Medical Center (WGMC)</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
+                                    <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="AWC">
+                                    <span class="text-sm">Abrazo West Campus (AWC)</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
+                                    <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="BTMC">
+                                    <span class="text-sm">Boswell Medical Center (BTMC)</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
+                                    <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="Westgate">
+                                    <span class="text-sm">Westgate</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
+                                    <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="CRMC">
+                                    <span class="text-sm">CRMC</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
+                                    <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="AHD">
+                                    <span class="text-sm">AHD</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
+                                    <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="BEMC">
+                                    <span class="text-sm">BEMC</span>
+                                </label>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">Check all that apply</p>
+                        </div>
+                        <button onclick="window.saveOnCallShift()" class="w-full p-3 bg-blue-600 text-white font-bold rounded-lg text-sm hover:bg-blue-700 transition-colors">Save Shift</button>
                     </div>
                     <div id="oc-schedule-list" class="flex-1 overflow-y-auto space-y-2"></div>
                 </div>
@@ -2119,7 +2524,13 @@
 
     <div id="patient-modal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-end md:items-center justify-center p-0 md:p-4">
         <div class="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-3xl shadow-2xl max-h-[92vh] md:h-auto md:max-h-[90vh] flex flex-col">
-            <div class="p-4 border-b flex justify-between items-center flex-shrink-0 bg-white z-10"><h2 class="text-lg font-bold">Record Entry</h2><button onclick="window.closeModal()" class="text-2xl">×</button></div>
+            <div class="p-4 border-b flex justify-between items-center flex-shrink-0 bg-white z-10">
+                <div>
+                    <h2 class="text-lg font-bold">Record Entry</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">💡 Press Enter or Ctrl+S to save • Esc to close</p>
+                </div>
+                <button onclick="window.closeModal()" class="text-2xl">×</button>
+            </div>
             
             <form id="patient-form" onsubmit="return window.savePatient(event)" class="flex-1 overflow-y-auto flex flex-col min-h-0">
                 <input type="hidden" id="edit-id">
@@ -2194,73 +2605,263 @@
                     <h3 class="text-xs font-bold text-blue-900">Findings</h3>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🩸 CBC</summary>
-                        <div class="pl-2 space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85025"> <span class="flex-1">CBC w/ diff (85025)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="cbc-85025" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85027"> <span class="flex-1">CBC auto (85027)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="cbc-85027" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85007"> <span class="flex-1">Blood smear (85007)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="cbc-85007" placeholder="CPT/Val"></div>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85025">
+                                    <span class="flex-1 font-medium">CBC w/ diff (85025)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85025">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85025" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85027">
+                                    <span class="flex-1 font-medium">CBC auto (85027)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85027">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85027" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85007">
+                                    <span class="flex-1 font-medium">Blood smear (85007)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85007">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85007" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
                         </div>
                     </details>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">📊 Chemistry Panels</summary>
-                        <div class="pl-2 space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="bmp-80048"> <span class="flex-1">BMP (80048)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="bmp-80048" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="cmp-80053"> <span class="flex-1">CMP (80053)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="cmp-80053" placeholder="CPT/Val"></div>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="bmp-80048">
+                                    <span class="flex-1 font-medium">BMP (80048)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="bmp-80048">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="bmp-80048" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="cmp-80053">
+                                    <span class="flex-1 font-medium">CMP (80053)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cmp-80053">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cmp-80053" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
                         </div>
                     </details>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🦠 Microbiology</summary>
-                        <div class="pl-2 space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87086"> <span class="flex-1">Urine culture (87086)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="urine-87086" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87088"> <span class="flex-1">+ organism ID (87088)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="urine-87088" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87040"> <span class="flex-1">Blood culture (87040)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="blood-87040" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87103"> <span class="flex-1">Blood fungal (87103)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="blood-87103" placeholder="CPT/Val"></div>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87086">
+                                    <span class="flex-1 font-medium">Urine culture (87086)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87086">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87086" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87088">
+                                    <span class="flex-1 font-medium">+ organism ID (87088)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87088">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87088" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87040">
+                                    <span class="flex-1 font-medium">Blood culture (87040)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87040">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87040" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87103">
+                                    <span class="flex-1 font-medium">Blood fungal (87103)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87103">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87103" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
                         </div>
                     </details>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">📷 X-Ray</summary>
-                        <div class="pl-2 space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-chest"> <span class="flex-1">Chest (71045-48)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="xray-chest" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-spine"> <span class="flex-1">Spine (72020-110)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="xray-spine" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-extremity"> <span class="flex-1">Extremity (73000+)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="xray-extremity" placeholder="CPT/Val"></div>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-chest">
+                                    <span class="flex-1 font-medium">Chest (71045-48)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-chest">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-chest" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-spine">
+                                    <span class="flex-1 font-medium">Spine (72020-110)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-spine">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-spine" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-extremity">
+                                    <span class="flex-1 font-medium">Extremity (73000+)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-extremity">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-extremity" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
                         </div>
                     </details>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🔊 Ultrasound</summary>
-                        <div class="pl-2 space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76700"> <span class="flex-1">Abd complete (76700)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="us-76700" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76705"> <span class="flex-1">Abd limited (76705)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="us-76705" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="us-93306"> <span class="flex-1">Echo (93306)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="us-93306" placeholder="CPT/Val"></div>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76700">
+                                    <span class="flex-1 font-medium">Abd complete (76700)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76700">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76700" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76705">
+                                    <span class="flex-1 font-medium">Abd limited (76705)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76705">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76705" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-93306">
+                                    <span class="flex-1 font-medium">Echo (93306)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-93306">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-93306" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
                         </div>
                     </details>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🖼️ CT Scan</summary>
-                        <div class="pl-2 space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-head"> <span class="flex-1">Head/Brain (70450-70)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="ct-head" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-chest"> <span class="flex-1">Chest (71250-75)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="ct-chest" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-abd"> <span class="flex-1">Abdomen (74150-78)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="ct-abd" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-pelvis"> <span class="flex-1">Pelvis (72192-94)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="ct-pelvis" placeholder="CPT/Val"></div>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-head">
+                                    <span class="flex-1 font-medium">Head/Brain (70450-70)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-head">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-head" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-chest">
+                                    <span class="flex-1 font-medium">Chest (71250-75)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-chest">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-chest" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-abd">
+                                    <span class="flex-1 font-medium">Abdomen (74150-78)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-abd">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-abd" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-pelvis">
+                                    <span class="flex-1 font-medium">Pelvis (72192-94)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-pelvis">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-pelvis" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
                         </div>
                     </details>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🧲 MRI</summary>
-                        <div class="pl-2 space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-brain"> <span class="flex-1">Brain (70551-53)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="mri-brain" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-c-spine"> <span class="flex-1">C-Spine (72141-42)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="mri-c-spine" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-l-spine"> <span class="flex-1">L-Spine (72148-49)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="mri-l-spine" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-abd"> <span class="flex-1">Abdomen (74181-83)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="mri-abd" placeholder="CPT/Val"></div>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-brain">
+                                    <span class="flex-1 font-medium">Brain (70551-53)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-brain">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-brain" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-c-spine">
+                                    <span class="flex-1 font-medium">C-Spine (72141-42)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-c-spine">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-c-spine" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-l-spine">
+                                    <span class="flex-1 font-medium">L-Spine (72148-49)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-l-spine">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-l-spine" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-abd">
+                                    <span class="flex-1 font-medium">Abdomen (74181-83)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-abd">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-abd" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
                         </div>
                     </details>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">☢️ Nuclear Medicine</summary>
-                        <div class="pl-2 space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78306"> <span class="flex-1">Bone scan (78306)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="nuc-78306" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78451"> <span class="flex-1">Cardiac perf (78451-54)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="nuc-78451" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78815"> <span class="flex-1">PET scan (78815)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="nuc-78815" placeholder="CPT/Val"></div>
-                            <div class="flex items-center gap-2"><input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-thyroid"> <span class="flex-1">Thyroid (78012-14)</span> <input type="text" class="findings-value w-20 text-xs px-2 py-1 border rounded" data-code="nuc-thyroid" placeholder="CPT/Val"></div>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78306">
+                                    <span class="flex-1 font-medium">Bone scan (78306)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78306">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78306" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78451">
+                                    <span class="flex-1 font-medium">Cardiac perf (78451-54)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78451">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78451" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78815">
+                                    <span class="flex-1 font-medium">PET scan (78815)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78815">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78815" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-thyroid">
+                                    <span class="flex-1 font-medium">Thyroid (78012-14)</span>
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-thyroid">
+                                </div>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-thyroid" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                            </div>
                         </div>
                     </details>
                     <input type="hidden" id="f-findings-codes">
                     <input type="hidden" id="f-findings-values">
+                    <input type="hidden" id="f-findings-dates">
                     <textarea id="f-findings-text" placeholder="Additional findings" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
                 </div>
 
@@ -2280,7 +2881,13 @@
                 </div>
             </form>
 
-            <button type="submit" form="patient-form" class="flex-shrink-0 w-full p-4 bg-blue-600 text-white font-bold active:bg-blue-700 hover:bg-blue-700 transition-colors cursor-pointer select-none min-h-[56px] flex items-center justify-center border-t border-blue-700">Save Record</button>
+            <div class="flex-shrink-0 relative">
+                <button type="submit" form="patient-form" class="w-full p-4 bg-blue-600 text-white font-bold active:bg-blue-700 hover:bg-blue-700 transition-colors cursor-pointer select-none min-h-[56px] flex items-center justify-center border-t border-blue-700 gap-2 group" title="Save record (Ctrl+S or Enter)">
+                    <span>Save Record</span>
+                    <span class="text-xs opacity-75 hidden md:inline">⌨️ Ctrl+S</span>
+                </button>
+                <div id="draft-indicator" class="absolute top-[-24px] left-1/2 transform -translate-x-1/2 bg-green-600 text-white text-xs px-3 py-1 rounded-full opacity-0 transition-opacity duration-300 whitespace-nowrap pointer-events-none">Draft saved</div>
+            </div>
         </div>
     </div>
 

@@ -72,16 +72,29 @@ function initializeMSAL() {
                     if (accounts.length > 0) {
                         currentAccount = accounts[0];
                         handleSuccessfulLogin();
+                    } else {
+                        // No existing session - update auth state to false
+                        if (typeof window.updateAuthState === 'function') {
+                            window.updateAuthState(false, '');
+                        }
                     }
                 }
             })
             .catch(err => {
                 console.error('MSAL redirect error:', err);
                 showToast('Authentication error: ' + err.message);
+                // Update auth state to false on error
+                if (typeof window.updateAuthState === 'function') {
+                    window.updateAuthState(false, '');
+                }
             });
     } catch (err) {
         console.error('MSAL initialization error:', err);
         showToast('Failed to initialize authentication');
+        // Update auth state to false on error
+        if (typeof window.updateAuthState === 'function') {
+            window.updateAuthState(false, '');
+        }
     }
 }
 
@@ -102,6 +115,12 @@ async function login() {
 
 function logout() {
     stopPolling();
+    
+    // Update auth state in main HTML
+    if (typeof window.updateAuthState === 'function') {
+        window.updateAuthState(false, '');
+    }
+    
     msalInstance.logoutRedirect({
         account: currentAccount
     });
@@ -134,6 +153,12 @@ async function getAccessToken() {
 function handleSuccessfulLogin() {
     console.log('User authenticated:', currentAccount.username);
     updateConnectionStatus(true, currentAccount.username);
+    
+    // Update auth state in main HTML
+    if (typeof window.updateAuthState === 'function') {
+        window.updateAuthState(true, currentAccount.username);
+    }
+    
     startPolling();
     
     // Trigger initial data load
