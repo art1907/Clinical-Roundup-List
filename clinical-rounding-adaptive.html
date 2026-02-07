@@ -1497,7 +1497,15 @@
         console.log('%c🔄 App Version: 2026-02-07 12:15 - Save Fix V6 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         // Global form submission blocker - prevents double submissions
+        console.log('📋 Setting up global form submission blocker...');
         document.addEventListener('submit', (e) => {
+            console.log('📝 Submit event caught:', {
+                targetId: e.target.id,
+                targetTag: e.target.tagName,
+                isSaving: isSaving,
+                isBubbling: !e.cancelBubble
+            });
+            
             if (isSaving && e.target.id === 'patient-form') {
                 console.warn('🚫 Form submission blocked - save already in progress');
                 e.preventDefault();
@@ -1505,15 +1513,20 @@
                 return false;
             }
         }, true);  // Use capture phase to intercept before any handlers
+        console.log('✅ Form submission blocker installed');
         
         window.savePatient = async (e) => {
+            console.log('📥 savePatient called, current isSaving state:', isSaving);
+            console.log('📥 Event type:', e ? e.type : 'no event');
+            
             // SET LOCK FIRST - before anything else
             if (isSaving) {
-                console.warn('⏭️ Save already in progress, skipping duplicate call');
+                console.warn('⏭️  Save already in progress, skipping duplicate call');
+                console.log('   Stack trace:', new Error().stack);
                 return false;
             }
             isSaving = true;  // Lock immediately
-            console.log('🔒 Save lock acquired');
+            console.log('🔒 Save lock acquired at', new Date().toISOString());
             
             // Disable save button to prevent re-submission
             const saveBtn = document.getElementById('save-button');
