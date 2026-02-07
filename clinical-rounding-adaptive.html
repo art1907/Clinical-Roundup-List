@@ -1662,7 +1662,7 @@
                     <td class="p-3 flex gap-1 flex-col">
                         <button onclick="window.openModal('${p.id}')" class="text-[9px] font-bold bg-blue-600 text-white px-2 py-1.5 rounded hover:bg-blue-700 transition-colors">Edit</button>
                         <button onclick="window.toggleArchive('${p.id}', ${!p.archived})" class="text-[9px] font-bold bg-slate-600 text-white px-2 py-1.5 rounded hover:bg-slate-700 transition-colors">${p.archived ? 'Restore' : 'Archive'}</button>
-                        ${db ? `<button onclick="window.deletePatient('${p.id}')" class="text-[9px] font-bold bg-red-600 text-white px-2 py-1.5 rounded hover:bg-red-700 transition-colors">Delete</button>` : ''}
+                        <button onclick="window.deletePatient('${p.id}')" class="text-[9px] font-bold bg-red-600 text-white px-2 py-1.5 rounded hover:bg-red-700 transition-colors">Delete</button>
                     </td>
                 </tr>`;
             }).join('');
@@ -1847,13 +1847,17 @@
         };
 
         window.updateGlobalSettings = async () => { 
-            if(!db) return;
+            if (!isAuthenticated || !window.m365SaveSetting) {
+                console.info("Settings update: Local Mode only, changes not persisted to M365");
+                return;
+            }
             try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { 
-                    onCall: document.getElementById('on-call-provider').value, 
-                    hospitals: document.getElementById('on-call-hospitals').value 
-                });
-            } catch (err) { console.error("Settings update error:", err); }
+                const onCall = document.getElementById('on-call-provider').value;
+                const hospitals = document.getElementById('on-call-hospitals').value;
+                await window.m365SaveSetting('onCall', onCall);
+                await window.m365SaveSetting('hospitals', hospitals);
+                showToast("✓ Settings saved to M365");
+            } catch (err) { console.error("Settings update error:", err); showToast("❌ Settings save failed"); }
         };
 
         // CSV IMPORT HANDLER

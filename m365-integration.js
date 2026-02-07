@@ -721,6 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.m365FetchOnCall = fetchOnCallSchedule;
     window.m365SaveOnCall = saveOnCallShift;
     window.m365DeleteOnCall = deleteOnCallShift;
+    window.m365SaveSetting = saveSetting;
     window.m365ExportToOneDrive = exportToOneDrive;
     window.m365ImportFromCSV = importFromCSV;
 });
