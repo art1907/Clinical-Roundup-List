@@ -747,6 +747,14 @@ function getCachedData(key) {
     return null;
 }
 
+// Get current authenticated user
+function getCurrentUser() {
+    if (currentAccount && currentAccount.username) {
+        return currentAccount.username;
+    }
+    return null;
+}
+
 // =============================================================================
 // INITIALIZATION
 // =============================================================================
@@ -763,6 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.m365SaveOnCall = saveOnCallShift;
     window.m365DeleteOnCall = deleteOnCallShift;
     window.m365SaveSetting = saveSetting;
+    window.m365GetCurrentUser = getCurrentUser;
     window.m365ExportToOneDrive = exportToOneDrive;
     window.m365ImportFromCSV = importFromCSV;
 });

@@ -773,7 +773,22 @@
             // Auto-fill Created By with current user for new records
             const createdByField = document.getElementById('f-created-by');
             if (createdByField && !id) {
-                createdByField.value = currentUser || 'Local User';
+                // Use authenticated username if available, otherwise fall back to currentUser or 'Local User'
+                let username = currentUser || 'Local User';
+                
+                // Try to get username from M365 if authenticated
+                if (isAuthenticated && typeof window.m365GetCurrentUser === 'function') {
+                    try {
+                        const m365User = window.m365GetCurrentUser();
+                        if (m365User) {
+                            username = m365User;
+                        }
+                    } catch (e) {
+                        console.warn('Could not get M365 user:', e);
+                    }
+                }
+                
+                createdByField.value = username;
             }
 
             if (id && typeof window.getCurrentPatients === 'function') {
