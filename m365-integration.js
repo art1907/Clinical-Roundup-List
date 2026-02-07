@@ -17,9 +17,13 @@
 const M365_CONFIG = {
     // MSAL Configuration - Update these values after Entra ID app registration
     auth: {
-        clientId: 'YOUR_CLIENT_ID_HERE',  // From Entra ID app registration
-        authority: 'https://login.microsoftonline.com/YOUR_TENANT_ID_HERE',
-        redirectUri: window.location.origin + window.location.pathname
+        clientId: '2030acbd-8796-420d-8990-acdf468227a6',  // From Entra ID app registration
+        authority: 'https://login.microsoftonline.com/d4402872-0ebc-4758-9c54-71923320c29d',
+        redirectUri: window.location.href.includes('localhost') 
+            ? 'http://localhost:3000/clinical-rounding-adaptive.html'
+            : window.location.href.includes('github.io')
+                ? 'https://art1907.github.io/Clinical-Roundup-List/'
+                : 'https://azurology.sharepoint.com/sites/clinical-rounding/AppAssets/clinical-rounding-adaptive.html'
     },
     cache: {
         cacheLocation: 'localStorage',
@@ -31,12 +35,12 @@ const M365_CONFIG = {
     
     // SharePoint configuration - Update after creating SharePoint site and lists
     sharepoint: {
-        siteId: 'YOUR_SITE_ID_HERE',  // Get via Graph API: /sites/{hostname}:/sites/{sitename}
+        siteId: 'bf8b1313-2fb7-4a22-8775-1f0acd899909',  // Get via Graph API: /sites/{hostname}:/sites/{sitename}
         lists: {
-            patients: 'YOUR_PATIENTS_LIST_ID_HERE',
-            onCallSchedule: 'YOUR_ONCALL_LIST_ID_HERE',
-            settings: 'YOUR_SETTINGS_LIST_ID_HERE',
-            auditLogs: 'YOUR_AUDIT_LIST_ID_HERE'  // Optional
+            patients: 'c475a404-97fa-44b1-8cca-7dfaec391049',
+            onCallSchedule: '7e99100a-aeb4-4fe6-9fb0-3f8188904174',
+            settings: '57fbe18d-6fa3-4fff-bc39-5937001e1a0b',
+            auditLogs: '36a95571-80dd-4ceb-94d3-36db0be54eae'  // Optional
         }
     },
     
