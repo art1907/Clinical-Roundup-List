@@ -1472,8 +1472,20 @@
         }
 
         let isSaving = false;  // Prevent concurrent saves
+        let lastSaveTime = 0;  // Timestamp of last save to prevent rapid fires
+        
+        // Version marker for debugging
+        console.log('%c🔄 App Version: 2026-02-07 11:22 - Save Lock V2 + Debounce', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         window.savePatient = async (e) => {
+            const now = Date.now();
+            
+            // Debounce: Ignore saves within 500ms of last save
+            if (now - lastSaveTime < 500) {
+                console.warn('Save debounced - too soon after last save');
+                return false;
+            }
+            
             if (e && typeof e.preventDefault === 'function') {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1481,10 +1493,13 @@
             
             // Prevent concurrent saves
             if (isSaving) {
-                console.log('Save already in progress, skipping');
+                console.warn('Save already in progress, skipping');
                 return false;
             }
+            
+            console.log('💾 Starting save...');
             isSaving = true;
+            lastSaveTime = now;
             
             const codesInput = document.getElementById('f-findings-codes');
             const findingsCodes = codesInput.value ? codesInput.value.split(',').map(c => c.trim()).filter(c => c) : [];
@@ -2663,7 +2678,7 @@
                 <button onclick="window.closeModal()" class="text-2xl">×</button>
             </div>
             
-            <form id="patient-form" onsubmit="event.preventDefault(); window.savePatient(event); return false;" class="flex-1 overflow-y-auto flex flex-col min-h-0">
+            <form id="patient-form" onsubmit="return window.savePatient(event);" class="flex-1 overflow-y-auto flex flex-col min-h-0">
                 <input type="hidden" id="edit-id">
                 
                 <!-- Scrollable content area with consistent padding -->

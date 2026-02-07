@@ -420,6 +420,8 @@ async function fetchPatients(dateFilter = null) {
 }
 
 async function savePatient(patientData) {
+    console.log('📤 M365: Saving patient to SharePoint...', { mrn: patientData.mrn, name: patientData.name });
+    
     const listId = M365_CONFIG.sharepoint.lists.patients;
     const siteId = M365_CONFIG.sharepoint.siteId;
     
@@ -447,22 +449,30 @@ async function savePatient(patientData) {
         Archived: patientData.archived ? 'Yes' : 'No'
     };
     
+    console.log('📋 SharePoint fields prepared:', { visitKey: fields.VisitKey, hospital: fields.Hospital });
+    
     if (patientData.id && patientData.id.startsWith('local-')) {
         // New record (local ID) - create in SharePoint
+        console.log('➕ Creating new patient in SharePoint (had local ID)');
         const endpoint = `/sites/${siteId}/lists/${listId}/items`;
         const body = { fields: fields };
         const response = await graphRequest(endpoint, 'POST', body);
+        console.log('✅ Created in SharePoint with ID:', response.id);
         return response.id;
     } else if (patientData.id) {
         // Update existing record
+        console.log('✏️ Updating existing patient in SharePoint, ID:', patientData.id);
         const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientData.id}/fields`;
         await graphRequest(endpoint, 'PATCH', fields);
+        console.log('✅ Updated in SharePoint');
         return patientData.id;
     } else {
         // New record (no ID) - create in SharePoint
+        console.log('➕ Creating new patient in SharePoint (no ID)');
         const endpoint = `/sites/${siteId}/lists/${listId}/items`;
         const body = { fields: fields };
         const response = await graphRequest(endpoint, 'POST', body);
+        console.log('✅ Created in SharePoint with ID:', response.id);
         return response.id;
     }
 }
