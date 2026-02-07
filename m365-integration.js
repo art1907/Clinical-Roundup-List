@@ -336,8 +336,12 @@ function updateConnectionStatus(connected, username = '') {
 // =============================================================================
 
 async function graphRequest(endpoint, method = 'GET', body = null) {
+    console.log('🔐 graphRequest: Getting access token...');
     const token = await getAccessToken();
+    console.log('✅ Access token obtained, length:', token ? token.length : 0);
+    
     const url = M365_CONFIG.graphBaseUrl + endpoint;
+    console.log('🌐 Calling Graph API:', { method, url: url.substring(0, 100) + '...' });
     
     const options = {
         method: method,
@@ -349,20 +353,36 @@ async function graphRequest(endpoint, method = 'GET', body = null) {
     
     if (body) {
         options.body = JSON.stringify(body);
+        console.log('📦 Request body size:', options.body.length, 'bytes');
     }
     
-    const response = await fetch(url, options);
-    
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Graph API error: ${response.status} - ${errorText}`);
+    try {
+        const response = await fetch(url, options);
+        console.log('📨 Response received:', { status: response.status, statusText: response.statusText });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Graph API error response:', { status: response.status, text: errorText });
+            throw new Error(`Graph API error: ${response.status} - ${errorText}`);
+        }
+        
+        if (response.status === 204) {
+            console.log('✅ No content response (204)');
+            return null;  // No content
+        }
+        
+        const data = await response.json();
+        console.log('✅ Response JSON parsed successfully');
+        return data;
+    } catch (fetchErr) {
+        console.error('❌ Network/fetch error in graphRequest:', fetchErr.message);
+        console.error('   Possible causes:');
+        console.error('   - Network connectivity issue');
+        console.error('   - CORS blocking');
+        console.error('   - Token invalid/expired');
+        console.error('   - Timeout');
+        throw fetchErr;
     }
-    
-    if (response.status === 204) {
-        return null;  // No content
-    }
-    
-    return await response.json();
 }
 
 // -----------------------------------------------------------------------------
@@ -451,29 +471,43 @@ async function savePatient(patientData) {
     
     console.log('📋 SharePoint fields prepared:', { visitKey: fields.VisitKey, hospital: fields.Hospital });
     
-    if (patientData.id && patientData.id.startsWith('local-')) {
-        // New record (local ID) - create in SharePoint
-        console.log('➕ Creating new patient in SharePoint (had local ID)');
-        const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-        const body = { fields: fields };
-        const response = await graphRequest(endpoint, 'POST', body);
-        console.log('✅ Created in SharePoint with ID:', response.id);
-        return response.id;
-    } else if (patientData.id) {
-        // Update existing record
-        console.log('✏️ Updating existing patient in SharePoint, ID:', patientData.id);
-        const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientData.id}/fields`;
-        await graphRequest(endpoint, 'PATCH', fields);
-        console.log('✅ Updated in SharePoint');
-        return patientData.id;
-    } else {
-        // New record (no ID) - create in SharePoint
-        console.log('➕ Creating new patient in SharePoint (no ID)');
-        const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-        const body = { fields: fields };
-        const response = await graphRequest(endpoint, 'POST', body);
-        console.log('✅ Created in SharePoint with ID:', response.id);
-        return response.id;
+    try {
+        if (patientData.id && patientData.id.startsWith('local-')) {
+            // New record (local ID) - create in SharePoint
+            console.log('➕ Creating new patient in SharePoint (had local ID)');
+            const endpoint = `/sites/${siteId}/lists/${listId}/items`;
+            const body = { fields: fields };
+            console.log('📡 Graph API POST to endpoint:', endpoint);
+            const response = await graphRequest(endpoint, 'POST', body);
+            console.log('✅ Graph API response received:', { id: response.id, status: response.status });
+            console.log('✅ Created in SharePoint with ID:', response.id);
+            return response.id;
+        } else if (patientData.id) {
+            // Update existing record
+            console.log('✏️ Updating existing patient in SharePoint, ID:', patientData.id);
+            const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientData.id}/fields`;
+            console.log('📡 Graph API PATCH to endpoint:', endpoint);
+            const response = await graphRequest(endpoint, 'PATCH', fields);
+            console.log('✅ Graph API response received:', { status: response });
+            console.log('✅ Updated in SharePoint');
+            return patientData.id;
+        } else {
+            // New record (no ID) - create in SharePoint
+            console.log('➕ Creating new patient in SharePoint (no ID)');
+            const endpoint = `/sites/${siteId}/lists/${listId}/items`;
+            const body = { fields: fields };
+            console.log('📡 Graph API POST to endpoint:', endpoint);
+            const response = await graphRequest(endpoint, 'POST', body);
+            console.log('✅ Graph API response received:', { id: response.id, status: response.status });
+            console.log('✅ Created in SharePoint with ID:', response.id);
+            return response.id;
+        }
+    } catch (err) {
+        console.error('❌ Graph API call failed in savePatient:', err.message);
+        console.error('   Full error:', err);
+        console.error('   Error type:', err.name);
+        console.error('   Error stack:', err.stack);
+        throw err; // Re-throw so caller knows it failed
     }
 }
 
@@ -815,8 +849,15 @@ function cacheData(key, data) {
             timestamp: Date.now()
         };
         localStorage.setItem(`m365_cache_${key}`, JSON.stringify(cache));
+        console.log('💾 Cached to localStorage:', `m365_cache_${key}`);
     } catch (err) {
-        console.warn('localStorage cache error:', err);
+        if (err.name === 'QuotaExceededError' || err.message.includes('QuotaExceededError')) {
+            console.warn('⚠️  localStorage full or not available (likely Tracking Prevention):', err.message);
+        } else if (err.name === 'SecurityError' || err.message.includes('SecurityError')) {
+            console.warn('🔒 Tracking Prevention blocking localStorage access:', err.message);
+        } else {
+            console.warn('📝 localStorage cache error:', err);
+        }
     }
 }
 
@@ -825,10 +866,15 @@ function getCachedData(key) {
         const cached = localStorage.getItem(`m365_cache_${key}`);
         if (cached) {
             const cache = JSON.parse(cached);
+            console.log('✅ Retrieved from localStorage cache:', `m365_cache_${key}`);
             return cache.data;
         }
     } catch (err) {
-        console.warn('localStorage retrieve error:', err);
+        if (err.name === 'SecurityError' || err.message.includes('SecurityError')) {
+            console.warn('🔒 Tracking Prevention blocking localStorage read:', err.message);
+        } else {
+            console.warn('📝 localStorage retrieve error:', err);
+        }
     }
     return null;
 }

@@ -1485,6 +1485,14 @@
             isSaving = true;  // Lock immediately
             console.log('🔒 Save lock acquired');
             
+            // Set a timeout to force-release lock after 30 seconds (safety net)
+            const saveTimeout = setTimeout(() => {
+                if (isSaving) {
+                    console.error('⏱️  Save timeout after 30s - forcibly releasing lock');
+                    isSaving = false;
+                }
+            }, 30000);
+            
             // Prevent default and stop propagation  
             if (e && typeof e.preventDefault === 'function') {
                 e.preventDefault();
@@ -1561,15 +1569,25 @@
                             data.id = editId;
                         }
                         console.log('📤 About to call window.m365SavePatient...');
-                        const result = await window.m365SavePatient(data);
-                        console.log('✅ m365SavePatient returned:', result);
-                        clearDraft(); // Clear draft on successful save
-                        showToast("✓ Saved");
-                        setTimeout(() => window.closeModal(), 100); // Slight delay to let toast show
-                        // Refetch data to update UI
-                        if (typeof window.m365FetchPatients === 'function') {
-                            console.log('🔄 Refetching patients...');
-                            await window.m365FetchPatients();
+                        try {
+                            const result = await window.m365SavePatient(data);
+                            console.log('✅ m365SavePatient returned:', result);
+                            console.log('📊 Save result type:', typeof result, 'value:', result);
+                            if (!result && result !== 0) {
+                                throw new Error('m365SavePatient returned empty/null: ' + JSON.stringify(result));
+                            }
+                            clearDraft(); // Clear draft on successful save
+                            showToast("✓ Saved");
+                            setTimeout(() => window.closeModal(), 100); // Slight delay to let toast show
+                            // Refetch data to update UI
+                            if (typeof window.m365FetchPatients === 'function') {
+                                console.log('🔄 Refetching patients...');
+                                await window.m365FetchPatients();
+                            }
+                        } catch (m365Err) {
+                            console.error('❌ m365SavePatient threw error:', m365Err.message);
+                            console.error('   Full error object:', m365Err);
+                            throw m365Err;
                         }
                     } else {
                         console.error('❌ m365SavePatient function NOT available!');
@@ -1581,6 +1599,7 @@
                 console.error("Error stack:", err.stack);
                 showToast("❌ Error: " + (err.message || "Failed to save"));
             } finally {
+                clearTimeout(saveTimeout);  // Clear the safety timeout
                 isSaving = false;  // Always release lock
                 console.log('🔓 Save lock released');
             }
