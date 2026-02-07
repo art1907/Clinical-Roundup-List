@@ -1400,7 +1400,11 @@
                 // Show import and add buttons
                 if (importBtn) importBtn.style.display = '';
                 if (addBtn) addBtn.style.display = '';
-                if (loginBtn) loginBtn.style.display = 'none';
+                if (loginBtn) {
+                    loginBtn.style.display = '';
+                    loginBtn.textContent = '🔓 Logout';
+                    loginBtn.onclick = () => window.m365Logout && window.m365Logout();
+                }
                 
                 // Show content, stats, and tabs
                 if (contentArea) contentArea.style.display = '';
@@ -1417,7 +1421,11 @@
                 // Hide import and add buttons
                 if (importBtn) importBtn.style.display = 'none';
                 if (addBtn) addBtn.style.display = 'none';
-                if (loginBtn) loginBtn.style.display = '';
+                if (loginBtn) {
+                    loginBtn.style.display = '';
+                    loginBtn.textContent = '🔐 Login';
+                    loginBtn.onclick = () => window.m365Login && window.m365Login();
+                }
                 
                 // Hide content, stats, and tabs
                 if (contentArea) contentArea.style.display = 'none';
@@ -1432,6 +1440,15 @@
                 console.log('✅ Hidden: content area, stats, tabs, import/add buttons');
             }
         }
+
+        // Ensure UI starts hidden until auth state is determined
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                toggleAuthUIElements();
+            } catch (e) {
+                console.error('Initial toggleAuthUIElements failed:', e);
+            }
+        });
         
         // Show login prompt when not authenticated
         function showLoginPrompt() {
