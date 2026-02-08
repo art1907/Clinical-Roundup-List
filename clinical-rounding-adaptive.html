@@ -1026,7 +1026,7 @@
     </script>
 
     <!-- Cache-busted to avoid stale JS when GitHub Pages/CDN is cached -->
-    <script src="m365-integration.js?v=2026-02-08T05:05"></script>
+    <script src="m365-integration.js?v=2026-02-08T05:15"></script>
 
     <script>
         // Global state for the application
@@ -1247,8 +1247,8 @@
         const getRetryDelay = (attempt) => Math.min(3000 * Math.pow(2, attempt), 6000);
         
         // Version enforcement to prevent cache reversion
-        const EXPECTED_VERSION = '2026-02-08T05:05:00Z';
-        const CURRENT_VERSION = '2026-02-08T05:05:00Z';
+        const EXPECTED_VERSION = '2026-02-08T05:15:00Z';
+        const CURRENT_VERSION = '2026-02-08T05:15:00Z';
         const storedVersion = sessionStorage.getItem('appVersion');
         
         // Detect and fix version mismatches
@@ -1495,7 +1495,7 @@
         let isSaving = false;  // Prevent concurrent saves
         
         // Version marker for debugging - includes timestamp to prevent cache reversion
-        console.log('%c🔄 App Version: 2026-02-08 05:05 - Save Fix V10 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
+        console.log('%c🔄 App Version: 2026-02-08 05:15 - Save Fix V11 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         // Global form submission blocker - prevents double submissions
         console.log('📋 Setting up global form submission blocker...');
