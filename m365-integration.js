@@ -494,7 +494,14 @@ async function api_savePatient(patientData) {
             VisitKey: fields.VisitKey,
             MRN: fields.MRN,
             Name: fields.Name,
-            Date: fields.Date
+            Date: fields.Date,
+            Room: fields.Room,
+            DateofBirth: fields.DateofBirth,
+            Hospital_x0028_s_x0029_: fields.Hospital_x0028_s_x0029_,
+            Plan: fields.Plan,
+            FindingsText: fields.FindingsText,
+            Pending: fields.Pending,
+            FollowUp: fields.FollowUp
         };
         console.warn('DEBUG minimal save enabled; sending fields:', Object.keys(fieldsToSend));
     }
