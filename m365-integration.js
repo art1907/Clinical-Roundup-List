@@ -450,9 +450,14 @@ async function api_savePatient(patientData) {
     const listId = M365_CONFIG.sharepoint.lists.patients;
     const siteId = M365_CONFIG.sharepoint.siteId;
 
+    const normalizeDateForSharePoint = (dateStr) => {
+        if (!dateStr) return '';
+        return dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00Z`;
+    };
+
     const fields = {
         Room: patientData.room || '',
-        Date: patientData.date || '',
+        Date: normalizeDateForSharePoint(patientData.date || ''),
         Name: patientData.name || '',
         DateofBirth: patientData.dob || '',
         MRN: patientData.mrn || '',
@@ -472,7 +477,14 @@ async function api_savePatient(patientData) {
         Archived: patientData.archived ? 'Yes' : 'No'
     };
 
-    console.log('SAVE fields', { visitKey: fields.VisitKey, hospital: fields.Hospital_x0028_s_x0029_ });
+    const fieldsToSend = { ...fields };
+    ['Hospital_x0028_s_x0029_', 'Priority', 'ProcedureStatus', 'Archived'].forEach((key) => {
+        if (fieldsToSend[key] === '' || fieldsToSend[key] === null) {
+            delete fieldsToSend[key];
+        }
+    });
+
+    console.log('SAVE fields', { visitKey: fieldsToSend.VisitKey, hospital: fieldsToSend.Hospital_x0028_s_x0029_ });
 
     const logAndValidateResponse = (resp, context) => {
         console.log(`RESP ${context}`, resp);
@@ -486,7 +498,7 @@ async function api_savePatient(patientData) {
         if (patientData.id && patientData.id.startsWith('local-')) {
             console.log('SAVE create (local id)');
             const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-            const body = { fields };
+            const body = { fields: fieldsToSend };
             const response = await graphRequest(endpoint, 'POST', body);
             const newId = logAndValidateResponse(response, 'create-local');
             console.log('SAVE created id', newId);
@@ -494,13 +506,13 @@ async function api_savePatient(patientData) {
         } else if (patientData.id) {
             console.log('SAVE update id', patientData.id);
             const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientData.id}/fields`;
-            const response = await graphRequest(endpoint, 'PATCH', fields);
+            const response = await graphRequest(endpoint, 'PATCH', fieldsToSend);
             console.log('SAVE patch response', response);
             return patientData.id;
         } else {
             console.log('SAVE create (no id)');
             const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-            const body = { fields };
+            const body = { fields: fieldsToSend };
             const response = await graphRequest(endpoint, 'POST', body);
             const newId = logAndValidateResponse(response, 'create-noid');
             console.log('SAVE created id', newId);
