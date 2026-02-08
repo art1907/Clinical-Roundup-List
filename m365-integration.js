@@ -15,7 +15,7 @@
 // =============================================================================
 
 // Build/version marker to confirm the right bundle is loaded
-const JS_VERSION = '2026-02-08T06:10Z';
+const JS_VERSION = '2026-02-08T06:25Z';
 
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
@@ -453,6 +453,7 @@ async function api_savePatient(patientData) {
 
     const listId = M365_CONFIG.sharepoint.lists.patients;
     const siteId = M365_CONFIG.sharepoint.siteId;
+    const isUpdate = !!patientData?.id && !patientData.id.startsWith('local-');
 
     const normalizeDateForSharePoint = (dateStr) => {
         if (!dateStr) return '';
@@ -499,11 +500,19 @@ async function api_savePatient(patientData) {
         console.warn('DEBUG minimal save enabled; sending fields:', Object.keys(fieldsToSend));
     }
 
-    ['Hospital_x0028_s_x0029_', 'ProcedureStatus', 'Archived'].forEach((key) => {
+    ['Hospital_x0028_s_x0029_', 'ProcedureStatus', 'Archived', 'Date', 'MRN'].forEach((key) => {
         if (fieldsToSend[key] === '' || fieldsToSend[key] === null) {
             delete fieldsToSend[key];
         }
     });
+
+    if (isUpdate) {
+        delete fieldsToSend.VisitKey;
+    }
+
+    if (!isUpdate && (!fieldsToSend.Date || !fieldsToSend.MRN)) {
+        throw new Error('Missing required fields: MRN and Date are required to create a record');
+    }
 
     console.log('SAVE fields', { visitKey: fieldsToSend.VisitKey, hospital: fieldsToSend.Hospital_x0028_s_x0029_ });
 
