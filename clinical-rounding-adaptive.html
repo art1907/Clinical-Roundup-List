@@ -767,12 +767,10 @@
             const editIdInput = document.getElementById('edit-id');
             const dateInput = document.getElementById('f-date');
             const statusInput = document.getElementById('f-proc-status');
-            const priorityInput = document.getElementById('f-priority');
 
             if (editIdInput) editIdInput.value = id || "";
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
             if (statusInput) statusInput.value = 'To-Do';
-            if (priorityInput) priorityInput.checked = false;
             
             // Auto-fill Created By with current user for new records
             const createdByField = document.getElementById('f-created-by');
@@ -828,7 +826,6 @@
                     if (document.getElementById('f-findings-dates')) {
                         document.getElementById('f-findings-dates').value = p.findingsDates ? JSON.stringify(p.findingsDates) : "";
                     }
-                    if (priorityInput) priorityInput.checked = p.priority || false;
                     if (statusInput) statusInput.value = p.procedureStatus || 'To-Do';
                     
                     // Show who created the record when editing
@@ -870,7 +867,6 @@
                     loadDraft();
                 }
             }
-            updateStatAcuityVisual(priorityInput?.checked || false);
             modal.classList.remove('hidden');
             setTimeout(() => modal.querySelector('.modal-container')?.scrollTo(0, 0), 100);
         };
@@ -970,51 +966,7 @@
             document.getElementById('handoff-modal')?.classList.add('hidden');
         };
 
-        const updateStatAcuityVisual = (isActive) => {
-            const card = document.getElementById('stat-acuity-card');
-            const track = document.getElementById('stat-toggle-track');
-            const thumb = document.getElementById('stat-toggle-thumb');
-            const onLabel = document.getElementById('stat-toggle-on');
-            const offLabel = document.getElementById('stat-toggle-off');
-            if (!card || !track || !thumb) return;
-
-            card.classList.toggle('bg-red-600', isActive);
-            card.classList.toggle('text-white', isActive);
-            card.classList.toggle('border-red-800', isActive);
-            card.classList.toggle('border-4', isActive);
-            card.classList.toggle('shadow-lg', isActive);
-            card.classList.toggle('shadow-red-500/50', isActive);
-            card.classList.toggle('bg-slate-50', !isActive);
-            card.classList.toggle('text-slate-700', !isActive);
-            card.classList.toggle('border-slate-200', !isActive);
-            card.classList.toggle('border', !isActive);
-
-            track.classList.toggle('bg-red-500', isActive);
-            track.classList.toggle('bg-slate-300', !isActive);
-
-            thumb.classList.toggle('translate-x-7', isActive);
-            thumb.classList.toggle('translate-x-0', !isActive);
-
-            if (onLabel) {
-                onLabel.classList.toggle('opacity-100', isActive);
-                onLabel.classList.toggle('opacity-0', !isActive);
-            }
-            if (offLabel) {
-                offLabel.classList.toggle('opacity-0', isActive);
-                offLabel.classList.toggle('opacity-100', !isActive);
-            }
-        };
-
-        const initializeStatAcuityToggle = () => {
-            const priorityInput = document.getElementById('f-priority');
-            if (!priorityInput) return;
-            updateStatAcuityVisual(priorityInput.checked);
-            priorityInput.addEventListener('change', () => updateStatAcuityVisual(priorityInput.checked));
-        };
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeStatAcuityToggle();
-        });
+        
     </script>
 
     <script>
@@ -1026,7 +978,7 @@
     </script>
 
     <!-- Cache-busted to avoid stale JS when GitHub Pages/CDN is cached -->
-    <script src="m365-integration.js?v=2026-02-08T05:55"></script>
+    <script src="m365-integration.js?v=2026-02-08T06:10"></script>
 
     <script>
         // Global state for the application
@@ -1051,13 +1003,6 @@
             'In-Progress': { bg: 'bg-blue-50 border border-blue-300', text: 'text-blue-700', badge: '🔵', bgHeavy: 'bg-blue-200' },
             'Completed': { bg: 'bg-emerald-50 border border-emerald-300', text: 'text-emerald-700', badge: '✅', bgHeavy: 'bg-emerald-200' },
             'Post-Op': { bg: 'bg-amber-50 border border-amber-300', text: 'text-amber-700', badge: '⭐', bgHeavy: 'bg-amber-200' }
-        };
-
-        // PRIORITY/ACUITY COLOR SCHEME (Enhanced)
-        const PRIORITY_COLORS = {
-            stat: { bg: 'bg-red-600', text: 'text-white', badge: '🔴 STAT', border: 'border-red-800', light: 'bg-red-100 border border-red-300 text-red-900' },
-            high: { bg: 'bg-orange-600', text: 'text-white', badge: '⚠️ HIGH', border: 'border-orange-800', light: 'bg-orange-100 border border-orange-300 text-orange-900' },
-            routine: { bg: 'bg-slate-400', text: 'text-white', badge: '📋 ROUTINE', border: 'border-slate-600', light: 'bg-slate-100 border border-slate-300 text-slate-900' }
         };
 
         // CSV IMPORT ENGINE
@@ -1138,7 +1083,6 @@
                                 pending: parts[colMap.pending] || '',
                                 followUp: parts[colMap.followUp] || '',
                                 procedureStatus: 'To-Do',
-                                priority: false,
                                 archived: false,
                                 cptPrimary: '',
                                 icdPrimary: '',
@@ -1146,12 +1090,6 @@
                                 findingsCodes: [],
                                 findingsValues: {}
                             };
-
-                            // Auto-detect priority/STAT (keywords in findings/plan)
-                            const statKeywords = /STAT|EMERGENCY|URGENT|CRITICAL|STAT|FOLLOW REMOTELY|high risk/gi;
-                            if (statKeywords.test(patient.findingsText + ' ' + patient.plan)) {
-                                patient.priority = true;
-                            }
 
                             result.patients.push(patient);
                         }
@@ -1247,8 +1185,8 @@
         const getRetryDelay = (attempt) => Math.min(3000 * Math.pow(2, attempt), 6000);
         
         // Version enforcement to prevent cache reversion
-        const EXPECTED_VERSION = '2026-02-08T05:55:00Z';
-        const CURRENT_VERSION = '2026-02-08T05:55:00Z';
+        const EXPECTED_VERSION = '2026-02-08T06:10:00Z';
+        const CURRENT_VERSION = '2026-02-08T06:10:00Z';
         const storedVersion = sessionStorage.getItem('appVersion');
         
         // Detect and fix version mismatches
@@ -1397,7 +1335,7 @@
             const addBtn = document.querySelector('button[onclick*="openModal"]');
             const loginBtn = document.getElementById('m365-login-btn');
             const contentArea = document.querySelector('.content-area');
-            const statsArea = document.querySelector('.px-4.py-3.bg-white.border-b.border-slate-100.grid.grid-cols-4');
+            const statsArea = document.querySelector('.px-4.py-3.bg-white.border-b.border-slate-100.grid.grid-cols-3');
             const tabNav = document.querySelector('nav.px-2.py-2.bg-white.border-b');
             
             console.log('🔍 Elements found:', {
@@ -1495,7 +1433,7 @@
         let isSaving = false;  // Prevent concurrent saves
         
         // Version marker for debugging - includes timestamp to prevent cache reversion
-        console.log('%c🔄 App Version: 2026-02-08 05:55 - Save Fix V15 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
+        console.log('%c🔄 App Version: 2026-02-08 06:10 - Save Fix V16 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         // Global form submission blocker - prevents double submissions
         console.log('📋 Setting up global form submission blocker...');
@@ -1580,7 +1518,6 @@
                 supervisingMd: document.getElementById('f-md').value,
                 pending: document.getElementById('f-pending').value, 
                 followUp: document.getElementById('f-fu').value,
-                priority: document.getElementById('f-priority').checked, 
                 procedureStatus: document.getElementById('f-proc-status').value,
                 cptPrimary: document.getElementById('f-cpt-primary').value,
                 icdPrimary: document.getElementById('f-icd-primary').value,
@@ -1834,7 +1771,7 @@
                     <div class="font-bold text-slate-500 mb-1">${d}</div>
                     ${holidayHtml}
                     <div class="space-y-0.5">
-                        ${procs.map(p => `<div class="font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-blue-200" onclick="window.openModal('${p.id}')">${p.priority ? '🔴' : ''} ${p.name}</div>`).join('')}
+                        ${procs.map(p => `<div class="font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-blue-200" onclick="window.openModal('${p.id}')">${p.name}</div>`).join('')}
                     </div>
                 </div>`;
             }
@@ -1861,24 +1798,22 @@
                 const status = p.procedureStatus || 'To-Do';
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS['To-Do'];
                 const findingsDisplay = p.findingsCodes?.length ? p.findingsCodes.join(', ') : (p.findingsText || '-');
-                const priorityBadge = p.priority ? `<span class="inline-block ${PRIORITY_COLORS.stat.light} px-2 py-1.5 rounded font-bold text-[9px] mt-1">${PRIORITY_COLORS.stat.badge}</span>` : '';
                 
                 return `
-                <tr class="border-b ${p.priority ? PRIORITY_COLORS.stat.light : 'bg-white border-slate-100'} hover:${statusObj.bgHeavy} transition-colors">
+                <tr class="border-b bg-white border-slate-100 hover:${statusObj.bgHeavy} transition-colors">
                     <td class="p-3"><input type="checkbox" onchange="window.togglePatientSelection('${p.id}')" ${selectedPatientIds.has(p.id)?'checked':''} class="w-5 h-5 rounded cursor-pointer"></td>
                     <td class="p-3">
-                        <div class="font-bold text-sm ${p.priority ? 'text-red-900' : 'text-slate-900'}">${p.room}</div>
-                        ${priorityBadge}
+                        <div class="font-bold text-sm text-slate-900">${p.room}</div>
                     </td>
                     <td class="p-3">
                         <div class="text-xs font-semibold text-slate-700">${p.hospital || 'N/A'}</div>
                     </td>
                     <td class="p-3">
                         <div class="text-sm font-bold text-slate-900">${p.name || 'Anon'}</div>
-                        <div class="text-xs ${p.priority ? 'text-red-600 font-semibold' : 'text-slate-500'} mt-0.5">${p.date}</div>
+                        <div class="text-xs text-slate-500 mt-0.5">${p.date}</div>
                     </td>
                     <td class="p-3">
-                        <div class="text-xs text-slate-600 line-clamp-2 ${p.priority ? 'font-semibold' : ''}">${findingsDisplay}</div>
+                        <div class="text-xs text-slate-600 line-clamp-2">${findingsDisplay}</div>
                     </td>
                     <td class="p-3">
                         <div class="text-xs font-bold text-slate-800 mb-1">${p.plan || '-'}</div>
@@ -1922,11 +1857,10 @@
 
         function updateStats() {
             const active = patients.filter(p => !p.archived);
-            ['total', 'priority', 'procedures', 'archived'].forEach(stat => {
+            ['total', 'procedures', 'archived'].forEach(stat => {
                 const el = document.getElementById(`count-${stat}`);
                 if (!el) return;
                 if (stat === 'total') el.innerText = active.length;
-                else if (stat === 'priority') el.innerText = active.filter(p => p.priority).length;
                 else if (stat === 'procedures') el.innerText = active.filter(p => PROC_KEYWORDS.test(p.plan || '')).length;
                 else if (stat === 'archived') el.innerText = patients.filter(p => p.archived).length;
             });
@@ -1970,7 +1904,7 @@
                 );
             }
             
-            return f.sort((a,b) => { if(a.priority!==b.priority) return a.priority ? -1 : 1; return new Date(b.date)-new Date(a.date); });
+            return f.sort((a,b) => new Date(b.date) - new Date(a.date));
         }
 
         window.applyFilters = () => {
@@ -2019,7 +1953,7 @@
             let t = `UROLOGY HANDOFF\n${new Date().toLocaleDateString()}\nOn-Call: ${document.getElementById('on-call-provider')?.value || 'N/A'}\n${'='.repeat(40)}\n\n`;
             sel.forEach(p => {
                 const findings = p.findingsCodes?.length ? p.findingsCodes.join(', ') : (p.findingsText || 'Pending');
-                t += `[${p.room}] ${p.name}${p.priority?' (STAT)':''}\nDx: ${findings}\nPlan: ${p.plan || 'See EMR'}\n${'='.repeat(40)}\n`;
+                t += `[${p.room}] ${p.name}\nDx: ${findings}\nPlan: ${p.plan || 'See EMR'}\n${'='.repeat(40)}\n`;
             });
             const area = document.getElementById('handoff-text-area');
             if (area) area.value = t;
@@ -2501,35 +2435,6 @@
             
             window.autoResizeTextarea = autoResizeTextarea;
             
-            const priorityCheckbox = document.getElementById('f-priority');
-            const statCard = document.getElementById('stat-acuity-card');
-            const track = document.getElementById('stat-toggle-track');
-            const thumb = document.getElementById('stat-toggle-thumb');
-            const offLabel = document.getElementById('stat-toggle-off');
-            const onLabel = document.getElementById('stat-toggle-on');
-            
-            function updateStatUI() {
-                if (priorityCheckbox.checked) {
-                    statCard.classList.add('bg-red-50', 'border-red-300');
-                    statCard.classList.remove('bg-slate-50', 'border-slate-200');
-                    track.classList.add('bg-red-500');
-                    track.classList.remove('bg-slate-300');
-                    thumb.classList.add('translate-x-8');
-                    offLabel.classList.add('opacity-0');
-                    onLabel.classList.remove('opacity-0');
-                } else {
-                    statCard.classList.add('bg-slate-50', 'border-slate-200');
-                    statCard.classList.remove('bg-red-50', 'border-red-300');
-                    track.classList.add('bg-slate-300');
-                    track.classList.remove('bg-red-500');
-                    thumb.classList.remove('translate-x-8');
-                    offLabel.classList.remove('opacity-0');
-                    onLabel.classList.add('opacity-0');
-                }
-            }
-            
-            priorityCheckbox?.addEventListener('change', updateStatUI);
-            
             // Keyboard shortcuts
             document.addEventListener('keydown', (e) => {
                 // Ctrl/Cmd + S to save
@@ -2612,9 +2517,8 @@
         </div>
 
         <!-- Stats -->
-        <div class="px-4 py-3 bg-white border-b border-slate-100 grid grid-cols-4 gap-2 flex-shrink-0">
+        <div class="px-4 py-3 bg-white border-b border-slate-100 grid grid-cols-3 gap-2 flex-shrink-0">
             <div class="text-center"><p class="text-[8px] font-bold text-slate-500 uppercase">Active</p><p id="count-total" class="text-lg font-black text-slate-900">0</p></div>
-            <div class="text-center"><p class="text-[8px] font-bold text-red-600 uppercase">🔴 Stat</p><p id="count-priority" class="text-lg font-black text-red-600">0</p></div>
             <div class="text-center"><p class="text-[8px] font-bold text-blue-600 uppercase">Proc</p><p id="count-procedures" class="text-lg font-black text-blue-600">0</p></div>
             <div class="text-center"><p class="text-[8px] font-bold text-slate-500 uppercase">Archive</p><p id="count-archived" class="text-lg font-black text-slate-500">0</p></div>
         </div>
@@ -2812,20 +2716,6 @@
                 <div>
                     <label class="text-xs font-bold text-slate-400">📝 Created By</label>
                     <input type="text" id="f-created-by" placeholder="Auto-filled from login" class="w-full mt-2 p-3 bg-slate-100 rounded-lg border border-slate-200 text-slate-600" readonly>
-                </div>
-
-                <div id="stat-acuity-card" class="flex items-center justify-between p-4 bg-slate-50 text-slate-700 rounded-lg border border-slate-200 transition-colors duration-300">
-                    <div>
-                        <label for="f-priority" class="font-bold text-lg block">Stat Acuity</label>
-                        <span class="text-xs opacity-80">STAT Priority Flag</span>
-                    </div>
-                    <div class="relative inline-flex items-center w-16 h-8">
-                        <input type="checkbox" id="f-priority" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-                        <div id="stat-toggle-track" class="w-full h-full bg-slate-300 rounded-full transition-colors duration-300"></div>
-                        <div id="stat-toggle-thumb" class="absolute left-1 top-1 w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-500 translate-x-0"></div>
-                        <span id="stat-toggle-off" class="absolute right-2 text-[10px] font-bold text-slate-600 transition-opacity duration-300">OFF</span>
-                        <span id="stat-toggle-on" class="absolute left-2 text-[10px] font-bold text-white opacity-0 transition-opacity duration-300">ON</span>
-                    </div>
                 </div>
 
                 <div>

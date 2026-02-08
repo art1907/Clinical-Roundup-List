@@ -15,7 +15,7 @@
 // =============================================================================
 
 // Build/version marker to confirm the right bundle is loaded
-const JS_VERSION = '2026-02-08T05:55Z';
+const JS_VERSION = '2026-02-08T06:10Z';
 
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
@@ -428,7 +428,6 @@ async function api_fetchPatients(dateFilter = null) {
             supervisingMd: item.fields.SupervisingMD || '',
             pending: item.fields.Pending || '',
             followUp: item.fields.FollowUp || '',
-            priority: item.fields.Priority === 'Yes',
             procedureStatus: item.fields.ProcedureStatus || 'To-Do',
             cptPrimary: item.fields.CPTPrimary || '',
             icdPrimary: item.fields.ICDPrimary || '',
@@ -474,7 +473,6 @@ async function api_savePatient(patientData) {
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
-        Priority: patientData.priority ? 'Yes' : 'No',
         ProcedureStatus: patientData.procedureStatus || 'To-Do',
         CPTPrimary: patientData.cptPrimary || '',
         ICDPrimary: patientData.icdPrimary || '',
@@ -496,13 +494,12 @@ async function api_savePatient(patientData) {
             Plan: fields.Plan,
             FindingsText: fields.FindingsText,
             Pending: fields.Pending,
-            FollowUp: fields.FollowUp,
-            Priority: fields.Priority
+            FollowUp: fields.FollowUp
         };
         console.warn('DEBUG minimal save enabled; sending fields:', Object.keys(fieldsToSend));
     }
 
-    ['Hospital_x0028_s_x0029_', 'Priority', 'ProcedureStatus', 'Archived'].forEach((key) => {
+    ['Hospital_x0028_s_x0029_', 'ProcedureStatus', 'Archived'].forEach((key) => {
         if (fieldsToSend[key] === '' || fieldsToSend[key] === null) {
             delete fieldsToSend[key];
         }
@@ -802,7 +799,6 @@ async function api_importFromCSV(csvText) {
             supervisingMd: row[columnMap.supervisingMd] || '',
             pending: row[columnMap.pending] || '',
             followUp: row[columnMap.followUp] || '',
-            priority: false,
             procedureStatus: 'To-Do',
             archived: false
         };
