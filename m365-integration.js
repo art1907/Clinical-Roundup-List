@@ -14,6 +14,9 @@
 // CONFIGURATION
 // =============================================================================
 
+// Build/version marker to confirm the right bundle is loaded
+const JS_VERSION = '2026-02-08T01:12Z';
+
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
     auth: {
@@ -389,7 +392,7 @@ async function graphRequest(endpoint, method = 'GET', body = null) {
 // PATIENTS
 // -----------------------------------------------------------------------------
 
-async function fetchPatients(dateFilter = null) {
+async function api_fetchPatients(dateFilter = null) {
     try {
         const listId = M365_CONFIG.sharepoint.lists.patients;
         const siteId = M365_CONFIG.sharepoint.siteId;
@@ -439,7 +442,7 @@ async function fetchPatients(dateFilter = null) {
     }
 }
 
-async function savePatient(patientData) {
+async function api_savePatient(patientData) {
     console.log('SAVE enter', { mrn: patientData?.mrn, name: patientData?.name, has_id: !!patientData?.id });
 
     const listId = M365_CONFIG.sharepoint.lists.patients;
@@ -507,7 +510,7 @@ async function savePatient(patientData) {
         throw err;
     }
 }
-async function deletePatient(patientId) {
+async function api_deletePatient(patientId) {
     const listId = M365_CONFIG.sharepoint.lists.patients;
     const siteId = M365_CONFIG.sharepoint.siteId;
     const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientId}`;
@@ -515,7 +518,7 @@ async function deletePatient(patientId) {
     await graphRequest(endpoint, 'DELETE');
 }
 
-async function getBackfeedData(mrn) {
+async function api_getBackfeedData(mrn) {
     try {
         const listId = M365_CONFIG.sharepoint.lists.patients;
         const siteId = M365_CONFIG.sharepoint.siteId;
@@ -554,7 +557,7 @@ async function getBackfeedData(mrn) {
 // ON-CALL SCHEDULE
 // -----------------------------------------------------------------------------
 
-async function fetchOnCallSchedule() {
+async function api_fetchOnCallSchedule() {
     try {
         const listId = M365_CONFIG.sharepoint.lists.onCallSchedule;
         const siteId = M365_CONFIG.sharepoint.siteId;
@@ -577,7 +580,7 @@ async function fetchOnCallSchedule() {
     }
 }
 
-async function saveOnCallShift(shiftData) {
+async function api_saveOnCallShift(shiftData) {
     const listId = M365_CONFIG.sharepoint.lists.onCallSchedule;
     const siteId = M365_CONFIG.sharepoint.siteId;
     
@@ -598,7 +601,7 @@ async function saveOnCallShift(shiftData) {
     }
 }
 
-async function deleteOnCallShift(shiftId) {
+async function api_deleteOnCallShift(shiftId) {
     const listId = M365_CONFIG.sharepoint.lists.onCallSchedule;
     const siteId = M365_CONFIG.sharepoint.siteId;
     const endpoint = `/sites/${siteId}/lists/${listId}/items/${shiftId}`;
@@ -610,7 +613,7 @@ async function deleteOnCallShift(shiftId) {
 // SETTINGS
 // -----------------------------------------------------------------------------
 
-async function fetchSettings() {
+async function api_fetchSettings() {
     try {
         const listId = M365_CONFIG.sharepoint.lists.settings;
         const siteId = M365_CONFIG.sharepoint.siteId;
@@ -632,7 +635,7 @@ async function fetchSettings() {
     }
 }
 
-async function saveSetting(key, value) {
+async function api_saveSetting(key, value) {
     const listId = M365_CONFIG.sharepoint.lists.settings;
     const siteId = M365_CONFIG.sharepoint.siteId;
     
@@ -692,7 +695,7 @@ async function exportToOneDrive(xlsxBlob, filename) {
 // CSV IMPORT WITH 3-PASS PARSING
 // =============================================================================
 
-async function importFromCSV(csvText) {
+async function api_importFromCSV(csvText) {
     const rows = Papa.parse(csvText, { header: false }).data;
     
     if (rows.length < 5) {
@@ -778,13 +781,13 @@ async function importFromCSV(csvText) {
     // Import on-call schedule
     for (const shift of onCallData) {
         if (shift.date && shift.provider) {
-            await saveOnCallShift(shift);
+            await api_saveOnCallShift(shift);
         }
     }
     
     // Import patients
     for (const patient of patients) {
-        await savePatient(patient);
+        await api_savePatient(patient);
     }
     
     return {
@@ -817,9 +820,9 @@ function stopPolling() {
 async function fetchAllData() {
     try {
         const [patients, schedule, settings] = await Promise.all([
-            fetchPatients(),
-            fetchOnCallSchedule(),
-            fetchSettings()
+            api_fetchPatients(),
+            api_fetchOnCallSchedule(),
+            api_fetchSettings()
         ]);
         
         // Update global state (assumes these variables exist in main HTML)
@@ -911,19 +914,19 @@ document.addEventListener('DOMContentLoaded', () => {
     
     window.m365Login = login;
     window.m365Logout = logout;
-    window.m365FetchPatients = fetchPatients;
-    console.log('📌 About to assign savePatient as window.m365SavePatient...');
-    window.m365SavePatient = savePatient;
+    window.m365FetchPatients = api_fetchPatients;
+    console.log('📌 About to assign api_savePatient as window.m365SavePatient...');
+    window.m365SavePatient = api_savePatient;
     console.log('📌 m365SavePatient assigned successfully');
-    window.m365DeletePatient = deletePatient;
-    window.m365GetBackfeed = getBackfeedData;
-    window.m365FetchOnCall = fetchOnCallSchedule;
-    window.m365SaveOnCall = saveOnCallShift;
-    window.m365DeleteOnCall = deleteOnCallShift;
-    window.m365SaveSetting = saveSetting;
+    window.m365DeletePatient = api_deletePatient;
+    window.m365GetBackfeed = api_getBackfeedData;
+    window.m365FetchOnCall = api_fetchOnCallSchedule;
+    window.m365SaveOnCall = api_saveOnCallShift;
+    window.m365DeleteOnCall = api_deleteOnCallShift;
+    window.m365SaveSetting = api_saveSetting;
     window.m365GetCurrentUser = getCurrentUser;
     window.m365ExportToOneDrive = exportToOneDrive;
-    window.m365ImportFromCSV = importFromCSV;
+    window.m365ImportFromCSV = api_importFromCSV;
     window.m365UpdateConnectionStatus = updateConnectionStatus;  // NEW: Export connection status updater
     
     console.log('✓ M365 Integration functions registered:', {
@@ -941,17 +944,19 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         login,
         logout,
-        fetchPatients,
-        savePatient,
-        deletePatient,
-        getBackfeedData,
-        fetchOnCallSchedule,
-        saveOnCallShift,
-        deleteOnCallShift,
-        fetchSettings,
-        saveSetting,
+        fetchPatients: api_fetchPatients,
+        savePatient: api_savePatient,
+        deletePatient: api_deletePatient,
+        getBackfeedData: api_getBackfeedData,
+        fetchOnCallSchedule: api_fetchOnCallSchedule,
+        saveOnCallShift: api_saveOnCallShift,
+        deleteOnCallShift: api_deleteOnCallShift,
+        fetchSettings: api_fetchSettings,
+        saveSetting: api_saveSetting,
         exportToOneDrive,
-        importFromCSV
+        importFromCSV: api_importFromCSV
     };
 }
+
+
 
