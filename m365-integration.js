@@ -15,7 +15,7 @@
 // =============================================================================
 
 // Build/version marker to confirm the right bundle is loaded
-const JS_VERSION = '2026-02-08T07:00Z';
+const JS_VERSION = '2026-02-08T07:20Z';
 
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
@@ -523,13 +523,38 @@ async function api_savePatient(patientData) {
         return resp.id;
     };
 
+    const buildBaseFields = () => ({
+        Title: fieldsToSend.Title || fieldsToSend.Name || 'Untitled',
+        Name: fieldsToSend.Name || fieldsToSend.Title || 'Untitled',
+        MRN: fieldsToSend.MRN,
+        Date: fieldsToSend.Date,
+        VisitKey: fieldsToSend.VisitKey,
+        [VISIT_TIME_FIELD]: fieldsToSend[VISIT_TIME_FIELD]
+    });
+
+    const buildPatchFields = () => {
+        const baseKeys = new Set(['Title', 'Name', 'MRN', 'Date', 'VisitKey', VISIT_TIME_FIELD]);
+        const patch = {};
+        Object.keys(fieldsToSend).forEach((key) => {
+            if (!baseKeys.has(key)) {
+                patch[key] = fieldsToSend[key];
+            }
+        });
+        return patch;
+    };
+
     try {
         if (patientData.id && patientData.id.startsWith('local-')) {
             console.log('SAVE create (local id)');
             const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-            const body = { fields: fieldsToSend };
-            const response = await graphRequest(endpoint, 'POST', body);
+            const baseFields = buildBaseFields();
+            const response = await graphRequest(endpoint, 'POST', { fields: baseFields });
             const newId = logAndValidateResponse(response, 'create-local');
+            const patchFields = buildPatchFields();
+            if (Object.keys(patchFields).length > 0) {
+                console.log('SAVE patch after create (local id)', Object.keys(patchFields));
+                await graphRequest(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, 'PATCH', patchFields);
+            }
             console.log('SAVE created id', newId);
             return newId;
         } else if (patientData.id) {
@@ -541,9 +566,20 @@ async function api_savePatient(patientData) {
         } else {
             console.log('SAVE create (no id)');
             const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-            const body = { fields: fieldsToSend };
-            const response = await graphRequest(endpoint, 'POST', body);
+            const baseFields = buildBaseFields();
+            const response = await graphRequest(endpoint, 'POST', { fields: baseFields });
             const newId = logAndValidateResponse(response, 'create-noid');
+            const patchFields = buildPatchFields();
+            if (Object.keys(patchFields).length > 0) {
+                console.log('SAVE patch after create (no id)', Object.keys(patchFields));
+                try {
+                    await graphRequest(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, 'PATCH', patchFields);
+                } catch (patchErr) {
+                    console.error('SAVE patch failed after create; deleting created record', patchErr);
+                    await graphRequest(`/sites/${siteId}/lists/${listId}/items/${newId}`, 'DELETE');
+                    throw patchErr;
+                }
+            }
             console.log('SAVE created id', newId);
             return newId;
         }
