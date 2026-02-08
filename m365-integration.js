@@ -15,7 +15,7 @@
 // =============================================================================
 
 // Build/version marker to confirm the right bundle is loaded
-const JS_VERSION = '2026-02-08T06:25Z';
+const JS_VERSION = '2026-02-08T06:40Z';
 
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
@@ -51,6 +51,9 @@ const M365_CONFIG = {
             onCallSchedule: '7e99100a-aeb4-4fe6-9fb0-3f8188904174',    // OnCall List ID
             settings: '57fbe18d-6fa3-4fff-bc39-5937001e1a0b',          // Settings List ID
             auditLogs: '36a95571-80dd-4ceb-94d3-36db0be54eae'          // Audit Logs List ID
+        },
+        fields: {
+            visitTime: 'VisitTime'
         }
     },
     
@@ -63,9 +66,11 @@ const M365_CONFIG = {
 
     // Debug toggles (temporary)
     debug: {
-        minimalSave: true
+        minimalSave: false
     }
 };
+
+const VISIT_TIME_FIELD = (M365_CONFIG.sharepoint.fields && M365_CONFIG.sharepoint.fields.visitTime) || 'VisitTime';
 
 // =============================================================================
 // MSAL INITIALIZATION
@@ -419,6 +424,8 @@ async function api_fetchPatients(dateFilter = null) {
             dob: item.fields.DateofBirth || item.fields.DOB || '',
             mrn: item.fields.MRN || '',
             hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
+            visitTime: item.fields[VISIT_TIME_FIELD] || item.fields.Visit_x0020_Time || '',
+            visitKey: item.fields.VisitKey || '',
             findingsValues: item.fields.FindingsData ? JSON.parse(item.fields.FindingsData) : {},
             findingsCodes: item.fields.FindingsCodes
                 ? item.fields.FindingsCodes.split(',').map(c => c.trim())
@@ -460,6 +467,9 @@ async function api_savePatient(patientData) {
         return dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00Z`;
     };
 
+    const visitTimeValue = patientData.visitTime || (isUpdate ? '' : new Date().toISOString());
+    const visitKeyValue = patientData.visitKey || (isUpdate ? '' : `${patientData.mrn}|${patientData.date}|${visitTimeValue}`);
+
     const fields = {
         Room: patientData.room || '',
         Date: normalizeDateForSharePoint(patientData.date || ''),
@@ -467,7 +477,8 @@ async function api_savePatient(patientData) {
         DateofBirth: patientData.dob || '',
         MRN: patientData.mrn || '',
         Hospital_x0028_s_x0029_: patientData.hospital || '',
-        VisitKey: `${patientData.mrn}|${patientData.date}`,
+        VisitKey: visitKeyValue,
+        [VISIT_TIME_FIELD]: visitTimeValue,
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
         FindingsText: patientData.findingsText || '',
         Plan: patientData.plan || '',
@@ -489,6 +500,7 @@ async function api_savePatient(patientData) {
             MRN: fields.MRN,
             Name: fields.Name,
             Date: fields.Date,
+            [VISIT_TIME_FIELD]: fields[VISIT_TIME_FIELD],
             Room: fields.Room,
             DateofBirth: fields.DateofBirth,
             Hospital_x0028_s_x0029_: fields.Hospital_x0028_s_x0029_,
@@ -500,7 +512,7 @@ async function api_savePatient(patientData) {
         console.warn('DEBUG minimal save enabled; sending fields:', Object.keys(fieldsToSend));
     }
 
-    ['Hospital_x0028_s_x0029_', 'ProcedureStatus', 'Archived', 'Date', 'MRN'].forEach((key) => {
+    ['Hospital_x0028_s_x0029_', 'ProcedureStatus', 'Archived', 'Date', 'MRN', VISIT_TIME_FIELD].forEach((key) => {
         if (fieldsToSend[key] === '' || fieldsToSend[key] === null) {
             delete fieldsToSend[key];
         }

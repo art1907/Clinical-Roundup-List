@@ -767,10 +767,14 @@
             const editIdInput = document.getElementById('edit-id');
             const dateInput = document.getElementById('f-date');
             const statusInput = document.getElementById('f-proc-status');
+            const visitTimeInput = document.getElementById('f-visit-time');
+            const visitKeyInput = document.getElementById('f-visit-key');
 
             if (editIdInput) editIdInput.value = id || "";
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
             if (statusInput) statusInput.value = 'To-Do';
+            if (visitTimeInput) visitTimeInput.value = new Date().toISOString();
+            if (visitKeyInput) visitKeyInput.value = '';
             
             // Auto-fill Created By with current user for new records
             const createdByField = document.getElementById('f-created-by');
@@ -817,6 +821,8 @@
                         if (el) el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
                     if (dateInput) dateInput.value = p.date || "";
+                    if (visitTimeInput) visitTimeInput.value = p.visitTime || '';
+                    if (visitKeyInput) visitKeyInput.value = p.visitKey || '';
                     if (document.getElementById('f-findings-codes')) {
                         document.getElementById('f-findings-codes').value = p.findingsCodes ? p.findingsCodes.join(',') : "";
                     }
@@ -978,7 +984,7 @@
     </script>
 
     <!-- Cache-busted to avoid stale JS when GitHub Pages/CDN is cached -->
-    <script src="m365-integration.js?v=2026-02-08T06:25"></script>
+    <script src="m365-integration.js?v=2026-02-08T06:40"></script>
 
     <script>
         // Global state for the application
@@ -1185,8 +1191,8 @@
         const getRetryDelay = (attempt) => Math.min(3000 * Math.pow(2, attempt), 6000);
         
         // Version enforcement to prevent cache reversion
-        const EXPECTED_VERSION = '2026-02-08T06:25:00Z';
-        const CURRENT_VERSION = '2026-02-08T06:25:00Z';
+        const EXPECTED_VERSION = '2026-02-08T06:40:00Z';
+        const CURRENT_VERSION = '2026-02-08T06:40:00Z';
         const storedVersion = sessionStorage.getItem('appVersion');
         
         // Detect and fix version mismatches
@@ -1433,7 +1439,7 @@
         let isSaving = false;  // Prevent concurrent saves
         
         // Version marker for debugging - includes timestamp to prevent cache reversion
-        console.log('%c🔄 App Version: 2026-02-08 06:25 - Save Fix V17 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
+        console.log('%c🔄 App Version: 2026-02-08 06:40 - Save Fix V18 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         // Global form submission blocker - prevents double submissions
         console.log('📋 Setting up global form submission blocker...');
@@ -1510,6 +1516,8 @@
                 dob: document.getElementById('f-dob').value,
                 mrn: document.getElementById('f-mrn').value,
                 hospital: document.getElementById('f-hospital').value,
+                visitTime: document.getElementById('f-visit-time').value,
+                visitKey: document.getElementById('f-visit-key').value,
                 findingsCodes: findingsCodes,
                 findingsValues: findingsValues,
                 findingsDates: findingsDates,
@@ -1525,6 +1533,13 @@
                 createdBy: document.getElementById('f-created-by').value || currentUser || 'Unknown',
                 archived: false
             };
+
+            if (!data.visitTime) {
+                data.visitTime = new Date().toISOString();
+            }
+            if (!data.visitKey && data.mrn && data.date) {
+                data.visitKey = `${data.mrn}|${data.date}|${data.visitTime}`;
+            }
             
             try {
                 const editId = document.getElementById('edit-id').value;
@@ -1798,6 +1813,7 @@
                 const status = p.procedureStatus || 'To-Do';
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS['To-Do'];
                 const findingsDisplay = p.findingsCodes?.length ? p.findingsCodes.join(', ') : (p.findingsText || '-');
+                const visitTimeDisplay = p.visitTime ? new Date(p.visitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                 
                 return `
                 <tr class="border-b bg-white border-slate-100 hover:${statusObj.bgHeavy} transition-colors">
@@ -1810,7 +1826,7 @@
                     </td>
                     <td class="p-3">
                         <div class="text-sm font-bold text-slate-900">${p.name || 'Anon'}</div>
-                        <div class="text-xs text-slate-500 mt-0.5">${p.date}</div>
+                        <div class="text-xs text-slate-500 mt-0.5">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
                     </td>
                     <td class="p-3">
                         <div class="text-xs text-slate-600 line-clamp-2">${findingsDisplay}</div>
@@ -2680,6 +2696,8 @@
             
             <form id="patient-form" novalidate onsubmit="return window.savePatient(event);" class="flex-1 overflow-y-auto flex flex-col min-h-0">
                 <input type="hidden" id="edit-id">
+                <input type="hidden" id="f-visit-time">
+                <input type="hidden" id="f-visit-key">
                 
                 <!-- Scrollable content area with consistent padding -->
                 <div class="flex-1 p-4 space-y-4">
