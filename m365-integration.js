@@ -414,8 +414,10 @@ async function api_fetchPatients(dateFilter = null) {
             dob: item.fields.DateofBirth || item.fields.DOB || '',
             mrn: item.fields.MRN || '',
             hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
-            findingsCodes: item.fields.FindingsCodes ? item.fields.FindingsCodes.split(',').map(c => c.trim()) : [],
             findingsValues: item.fields.FindingsData ? JSON.parse(item.fields.FindingsData) : {},
+            findingsCodes: item.fields.FindingsCodes
+                ? item.fields.FindingsCodes.split(',').map(c => c.trim())
+                : (item.fields.FindingsData ? Object.keys(JSON.parse(item.fields.FindingsData)) : []),
             findingsText: item.fields.FindingsText || '',
             plan: item.fields.Plan || '',
             supervisingMd: item.fields.SupervisingMD || '',
@@ -456,7 +458,6 @@ async function api_savePatient(patientData) {
         MRN: patientData.mrn || '',
         Hospital_x0028_s_x0029_: patientData.hospital || '',
         VisitKey: `${patientData.mrn}|${patientData.date}`,
-        FindingsCodes: patientData.findingsCodes ? patientData.findingsCodes.join(',') : '',
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
         FindingsText: patientData.findingsText || '',
         Plan: patientData.plan || '',
