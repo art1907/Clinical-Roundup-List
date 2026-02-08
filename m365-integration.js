@@ -15,7 +15,7 @@
 // =============================================================================
 
 // Build/version marker to confirm the right bundle is loaded
-const JS_VERSION = '2026-02-08T07:35Z';
+const JS_VERSION = '2026-02-08T07:50Z';
 
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
@@ -439,7 +439,7 @@ async function api_fetchPatients(dateFilter = null) {
             cptPrimary: item.fields.CPTPrimary || '',
             icdPrimary: item.fields.ICDPrimary || '',
             chargeCodesSecondary: item.fields.ChargeCodesSecondary ? JSON.parse(item.fields.ChargeCodesSecondary) : [],
-            archived: item.fields.Archived === 'Yes',
+            archived: item.fields.Archived === true || item.fields.Archived === 'Yes',
             lastUpdated: item.fields.Modified || item.fields.Created
         }));
         
@@ -490,7 +490,7 @@ async function api_savePatient(patientData) {
         CPTPrimary: patientData.cptPrimary || '',
         ICDPrimary: patientData.icdPrimary || '',
         ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '[]',
-        Archived: patientData.archived ? 'Yes' : 'No'
+        Archived: !!patientData.archived
     };
 
     let fieldsToSend = { ...fields };
