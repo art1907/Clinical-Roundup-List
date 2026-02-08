@@ -413,7 +413,7 @@ async function api_fetchPatients(dateFilter = null) {
             name: item.fields.Name || '',
             dob: item.fields.DateofBirth || item.fields.DOB || '',
             mrn: item.fields.MRN || '',
-            hospital: item.fields.Hospital || '',
+            hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
             findingsCodes: item.fields.FindingsCodes ? item.fields.FindingsCodes.split(',').map(c => c.trim()) : [],
             findingsValues: item.fields.FindingsData ? JSON.parse(item.fields.FindingsData) : {},
             findingsText: item.fields.FindingsText || '',
@@ -454,7 +454,7 @@ async function api_savePatient(patientData) {
         Name: patientData.name || '',
         DateofBirth: patientData.dob || '',
         MRN: patientData.mrn || '',
-        Hospital: patientData.hospital || '',
+        Hospital_x0028_s_x0029_: patientData.hospital || '',
         VisitKey: `${patientData.mrn}|${patientData.date}`,
         FindingsCodes: patientData.findingsCodes ? patientData.findingsCodes.join(',') : '',
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
@@ -471,7 +471,7 @@ async function api_savePatient(patientData) {
         Archived: patientData.archived ? 'Yes' : 'No'
     };
 
-    console.log('SAVE fields', { visitKey: fields.VisitKey, hospital: fields.Hospital });
+    console.log('SAVE fields', { visitKey: fields.VisitKey, hospital: fields.Hospital_x0028_s_x0029_ });
 
     const logAndValidateResponse = (resp, context) => {
         console.log(`RESP ${context}`, resp);
@@ -536,7 +536,7 @@ async function api_getBackfeedData(mrn) {
                 name: item.fields.Name || '',
                 dob: item.fields.DateofBirth || item.fields.DOB || '',
                 mrn: item.fields.MRN || '',
-                hospital: item.fields.Hospital || '',
+                hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
                 plan: item.fields.Plan || '',
                 supervisingMd: item.fields.SupervisingMD || '',
                 cptPrimary: item.fields.CPTPrimary || '',

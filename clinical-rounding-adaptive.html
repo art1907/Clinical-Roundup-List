@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Clinical Rounding List - Adaptive Platform</title>
-    <!-- Last deployed: 2026-02-07 - Force deploy to prevent cache reversion -->
+    <!-- Last deployed: 2026-02-08 - Force deploy to prevent cache reversion -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1026,7 +1026,7 @@
     </script>
 
     <!-- Cache-busted to avoid stale JS when GitHub Pages/CDN is cached -->
-    <script src="m365-integration.js?v=2026-02-07T20:40"></script>
+    <script src="m365-integration.js?v=2026-02-08T04:30"></script>
 
     <script>
         // Global state for the application
@@ -1247,8 +1247,8 @@
         const getRetryDelay = (attempt) => Math.min(3000 * Math.pow(2, attempt), 6000);
         
         // Version enforcement to prevent cache reversion
-        const EXPECTED_VERSION = '2026-02-07T12:15:00Z';
-        const CURRENT_VERSION = '2026-02-07T12:15:00Z';
+        const EXPECTED_VERSION = '2026-02-08T04:30:00Z';
+        const CURRENT_VERSION = '2026-02-08T04:30:00Z';
         const storedVersion = sessionStorage.getItem('appVersion');
         
         // Detect and fix version mismatches
@@ -1495,7 +1495,7 @@
         let isSaving = false;  // Prevent concurrent saves
         
         // Version marker for debugging - includes timestamp to prevent cache reversion
-        console.log('%c🔄 App Version: 2026-02-07 12:15 - Save Fix V6 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
+        console.log('%c🔄 App Version: 2026-02-08 04:30 - Save Fix V7 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         // Global form submission blocker - prevents double submissions
         console.log('📋 Setting up global form submission blocker...');
