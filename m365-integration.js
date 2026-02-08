@@ -15,7 +15,7 @@
 // =============================================================================
 
 // Build/version marker to confirm the right bundle is loaded
-const JS_VERSION = '2026-02-08T06:40Z';
+const JS_VERSION = '2026-02-08T07:00Z';
 
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
@@ -420,7 +420,7 @@ async function api_fetchPatients(dateFilter = null) {
             id: item.id,
             room: item.fields.Room || '',
             date: item.fields.Date || '',
-            name: item.fields.Name || '',
+            name: item.fields.Name || item.fields.Title || '',
             dob: item.fields.DateofBirth || item.fields.DOB || '',
             mrn: item.fields.MRN || '',
             hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
@@ -473,6 +473,7 @@ async function api_savePatient(patientData) {
     const fields = {
         Room: patientData.room || '',
         Date: normalizeDateForSharePoint(patientData.date || ''),
+        Title: patientData.name || '',
         Name: patientData.name || '',
         DateofBirth: patientData.dob || '',
         MRN: patientData.mrn || '',
@@ -495,21 +496,7 @@ async function api_savePatient(patientData) {
     let fieldsToSend = { ...fields };
 
     if (M365_CONFIG.debug && M365_CONFIG.debug.minimalSave) {
-        fieldsToSend = {
-            VisitKey: fields.VisitKey,
-            MRN: fields.MRN,
-            Name: fields.Name,
-            Date: fields.Date,
-            [VISIT_TIME_FIELD]: fields[VISIT_TIME_FIELD],
-            Room: fields.Room,
-            DateofBirth: fields.DateofBirth,
-            Hospital_x0028_s_x0029_: fields.Hospital_x0028_s_x0029_,
-            Plan: fields.Plan,
-            FindingsText: fields.FindingsText,
-            Pending: fields.Pending,
-            FollowUp: fields.FollowUp
-        };
-        console.warn('DEBUG minimal save enabled; sending fields:', Object.keys(fieldsToSend));
+        console.warn('DEBUG minimal save disabled; sending full payload');
     }
 
     ['Hospital_x0028_s_x0029_', 'ProcedureStatus', 'Archived', 'Date', 'MRN', VISIT_TIME_FIELD].forEach((key) => {
