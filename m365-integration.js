@@ -15,7 +15,7 @@
 // =============================================================================
 
 // Build/version marker to confirm the right bundle is loaded
-const JS_VERSION = '2026-02-08T07:20Z';
+const JS_VERSION = '2026-02-08T07:35Z';
 
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
@@ -575,9 +575,19 @@ async function api_savePatient(patientData) {
                 try {
                     await graphRequest(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, 'PATCH', patchFields);
                 } catch (patchErr) {
-                    console.error('SAVE patch failed after create; deleting created record', patchErr);
+                    console.error('SAVE patch failed after create; isolating invalid fields', patchErr);
+                    const invalidFields = [];
+                    for (const [key, value] of Object.entries(patchFields)) {
+                        try {
+                            await graphRequest(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, 'PATCH', { [key]: value });
+                        } catch (fieldErr) {
+                            invalidFields.push(key);
+                        }
+                    }
+                    console.error('SAVE patch rejected fields:', invalidFields);
+                    console.error('SAVE patch failed after create; deleting created record');
                     await graphRequest(`/sites/${siteId}/lists/${listId}/items/${newId}`, 'DELETE');
-                    throw patchErr;
+                    throw new Error(`SharePoint rejected fields: ${invalidFields.join(', ') || 'unknown'}`);
                 }
             }
             console.log('SAVE created id', newId);
