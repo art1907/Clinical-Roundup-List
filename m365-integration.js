@@ -15,7 +15,7 @@
 // =============================================================================
 
 // Build/version marker to confirm the right bundle is loaded
-const JS_VERSION = '2026-02-08T05:05Z';
+const JS_VERSION = '2026-02-08T05:55Z';
 
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
@@ -483,11 +483,6 @@ async function api_savePatient(patientData) {
     };
 
     let fieldsToSend = { ...fields };
-    ['Hospital_x0028_s_x0029_', 'Priority', 'ProcedureStatus', 'Archived'].forEach((key) => {
-        if (fieldsToSend[key] === '' || fieldsToSend[key] === null) {
-            delete fieldsToSend[key];
-        }
-    });
 
     if (M365_CONFIG.debug && M365_CONFIG.debug.minimalSave) {
         fieldsToSend = {
@@ -506,6 +501,12 @@ async function api_savePatient(patientData) {
         };
         console.warn('DEBUG minimal save enabled; sending fields:', Object.keys(fieldsToSend));
     }
+
+    ['Hospital_x0028_s_x0029_', 'Priority', 'ProcedureStatus', 'Archived'].forEach((key) => {
+        if (fieldsToSend[key] === '' || fieldsToSend[key] === null) {
+            delete fieldsToSend[key];
+        }
+    });
 
     console.log('SAVE fields', { visitKey: fieldsToSend.VisitKey, hospital: fieldsToSend.Hospital_x0028_s_x0029_ });
 
