@@ -502,9 +502,7 @@ async function api_savePatient(patientData) {
             FindingsText: fields.FindingsText,
             Pending: fields.Pending,
             FollowUp: fields.FollowUp,
-            Priority: fields.Priority,
-            ProcedureStatus: fields.ProcedureStatus,
-            Archived: fields.Archived
+            Priority: fields.Priority
         };
         console.warn('DEBUG minimal save enabled; sending fields:', Object.keys(fieldsToSend));
     }
