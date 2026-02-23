@@ -165,25 +165,9 @@ async function login() {
             scopes: M365_CONFIG.scopes,
             prompt: 'select_account'
         };
-        
-        // Try popup on mobile if redirect has issues, otherwise use redirect
-        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        
-        if (isMobile) {
-            // Popup might work better on some mobile browsers
-            try {
-                const response = await msalInstance.loginPopup(loginRequest);
-                currentAccount = response.account;
-                handleSuccessfulLogin();
-            } catch (popupErr) {
-                // Fallback to redirect if popup fails
-                console.warn('Popup failed, trying redirect:', popupErr);
-                await msalInstance.loginRedirect(loginRequest);
-            }
-        } else {
-            // Desktop: use redirect flow
-            await msalInstance.loginRedirect(loginRequest);
-        }
+
+        // Redirect-only flow avoids Safari/iOS popup restrictions (block_nested_popups)
+        await msalInstance.loginRedirect(loginRequest);
     } catch (err) {
         console.error('Login error:', err);
         if (typeof window.showToast === 'function') {
