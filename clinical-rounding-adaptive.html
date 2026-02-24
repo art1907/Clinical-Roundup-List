@@ -39,6 +39,15 @@
             background-color: #f3f4f6;
             cursor: not-allowed;
         }
+
+        .findings-custom-panel {
+            display: none;
+        }
+
+        .findings-custom-panel .findings-custom-input:disabled {
+            background-color: #f3f4f6;
+            cursor: not-allowed;
+        }
         
         input.findings-date:disabled {
             background-color: #f3f4f6;
@@ -93,6 +102,70 @@
                 type: isTablet ? (isIOS ? 'iPad' : 'Android Tablet') : (isIOS ? 'iPhone' : 'Android Phone')
             };
         })();
+
+        const FINDINGS_CUSTOM_CODES = ['cbc-85025', 'bmp-80048'];
+
+        function parseCustomFindingValue(code, rawValue) {
+            if (!rawValue) return {};
+            if (typeof rawValue === 'object') return rawValue;
+            if (typeof rawValue !== 'string') return {};
+
+            try {
+                const parsed = JSON.parse(rawValue);
+                if (parsed && typeof parsed === 'object') return parsed;
+            } catch (err) {
+                // Fall through to legacy parsing.
+            }
+
+            if (code === 'bmp-80048') {
+                const parsed = {};
+                const map = {
+                    na: /Na\s*([0-9.]+)/i,
+                    k: /K\s*([0-9.]+)/i,
+                    cl: /Cl\s*([0-9.]+)/i,
+                    hco3: /HCO3\s*([0-9.]+)/i,
+                    bun: /BUN\s*([0-9.]+)/i,
+                    creatinine: /Creatinine\s*([0-9.]+)/i,
+                    glucose: /Glucose\s*([0-9.]+)/i
+                };
+                Object.keys(map).forEach((key) => {
+                    const match = rawValue.match(map[key]);
+                    if (match?.[1]) parsed[key] = match[1];
+                });
+                return parsed;
+            }
+
+            if (code === 'cbc-85025') {
+                const parsed = {};
+                const map = {
+                    wcc: /WCC\s*([0-9.]+)/i,
+                    hb: /Hb\s*([0-9.]+)/i,
+                    hct: /Hct\s*([0-9.]+)/i,
+                    plt: /Plt\s*([0-9.]+)/i,
+                    neutro: /Neutro\s*([0-9.]+)%?/i,
+                    lympho: /Lympho\s*([0-9.]+)%?/i,
+                    mono: /Mono\s*([0-9.]+)%?/i,
+                    eosino: /Eosino\s*([0-9.]+)%?/i
+                };
+                Object.keys(map).forEach((key) => {
+                    const match = rawValue.match(map[key]);
+                    if (match?.[1]) parsed[key] = match[1];
+                });
+                const commentsMatch = rawValue.match(/Comments?\s*:?\s*(.*)$/i);
+                if (commentsMatch?.[1]) parsed.comments = commentsMatch[1].trim();
+                return parsed;
+            }
+
+            return {};
+        }
+
+        function populateCustomFindingFields(code, rawValue) {
+            const parsed = parseCustomFindingValue(code, rawValue);
+            document.querySelectorAll(`.findings-custom-input[data-code="${code}"]`).forEach((input) => {
+                const field = input.dataset.field;
+                input.value = parsed[field] || '';
+            });
+        }
         
         console.log('Device:', Device.type, `${Device.width}x${Device.height}`);
 
@@ -843,13 +916,17 @@
                     if (p.findingsCodes && p.findingsCodes.length > 0) {
                         document.querySelectorAll('.findings-checkbox').forEach(cb => {
                             cb.checked = p.findingsCodes.includes(cb.value);
+                            const isCustomCode = FINDINGS_CUSTOM_CODES.includes(cb.value);
+                            const customValue = p.findingsValues ? p.findingsValues[cb.value] : null;
                             const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
                             const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
-                            if (valueInput) {
+                            if (isCustomCode && customValue) {
+                                populateCustomFindingFields(cb.value, customValue);
+                            } else if (valueInput) {
                                 if (cb.checked) {
                                     valueInput.disabled = false;
-                                    if (p.findingsValues && p.findingsValues[cb.value]) {
-                                        valueInput.value = p.findingsValues[cb.value];
+                                    if (customValue !== null && customValue !== undefined) {
+                                        valueInput.value = typeof customValue === 'string' ? customValue : JSON.stringify(customValue);
                                         autoResizeTextarea(valueInput);
                                     }
                                 } else {
@@ -867,11 +944,17 @@
                                 }
                             }
                         });
+                        if (typeof window.syncFindingsUI === 'function') {
+                            window.syncFindingsUI();
+                        }
                     }
                 } else {
                     // New record - check for draft
                     loadDraft();
                 }
+            }
+            if (typeof window.syncFindingsUI === 'function') {
+                window.syncFindingsUI();
             }
             modal.classList.remove('hidden');
             setTimeout(() => modal.querySelector('.modal-container')?.scrollTo(0, 0), 100);
@@ -2404,33 +2487,53 @@
                 codesInput.value = selected.join(', ');
                 const values = {};
                 const dates = {};
-                document.querySelectorAll('textarea.findings-value').forEach(input => {
-                    if (input.value) values[input.dataset.code] = input.value;
-                });
-                document.querySelectorAll('input.findings-date').forEach(input => {
-                    if (input.value) dates[input.dataset.code] = input.value;
-                });
-                valuesInput.value = JSON.stringify(values);
-                datesInput.value = JSON.stringify(dates);
-                document.querySelectorAll('textarea.findings-value').forEach(input => {
-                    const cb = document.querySelector(`.findings-checkbox[value="${input.dataset.code}"]`);
-                    const dateInput = document.querySelector(`input.findings-date[data-code="${input.dataset.code}"]`);
-                    if (cb?.checked) {
-                        input.disabled = false;
-                        input.style.display = 'block';
-                        if (dateInput) {
-                            dateInput.disabled = false;
-                            dateInput.style.display = 'inline-block';
+                checkboxes.forEach(cb => {
+                    const code = cb.value;
+                    const checked = cb.checked;
+                    const isCustomCode = FINDINGS_CUSTOM_CODES.includes(code);
+                    const valueInput = document.querySelector(`textarea.findings-value[data-code="${code}"]`);
+                    const dateInput = document.querySelector(`input.findings-date[data-code="${code}"]`);
+                    const customPanel = document.querySelector(`.findings-custom-panel[data-code="${code}"]`);
+
+                    if (dateInput) {
+                        dateInput.disabled = !checked;
+                        dateInput.style.display = checked ? 'inline-block' : 'none';
+                        if (checked && dateInput.value) dates[code] = dateInput.value;
+                    }
+
+                    if (isCustomCode) {
+                        const customValues = {};
+                        let hasCustomValue = false;
+                        if (customPanel) {
+                            customPanel.style.display = checked ? 'block' : 'none';
                         }
-                    } else {
-                        input.disabled = true;
-                        input.style.display = 'none';
-                        if (dateInput) {
-                            dateInput.disabled = true;
-                            dateInput.style.display = 'none';
+                        document.querySelectorAll(`.findings-custom-input[data-code="${code}"]`).forEach(input => {
+                            input.disabled = !checked;
+                            const val = input.value.trim();
+                            if (val) {
+                                customValues[input.dataset.field] = val;
+                                hasCustomValue = true;
+                            }
+                        });
+                        if (hasCustomValue) {
+                            values[code] = customValues;
                         }
+                        if (valueInput) {
+                            valueInput.disabled = true;
+                            valueInput.style.display = 'none';
+                        }
+                        return;
+                    }
+
+                    if (valueInput) {
+                        valueInput.disabled = !checked;
+                        valueInput.style.display = checked ? 'block' : 'none';
+                        if (checked && valueInput.value) values[code] = valueInput.value;
                     }
                 });
+
+                valuesInput.value = JSON.stringify(values);
+                datesInput.value = JSON.stringify(dates);
             }
             
             function autoResizeTextarea(textarea) {
@@ -2448,8 +2551,13 @@
             document.querySelectorAll('input.findings-date').forEach(input => {
                 input.addEventListener('change', updateSelectedCodes);
             });
+            document.querySelectorAll('.findings-custom-input').forEach(input => {
+                input.addEventListener('change', updateSelectedCodes);
+                input.addEventListener('input', updateSelectedCodes);
+            });
             
             window.autoResizeTextarea = autoResizeTextarea;
+            window.syncFindingsUI = updateSelectedCodes;
             
             // Keyboard shortcuts
             document.addEventListener('keydown', (e) => {
@@ -2481,10 +2589,7 @@
                 });
             });
             
-            // Initialize findings fields visibility
-            updateSelectedCodes();
-            
-            // Initially hide all findings value inputs and date inputs
+            // Start with all findings controls hidden/disabled until a code is checked.
             document.querySelectorAll('textarea.findings-value').forEach(input => {
                 input.style.display = 'none';
                 input.disabled = true;
@@ -2493,6 +2598,10 @@
                 input.style.display = 'none';
                 input.disabled = true;
             });
+            document.querySelectorAll('.findings-custom-panel').forEach(panel => {
+                panel.style.display = 'none';
+            });
+            updateSelectedCodes();
             
             // Ensure setTab is defined before calling it
             if (typeof window.setTab === 'function') {
@@ -2739,7 +2848,12 @@
                 <div>
                     <label class="text-xs font-bold text-slate-600">Status</label>
                     <select id="f-proc-status" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <option>To-Do</option><option>In-Progress</option><option>Completed</option><option>Post-Op</option>
+                        <option>NEW CONSULT</option>
+                        <option>SURGICAL PATIENT (SAME DAY SURGERY)</option>
+                        <option>NEW SURGICAL PATIENT (AM ADMIT)</option>
+                        <option>FOLLOW UP (CONSULT)</option>
+                        <option>FOLLOW UP (POST OP)</option>
+                        <option>TO BE DISCHARGED/SIGNED OFF</option>
                     </select>
                 </div>
 
@@ -2762,7 +2876,26 @@
                                     <span class="flex-1 font-medium">CBC w/ diff (85025)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85025">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85025" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <div class="findings-custom-panel mt-1.5" data-code="cbc-85025">
+                                    <details class="border border-slate-300 rounded bg-slate-50">
+                                        <summary class="px-2 py-1 text-[11px] font-semibold text-slate-700">CBC w/ diff values</summary>
+                                        <div class="p-2 space-y-2">
+                                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="wcc" placeholder="WCC">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="hb" placeholder="Hb">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="hct" placeholder="Hct">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="plt" placeholder="Plt">
+                                            </div>
+                                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="neutro" placeholder="Neutro %">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="lympho" placeholder="Lympho %">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="mono" placeholder="Mono %">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="eosino" placeholder="Eosino %">
+                                            </div>
+                                            <textarea class="findings-custom-input w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85025" data-field="comments" placeholder="Comments (if any)" rows="2"></textarea>
+                                        </div>
+                                    </details>
+                                </div>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -2791,7 +2924,22 @@
                                     <span class="flex-1 font-medium">BMP (80048)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="bmp-80048">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="bmp-80048" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <div class="findings-custom-panel mt-1.5" data-code="bmp-80048">
+                                    <details class="border border-slate-300 rounded bg-slate-50">
+                                        <summary class="px-2 py-1 text-[11px] font-semibold text-slate-700">BMP values</summary>
+                                        <div class="p-2">
+                                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="bmp-80048" data-field="na" placeholder="Na">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="bmp-80048" data-field="k" placeholder="K">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="bmp-80048" data-field="cl" placeholder="Cl">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="bmp-80048" data-field="hco3" placeholder="HCO3">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="bmp-80048" data-field="bun" placeholder="BUN">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="bmp-80048" data-field="creatinine" placeholder="Creatinine">
+                                                <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded md:col-span-2" data-code="bmp-80048" data-field="glucose" placeholder="Glucose">
+                                            </div>
+                                        </div>
+                                    </details>
+                                </div>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
