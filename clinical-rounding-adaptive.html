@@ -1,3 +1,87 @@
+                // ===================== PRINT FEATURE =====================
+                // Print a single patient record by id
+                window.printPatientRecord = (id) => {
+                        const patient = patients.find(p => p.id === id);
+                        if (!patient) return showToast('Patient not found');
+                        const html = generatePrintHtml([patient]);
+                        openPrintWindow(html);
+                };
+
+                // Print multiple selected patient records
+                window.printSelectedPatientRecords = () => {
+                        const selected = patients.filter(p => selectedPatientIds.has(p.id));
+                        if (!selected.length) return showToast('No patients selected');
+                        const html = generatePrintHtml(selected);
+                        openPrintWindow(html);
+                };
+
+                // Helper: Generate print-friendly HTML for an array of patients
+                function generatePrintHtml(patientArr) {
+                        return `<!DOCTYPE html><html><head><title>Print - Clinical Rounding List</title>
+                        <style>
+                                body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
+                                .record { max-width: 800px; margin: 0 auto 32px auto; padding: 32px 24px; border: 1px solid #e5e7eb; border-radius: 16px; background: #fff; }
+                                h2 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+                                h3 { font-size: 1.1rem; margin: 1.2em 0 0.5em 0; color: #2563eb; }
+                                .section { margin-bottom: 1.2em; }
+                                .label { font-weight: bold; color: #374151; display: inline-block; min-width: 120px; }
+                                .value { color: #111827; }
+                                .row { margin-bottom: 0.4em; }
+                                @media print {
+                                    .record { page-break-after: always; box-shadow: none; border: none; }
+                                    body { background: #fff; }
+                                }
+                        </style></head><body>
+                        ${patientArr.map(p => `
+                            <div class="record">
+                                <h2>Patient: ${p.name || ''}</h2>
+                                <div class="section">
+                                    <h3>Patient Info</h3>
+                                    <div class="row"><span class="label">Room:</span> <span class="value">${p.room || ''}</span></div>
+                                    <div class="row"><span class="label">DOB:</span> <span class="value">${p.dob || ''}</span></div>
+                                    <div class="row"><span class="label">MRN:</span> <span class="value">${p.mrn || ''}</span></div>
+                                    <div class="row"><span class="label">Hospital:</span> <span class="value">${p.hospital || ''}</span></div>
+                                </div>
+                                <div class="section">
+                                    <h3>Visit Details</h3>
+                                    <div class="row"><span class="label">Date:</span> <span class="value">${p.date || ''}</span></div>
+                                    <div class="row"><span class="label">Provider:</span> <span class="value">${p.supervisingMd || p.md || ''}</span></div>
+                                    <div class="row"><span class="label">Status:</span> <span class="value">${p.procedureStatus || p.status || ''}</span></div>
+                                </div>
+                                <div class="section">
+                                    <h3>Clinical Findings</h3>
+                                    <div class="row"><span class="label">Findings:</span> <span class="value">${p.findingsText || ''}</span></div>
+                                    <div class="row"><span class="label">Findings Codes:</span> <span class="value">${(p.findingsCodes && p.findingsCodes.join(', ')) || ''}</span></div>
+                                </div>
+                                <div class="section">
+                                    <h3>Plan</h3>
+                                    <div class="row"><span class="label">Plan:</span> <span class="value">${p.plan || ''}</span></div>
+                                    <div class="row"><span class="label">Pending:</span> <span class="value">${p.pending || ''}</span></div>
+                                    <div class="row"><span class="label">Follow Up:</span> <span class="value">${p.followUp || ''}</span></div>
+                                </div>
+                                <div class="section">
+                                    <h3>Billing</h3>
+                                    <div class="row"><span class="label">CPT:</span> <span class="value">${p.cptPrimary || ''}</span></div>
+                                    <div class="row"><span class="label">ICD:</span> <span class="value">${p.icdPrimary || ''}</span></div>
+                                    <div class="row"><span class="label">Other Codes:</span> <span class="value">${(Array.isArray(p.chargeCodesSecondary) ? p.chargeCodesSecondary.join(', ') : (p.chargeCodesSecondary || ''))}</span></div>
+                                </div>
+                                <div class="section">
+                                    <h3>Attachments</h3>
+                                    <div class="row"><span class="label">Files:</span> <span class="value">${(p.files && p.files.length) ? p.files.map(f => f.name).join(', ') : 'None'}</span></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                        </body></html>`;
+                }
+
+                // Helper: Open print window and trigger print
+                function openPrintWindow(html) {
+                        const w = window.open('', '_blank');
+                        w.document.write(html);
+                        w.document.close();
+                        w.focus();
+                        setTimeout(() => { w.print(); }, 300);
+                }
 
 <!DOCTYPE html>
 <html lang="en">
@@ -2295,6 +2379,19 @@
                     </td>
                     <td class="p-3 flex gap-1 flex-col">
                         <button onclick="window.viewPatientCard('${p.id}')" class="text-[9px] font-bold bg-blue-600 text-white px-2 py-1.5 rounded hover:bg-blue-700 transition-colors">View</button>
+                        <button onclick="window.printPatientRecord('${p.id}')" class="text-[9px] font-bold bg-slate-700 text-white px-2 py-1.5 rounded hover:bg-slate-800 transition-colors">Print</button>
+                            // Add Print Selected button to main UI (e.g., above table)
+                            document.addEventListener('DOMContentLoaded', () => {
+                                const tableHeader = document.getElementById('main-table-header') || document.querySelector('.main-table-header');
+                                if (tableHeader && !document.getElementById('print-selected-btn')) {
+                                    const btn = document.createElement('button');
+                                    btn.id = 'print-selected-btn';
+                                    btn.textContent = '🖨️ Print Selected';
+                                    btn.className = 'ml-2 px-4 py-2 bg-slate-700 text-white text-xs font-bold rounded hover:bg-slate-800 transition-colors';
+                                    btn.onclick = window.printSelectedPatientRecords;
+                                    tableHeader.appendChild(btn);
+                                }
+                            });
                     </td>
                 </tr>`;
             }).join('');
