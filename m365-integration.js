@@ -803,10 +803,6 @@ async function resolvePatientDocsDriveId() {
 async function api_uploadPatientFile(patientId, file, meta = {}) {
     const siteId = M365_CONFIG.sharepoint.siteId;
     const driveId = await resolvePatientDocsDriveId();
-    const docFields = M365_CONFIG.sharepoint.patientDocumentsFields || {};
-    const patientIdField = docFields.patientId || 'PatientId';
-    const mrnField = docFields.mrn || 'MRN';
-    const visitKeyField = docFields.visitKey || 'VisitKey';
 
     const safeName = file.name.replace(/[#%?&]/g, '_');
     const uploadPath = `/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${patientId}/${safeName}:/content`;
@@ -827,32 +823,29 @@ async function api_uploadPatientFile(patientId, file, meta = {}) {
     }
 
     const driveItem = await uploadResponse.json();
-
-    const fields = {
-        [patientIdField]: patientId,
-        [mrnField]: meta.mrn || '',
-        [visitKeyField]: meta.visitKey || ''
-    };
-
-    await graphRequest(`/sites/${siteId}/drives/${driveId}/items/${driveItem.id}/listItem/fields`, 'PATCH', fields);
     return driveItem;
 }
 
 async function api_fetchPatientFiles(patientId) {
     const siteId = M365_CONFIG.sharepoint.siteId;
     const driveId = await resolvePatientDocsDriveId();
-    const docFields = M365_CONFIG.sharepoint.patientDocumentsFields || {};
-    const patientIdField = docFields.patientId || 'PatientId';
-    const endpoint = `/sites/${siteId}/drives/${driveId}/list/items?expand=driveItem,fields&$filter=fields/${patientIdField} eq '${patientId}'`;
-    const response = await graphRequest(endpoint);
+    const endpoint = `/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${patientId}:/children`;
 
-    return response.value.map(item => ({
-        id: item.id,
-        driveItemId: item.driveItem?.id,
-        name: item.driveItem?.name || 'Attachment',
-        webUrl: item.driveItem?.webUrl || '#',
-        uploadedAt: item.fields?.Created || ''
-    }));
+    try {
+        const response = await graphRequest(endpoint);
+        return response.value.map(item => ({
+            id: item.id,
+            driveItemId: item.id,
+            name: item.name || 'Attachment',
+            webUrl: item.webUrl || '#',
+            uploadedAt: item.createdDateTime || ''
+        }));
+    } catch (err) {
+        if (err && typeof err.message === 'string' && err.message.includes('404')) {
+            return [];
+        }
+        throw err;
+    }
 }
 
 async function api_deletePatientFile(driveItemId) {
