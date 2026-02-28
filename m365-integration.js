@@ -56,6 +56,11 @@ const M365_CONFIG = {
             patientDocuments: 'YOUR_PATIENT_DOCS_DRIVE_ID',             // Document Library Drive ID
             patientDocumentsName: 'PatientDocuments'                    // Document Library Name fallback
         },
+        patientDocumentsFields: {
+            patientId: 'PatientId',
+            mrn: 'MRN',
+            visitKey: 'Visitkey'
+        },
         fields: {
             visitTime: 'VisitTime'
         }
@@ -798,6 +803,10 @@ async function resolvePatientDocsDriveId() {
 async function api_uploadPatientFile(patientId, file, meta = {}) {
     const siteId = M365_CONFIG.sharepoint.siteId;
     const driveId = await resolvePatientDocsDriveId();
+    const docFields = M365_CONFIG.sharepoint.patientDocumentsFields || {};
+    const patientIdField = docFields.patientId || 'PatientId';
+    const mrnField = docFields.mrn || 'MRN';
+    const visitKeyField = docFields.visitKey || 'VisitKey';
 
     const safeName = file.name.replace(/[#%?&]/g, '_');
     const uploadPath = `/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${patientId}/${safeName}:/content`;
@@ -820,9 +829,9 @@ async function api_uploadPatientFile(patientId, file, meta = {}) {
     const driveItem = await uploadResponse.json();
 
     const fields = {
-        PatientId: patientId,
-        MRN: meta.mrn || '',
-        VisitKey: meta.visitKey || ''
+        [patientIdField]: patientId,
+        [mrnField]: meta.mrn || '',
+        [visitKeyField]: meta.visitKey || ''
     };
 
     await graphRequest(`/sites/${siteId}/drives/${driveId}/items/${driveItem.id}/listItem/fields`, 'PATCH', fields);
@@ -832,7 +841,9 @@ async function api_uploadPatientFile(patientId, file, meta = {}) {
 async function api_fetchPatientFiles(patientId) {
     const siteId = M365_CONFIG.sharepoint.siteId;
     const driveId = await resolvePatientDocsDriveId();
-    const endpoint = `/sites/${siteId}/drives/${driveId}/list/items?expand=driveItem,fields&$filter=fields/PatientId eq '${patientId}'`;
+    const docFields = M365_CONFIG.sharepoint.patientDocumentsFields || {};
+    const patientIdField = docFields.patientId || 'PatientId';
+    const endpoint = `/sites/${siteId}/drives/${driveId}/list/items?expand=driveItem,fields&$filter=fields/${patientIdField} eq '${patientId}'`;
     const response = await graphRequest(endpoint);
 
     return response.value.map(item => ({
