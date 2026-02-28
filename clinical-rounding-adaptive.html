@@ -991,7 +991,18 @@
                     // Show who created the record when editing
                     const createdByField = document.getElementById('f-created-by');
                     if (createdByField) {
-                        createdByField.value = p.createdBy || 'Unknown';
+                        let creator = p.createdBy || '';
+                        if (!creator && typeof window.m365GetCurrentUser === 'function') {
+                            try {
+                                creator = window.m365GetCurrentUser() || '';
+                            } catch (e) {
+                                creator = '';
+                            }
+                        }
+                        if (!creator && currentUser) {
+                            creator = currentUser;
+                        }
+                        createdByField.value = creator || 'Unknown';
                     }
                     
                     if (p.findingsCodes && p.findingsCodes.length > 0) {
@@ -1157,6 +1168,11 @@
                     list.innerHTML = '<div class="text-slate-400">File service unavailable.</div>';
                 }
             } catch (err) {
+                const msg = typeof err?.message === 'string' ? err.message : '';
+                if (msg.includes('404') || msg.includes('itemNotFound')) {
+                    list.innerHTML = '<div class="text-slate-400">No files uploaded.</div>';
+                    return;
+                }
                 console.error('File list error:', err);
                 list.innerHTML = '<div class="text-red-600">Failed to load files.</div>';
             }
