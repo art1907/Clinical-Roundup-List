@@ -357,6 +357,13 @@
             const appendImmutable = (logEntry) => {
                 immutableLogs.push(logEntry);
                 logs.push(logEntry);
+                if (typeof window.m365LogAuditEvent === 'function') {
+                    try {
+                        window.m365LogAuditEvent(logEntry);
+                    } catch (e) {
+                        console.warn('Audit log sync failed:', e.message || e);
+                    }
+                }
             };
 
             return {
@@ -969,6 +976,10 @@
                 if (typeof window.refreshPatientFiles === 'function') {
                     window.refreshPatientFiles(id);
                 }
+                if (typeof AuditLogger !== 'undefined' && typeof AuditLogger.logDataAccess === 'function') {
+                    const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                    AuditLogger.logDataAccess(auditUser, id, 'view');
+                }
                 if (p) {
                     ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
@@ -1194,6 +1205,8 @@
                 files.forEach((file) => {
                     const url = URL.createObjectURL(file);
                     items.push({ id: `local-${Date.now()}-${file.name}`, name: file.name, url });
+                    const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                    AuditLogger.logDataChange(auditUser, editId, 'file_upload', null, file.name);
                 });
                 localPatientFiles.set(editId, items);
                 input.value = '';
@@ -1209,6 +1222,8 @@
                             mrn: document.getElementById('f-mrn')?.value || '',
                             visitKey: document.getElementById('f-visit-key')?.value || ''
                         });
+                        const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                        AuditLogger.logDataChange(auditUser, editId, 'file_upload', null, file.name);
                     }
                     input.value = '';
                     window.refreshPatientFiles(editId);
@@ -1228,6 +1243,8 @@
             if (isLocal) {
                 const items = (localPatientFiles.get(editId) || []).filter(item => item.id !== fileId);
                 localPatientFiles.set(editId, items);
+                const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                AuditLogger.logDataChange(auditUser, editId, 'file_delete', fileId, null);
                 window.refreshPatientFiles(editId);
                 showToast('✓ File deleted');
                 return;
@@ -1235,6 +1252,8 @@
             try {
                 if (typeof window.m365DeletePatientFile === 'function') {
                     await window.m365DeletePatientFile(fileId);
+                    const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                    AuditLogger.logDataChange(auditUser, editId, 'file_delete', fileId, null);
                     window.refreshPatientFiles(editId);
                     showToast('✓ File deleted');
                 } else {
@@ -1930,6 +1949,33 @@
             
             try {
                 const editId = document.getElementById('edit-id').value;
+                const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                const getPreviousPatient = () => {
+                    if (!editId) return null;
+                    const existing = patients.find(p => p.id === editId);
+                    return existing || null;
+                };
+                const diffAndLog = (previous, next, recordId) => {
+                    if (!previous) {
+                        AuditLogger.logDataChange(auditUser, recordId, 'record', null, 'created');
+                        return;
+                    }
+                    const fields = [
+                        'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
+                        'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
+                        'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues',
+                        'findingsDates', 'visitTime', 'visitKey', 'createdBy', 'archived'
+                    ];
+                    fields.forEach((field) => {
+                        const prevVal = previous[field];
+                        const nextVal = next[field];
+                        const prevStr = typeof prevVal === 'object' ? JSON.stringify(prevVal) : String(prevVal ?? '');
+                        const nextStr = typeof nextVal === 'object' ? JSON.stringify(nextVal) : String(nextVal ?? '');
+                        if (prevStr !== nextStr) {
+                            AuditLogger.logDataChange(auditUser, recordId, field, prevVal, nextVal);
+                        }
+                    });
+                };
                 
                 console.log('🔍 Save decision:', { 
                     isConnected, 
@@ -1944,11 +1990,14 @@
                     if (editId) {
                         const index = patients.findIndex(p => p.id === editId);
                         if (index !== -1) {
+                            const previous = patients[index];
                             patients[index] = { ...data, id: editId, lastUpdated: new Date().toISOString() };
+                            diffAndLog(previous, patients[index], editId);
                         }
                     } else {
                         const newId = 'local-' + Date.now();
                         patients.push({ ...data, id: newId, lastUpdated: new Date().toISOString() });
+                        diffAndLog(null, data, newId);
                     }
                     renderUI();
                     clearDraft(); // Clear draft on successful save
@@ -1975,6 +2024,8 @@
                             }
                             
                             // Success - result should be an ID (string/number)
+                            const recordId = editId || result;
+                            diffAndLog(getPreviousPatient(), data, recordId);
                             clearDraft(); // Clear draft on successful save
                             showToast("✓ Saved");
                             setTimeout(() => window.closeModal(), 100); // Slight delay to let toast show
@@ -2017,6 +2068,8 @@
                 // Local mode: update in memory
                 const p = patients.find(x => x.id === id);
                 if (p) {
+                    const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                    AuditLogger.logDataChange(auditUser, id, 'archived', p.archived, shouldArchive);
                     p.archived = shouldArchive;
                     renderUI();
                     showToast(shouldArchive ? "Archived" : "Restored");
@@ -2027,6 +2080,8 @@
                 if (typeof window.m365SavePatient === 'function') {
                     const patient = patients.find(p => p.id === id);
                     if (patient) {
+                        const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                        AuditLogger.logDataChange(auditUser, id, 'archived', patient.archived, shouldArchive);
                         patient.archived = shouldArchive;
                         await window.m365SavePatient(patient);
                         showToast(shouldArchive ? "Archived" : "Restored");
@@ -2042,6 +2097,8 @@
                 // Local mode: update in memory
                 const p = patients.find(x => x.id === id);
                 if (p) {
+                    const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                    AuditLogger.logDataChange(auditUser, id, 'procedureStatus', p.procedureStatus, newStatus);
                     p.procedureStatus = newStatus;
                     renderUI();
                 }
@@ -2051,6 +2108,8 @@
                 if (typeof window.m365SavePatient === 'function') {
                     const patient = patients.find(p => p.id === id);
                     if (patient) {
+                        const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                        AuditLogger.logDataChange(auditUser, id, 'procedureStatus', patient.procedureStatus, newStatus);
                         patient.procedureStatus = newStatus;
                         await window.m365SavePatient(patient);
                     }
@@ -2067,6 +2126,8 @@
                 // Local mode
                 const index = patients.findIndex(p => p.id === id);
                 if (index !== -1) {
+                    const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                    AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
                     patients.splice(index, 1);
                     renderUI();
                     showToast("✓ Deleted");
@@ -2075,6 +2136,8 @@
             }
             try {
                 if (typeof window.m365DeletePatient === 'function') {
+                    const auditUser = (typeof window.m365GetCurrentUser === 'function' ? window.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                    AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
                     await window.m365DeletePatient(id);
                     showToast("✓ Deleted");
                     // Refetch to update UI

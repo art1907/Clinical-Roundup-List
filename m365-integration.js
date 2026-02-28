@@ -52,6 +52,13 @@ const M365_CONFIG = {
             settings: '57fbe18d-6fa3-4fff-bc39-5937001e1a0b',          // Settings List ID
             auditLogs: '36a95571-80dd-4ceb-94d3-36db0be54eae'          // Audit Logs List ID
         },
+        auditFields: {
+            userIdentity: 'UserIdentity',
+            actionType: 'ActionType',
+            recordId: 'RecordId',
+            details: 'Details',
+            timestamp: 'Timestamp'
+        },
         drives: {
             patientDocuments: 'YOUR_PATIENT_DOCS_DRIVE_ID',             // Document Library Drive ID
             patientDocumentsName: 'PatientDocuments'                    // Document Library Name fallback
@@ -389,6 +396,32 @@ async function graphRequest(endpoint, method = 'GET', body = null) {
         console.error('   - Token invalid/expired');
         console.error('   - Timeout');
         throw fetchErr;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// AUDIT LOGS
+// -----------------------------------------------------------------------------
+
+async function api_logAuditEvent(event) {
+    try {
+        const listId = M365_CONFIG.sharepoint.lists.auditLogs;
+        const siteId = M365_CONFIG.sharepoint.siteId;
+        const fieldsMap = M365_CONFIG.sharepoint.auditFields || {};
+
+        const fields = {
+            Title: event.type || 'audit',
+            [fieldsMap.userIdentity || 'UserIdentity']: event.userId || 'unknown',
+            [fieldsMap.actionType || 'ActionType']: event.action || event.type || 'event',
+            [fieldsMap.recordId || 'RecordId']: event.recordId || event.patientId || '',
+            [fieldsMap.details || 'Details']: JSON.stringify(event),
+            [fieldsMap.timestamp || 'Timestamp']: event.timestamp || new Date().toISOString()
+        };
+
+        const endpoint = `/sites/${siteId}/lists/${listId}/items`;
+        await graphRequest(endpoint, 'POST', { fields });
+    } catch (err) {
+        console.warn('Audit log write failed:', err.message || err);
     }
 }
 
@@ -1102,6 +1135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.m365UploadPatientFile = api_uploadPatientFile;
         window.m365FetchPatientFiles = api_fetchPatientFiles;
         window.m365DeletePatientFile = api_deletePatientFile;
+        window.m365LogAuditEvent = api_logAuditEvent;
     
     console.log('✓ M365 Integration functions registered:', {
         login: typeof window.m365Login,
