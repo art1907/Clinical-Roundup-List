@@ -844,7 +844,6 @@
             const visitTimeInput = document.getElementById('f-visit-time');
             const visitKeyInput = document.getElementById('f-visit-key');
 
-            if (editIdInput) editIdInput.value = id || "";
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
             if (statusInput) statusInput.value = 'To-Do';
             if (visitTimeInput) visitTimeInput.value = new Date().toISOString();
@@ -889,6 +888,14 @@
             if (id && typeof window.getCurrentPatients === 'function') {
                 const patients = window.getCurrentPatients();
                 const p = patients.find(x => x.id === id);
+                if (!p) {
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('Record not found');
+                    }
+                    document.body.classList.remove('no-scroll');
+                    return;
+                }
+                if (editIdInput) editIdInput.value = id;
                 if (p) {
                     ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
@@ -953,12 +960,18 @@
                     // New record - check for draft
                     loadDraft();
                 }
+            } else if (editIdInput) {
+                editIdInput.value = '';
             }
             if (typeof window.syncFindingsUI === 'function') {
                 window.syncFindingsUI();
             }
             modal.classList.remove('hidden');
             setTimeout(() => modal.querySelector('.modal-container')?.scrollTo(0, 0), 100);
+        };
+
+        window.viewPatientCard = (id) => {
+            window.openModal(id);
         };
 
         window.closeModal = () => {
