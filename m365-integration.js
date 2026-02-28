@@ -52,6 +52,10 @@ const M365_CONFIG = {
             settings: '57fbe18d-6fa3-4fff-bc39-5937001e1a0b',          // Settings List ID
             auditLogs: '36a95571-80dd-4ceb-94d3-36db0be54eae'          // Audit Logs List ID
         },
+        drives: {
+            patientDocuments: 'YOUR_PATIENT_DOCS_DRIVE_ID',             // Document Library Drive ID
+            patientDocumentsName: 'PatientDocuments'                    // Document Library Name fallback
+        },
         fields: {
             visitTime: 'VisitTime'
         }
@@ -71,6 +75,7 @@ const M365_CONFIG = {
 };
 
 const VISIT_TIME_FIELD = (M365_CONFIG.sharepoint.fields && M365_CONFIG.sharepoint.fields.visitTime) || 'VisitTime';
+let patientDocsDriveIdCache = null;
 
 // =============================================================================
 // MSAL INITIALIZATION
@@ -768,6 +773,84 @@ async function exportToOneDrive(xlsxBlob, filename) {
 }
 
 // =============================================================================
+// PATIENT DOCUMENTS (SHAREPOINT DOCUMENT LIBRARY)
+// =============================================================================
+
+async function resolvePatientDocsDriveId() {
+    if (patientDocsDriveIdCache) return patientDocsDriveIdCache;
+    const configured = M365_CONFIG.sharepoint?.drives?.patientDocuments;
+    if (configured && configured !== 'YOUR_PATIENT_DOCS_DRIVE_ID') {
+        patientDocsDriveIdCache = configured;
+        return patientDocsDriveIdCache;
+    }
+
+    const siteId = M365_CONFIG.sharepoint.siteId;
+    const driveName = M365_CONFIG.sharepoint?.drives?.patientDocumentsName || 'PatientDocuments';
+    const response = await graphRequest(`/sites/${siteId}/drives`);
+    const match = response.value.find(d => d.name === driveName);
+    if (!match) {
+        throw new Error(`Patient documents library not found: ${driveName}`);
+    }
+    patientDocsDriveIdCache = match.id;
+    return patientDocsDriveIdCache;
+}
+
+async function api_uploadPatientFile(patientId, file, meta = {}) {
+    const siteId = M365_CONFIG.sharepoint.siteId;
+    const driveId = await resolvePatientDocsDriveId();
+
+    const safeName = file.name.replace(/[#%?&]/g, '_');
+    const uploadPath = `/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${patientId}/${safeName}:/content`;
+    const token = await getAccessToken();
+
+    const uploadResponse = await fetch(`${M365_CONFIG.graphBaseUrl}${uploadPath}`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': file.type || 'application/octet-stream'
+        },
+        body: file
+    });
+
+    if (!uploadResponse.ok) {
+        const errText = await uploadResponse.text();
+        throw new Error(`Upload failed: ${uploadResponse.status} - ${errText}`);
+    }
+
+    const driveItem = await uploadResponse.json();
+
+    const fields = {
+        PatientId: patientId,
+        MRN: meta.mrn || '',
+        VisitKey: meta.visitKey || ''
+    };
+
+    await graphRequest(`/sites/${siteId}/drives/${driveId}/items/${driveItem.id}/listItem/fields`, 'PATCH', fields);
+    return driveItem;
+}
+
+async function api_fetchPatientFiles(patientId) {
+    const siteId = M365_CONFIG.sharepoint.siteId;
+    const driveId = await resolvePatientDocsDriveId();
+    const endpoint = `/sites/${siteId}/drives/${driveId}/list/items?expand=driveItem,fields&$filter=fields/PatientId eq '${patientId}'`;
+    const response = await graphRequest(endpoint);
+
+    return response.value.map(item => ({
+        id: item.id,
+        driveItemId: item.driveItem?.id,
+        name: item.driveItem?.name || 'Attachment',
+        webUrl: item.driveItem?.webUrl || '#',
+        uploadedAt: item.fields?.Created || ''
+    }));
+}
+
+async function api_deletePatientFile(driveItemId) {
+    const siteId = M365_CONFIG.sharepoint.siteId;
+    const driveId = await resolvePatientDocsDriveId();
+    await graphRequest(`/sites/${siteId}/drives/${driveId}/items/${driveItemId}`, 'DELETE');
+}
+
+// =============================================================================
 // CSV IMPORT WITH 3-PASS PARSING
 // =============================================================================
 
@@ -1003,6 +1086,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.m365ExportToOneDrive = exportToOneDrive;
     window.m365ImportFromCSV = api_importFromCSV;
     window.m365UpdateConnectionStatus = updateConnectionStatus;  // NEW: Export connection status updater
+
+        window.m365UploadPatientFile = api_uploadPatientFile;
+        window.m365FetchPatientFiles = api_fetchPatientFiles;
+        window.m365DeletePatientFile = api_deletePatientFile;
     
     console.log('✓ M365 Integration functions registered:', {
         login: typeof window.m365Login,
