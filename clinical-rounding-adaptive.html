@@ -1,3 +1,6 @@
+        window.viewPatientCard = (id) => {
+            window.openModal(id);
+        };
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1927,9 +1930,7 @@
                         </div>` : ''}
                     </td>
                     <td class="p-3 flex gap-1 flex-col">
-                        <button onclick="window.openModal('${p.id}')" class="text-[9px] font-bold bg-blue-600 text-white px-2 py-1.5 rounded hover:bg-blue-700 transition-colors">Edit</button>
-                        <button onclick="window.toggleArchive('${p.id}', ${!p.archived})" class="text-[9px] font-bold bg-slate-600 text-white px-2 py-1.5 rounded hover:bg-slate-700 transition-colors">${p.archived ? 'Restore' : 'Archive'}</button>
-                        <button onclick="window.deletePatient('${p.id}')" class="text-[9px] font-bold bg-red-600 text-white px-2 py-1.5 rounded hover:bg-red-700 transition-colors">Delete</button>
+                        <button onclick="window.viewPatientCard('${p.id}')" class="text-[9px] font-bold bg-blue-600 text-white px-2 py-1.5 rounded hover:bg-blue-700 transition-colors">View</button>
                     </td>
                 </tr>`;
             }).join('');
