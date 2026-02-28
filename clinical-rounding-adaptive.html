@@ -843,11 +843,15 @@
             const statusInput = document.getElementById('f-proc-status');
             const visitTimeInput = document.getElementById('f-visit-time');
             const visitKeyInput = document.getElementById('f-visit-key');
+            const archivedInput = document.getElementById('f-archived');
+            const archiveBtn = document.getElementById('modal-archive-btn');
+            const deleteBtn = document.getElementById('modal-delete-btn');
 
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
             if (statusInput) statusInput.value = 'To-Do';
             if (visitTimeInput) visitTimeInput.value = new Date().toISOString();
             if (visitKeyInput) visitKeyInput.value = '';
+            if (archivedInput) archivedInput.value = 'false';
             
             // Auto-fill Created By with current user for new records
             const createdByField = document.getElementById('f-created-by');
@@ -896,6 +900,12 @@
                     return;
                 }
                 if (editIdInput) editIdInput.value = id;
+                if (archivedInput) archivedInput.value = p.archived ? 'true' : 'false';
+                if (archiveBtn) {
+                    archiveBtn.classList.remove('hidden');
+                    archiveBtn.textContent = p.archived ? 'Restore' : 'Archive';
+                }
+                if (deleteBtn) deleteBtn.classList.remove('hidden');
                 if (p) {
                     ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
@@ -962,6 +972,9 @@
                 }
             } else if (editIdInput) {
                 editIdInput.value = '';
+                if (archivedInput) archivedInput.value = 'false';
+                if (archiveBtn) archiveBtn.classList.add('hidden');
+                if (deleteBtn) deleteBtn.classList.add('hidden');
             }
             if (typeof window.syncFindingsUI === 'function') {
                 window.syncFindingsUI();
@@ -972,6 +985,24 @@
 
         window.viewPatientCard = (id) => {
             window.openModal(id);
+        };
+
+        window.archiveFromModal = async () => {
+            const editId = document.getElementById('edit-id')?.value;
+            if (!editId) return;
+            const archivedInput = document.getElementById('f-archived');
+            const isArchived = archivedInput?.value === 'true';
+            await window.toggleArchive(editId, !isArchived);
+            if (archivedInput) archivedInput.value = (!isArchived).toString();
+            const archiveBtn = document.getElementById('modal-archive-btn');
+            if (archiveBtn) archiveBtn.textContent = (!isArchived) ? 'Restore' : 'Archive';
+        };
+
+        window.deleteFromModal = async () => {
+            const editId = document.getElementById('edit-id')?.value;
+            if (!editId) return;
+            await window.deletePatient(editId);
+            window.closeModal();
         };
 
         window.closeModal = () => {
@@ -1628,7 +1659,7 @@
                 icdPrimary: document.getElementById('f-icd-primary').value,
                 chargeCodesSecondary: document.getElementById('f-charge-codes-secondary').value,
                 createdBy: document.getElementById('f-created-by').value || currentUser || 'Unknown',
-                archived: false
+                archived: document.getElementById('f-archived')?.value === 'true'
             };
 
             if (!data.visitTime) {
@@ -2819,6 +2850,7 @@
                 <input type="hidden" id="edit-id">
                 <input type="hidden" id="f-visit-time">
                 <input type="hidden" id="f-visit-key">
+                <input type="hidden" id="f-archived">
                 
                 <!-- Scrollable content area with consistent padding -->
                 <div class="flex-1 p-4 space-y-4">
@@ -3192,6 +3224,10 @@
             </form>
 
             <div class="flex-shrink-0 relative">
+                <div class="flex gap-2 p-3 border-t border-slate-200 bg-slate-50">
+                    <button id="modal-archive-btn" type="button" onclick="window.archiveFromModal()" class="hidden flex-1 px-4 py-2 bg-slate-700 text-white font-bold text-xs rounded hover:bg-slate-800 transition-colors">Archive</button>
+                    <button id="modal-delete-btn" type="button" onclick="window.deleteFromModal()" class="hidden flex-1 px-4 py-2 bg-red-600 text-white font-bold text-xs rounded hover:bg-red-700 transition-colors">Delete</button>
+                </div>
                 <button id="save-button" type="submit" form="patient-form" class="w-full p-4 bg-blue-600 text-white font-bold active:bg-blue-700 hover:bg-blue-700 transition-colors cursor-pointer select-none min-h-[56px] flex items-center justify-center border-t border-blue-700 gap-2 group" title="Save record (Ctrl+S or Enter)">
                     <span>Save Record</span>
                     <span class="text-xs opacity-75 hidden md:inline">⌨️ Ctrl+S</span>
