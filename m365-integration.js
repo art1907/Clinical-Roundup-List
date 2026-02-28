@@ -829,23 +829,31 @@ async function api_uploadPatientFile(patientId, file, meta = {}) {
 async function api_fetchPatientFiles(patientId) {
     const siteId = M365_CONFIG.sharepoint.siteId;
     const driveId = await resolvePatientDocsDriveId();
-    const endpoint = `/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${patientId}:/children`;
+    const endpoint = `${M365_CONFIG.graphBaseUrl}/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${patientId}:/children`;
 
-    try {
-        const response = await graphRequest(endpoint);
-        return response.value.map(item => ({
-            id: item.id,
-            driveItemId: item.id,
-            name: item.name || 'Attachment',
-            webUrl: item.webUrl || '#',
-            uploadedAt: item.createdDateTime || ''
-        }));
-    } catch (err) {
-        if (err && typeof err.message === 'string' && err.message.includes('404')) {
-            return [];
-        }
-        throw err;
+    const token = await getAccessToken();
+    const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (response.status === 404) {
+        return [];
     }
+
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Graph API error: ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    return data.value.map(item => ({
+        id: item.id,
+        driveItemId: item.id,
+        name: item.name || 'Attachment',
+        webUrl: item.webUrl || '#',
+        uploadedAt: item.createdDateTime || ''
+    }));
 }
 
 async function api_deletePatientFile(driveItemId) {
