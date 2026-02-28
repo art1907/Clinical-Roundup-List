@@ -846,6 +846,8 @@
             const archivedInput = document.getElementById('f-archived');
             const archiveBtn = document.getElementById('modal-archive-btn');
             const deleteBtn = document.getElementById('modal-delete-btn');
+            const editToggleBtn = document.getElementById('modal-edit-btn');
+            const saveBtn = document.getElementById('save-button');
 
             const lockBackfilledFields = (locked) => {
                 const lockedIds = [
@@ -869,6 +871,17 @@
                         el.classList.remove('opacity-70', 'cursor-not-allowed');
                     }
                 });
+            };
+
+            const setEditMode = (isEditing) => {
+                lockBackfilledFields(!isEditing);
+                if (saveBtn) {
+                    saveBtn.disabled = !isEditing;
+                    saveBtn.style.opacity = isEditing ? '1' : '0.5';
+                }
+                if (editToggleBtn) {
+                    editToggleBtn.classList.toggle('hidden', isEditing);
+                }
             };
 
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
@@ -914,7 +927,7 @@
             }
 
             if (id && typeof window.getCurrentPatients === 'function') {
-                lockBackfilledFields(true);
+                setEditMode(false);
                 const patients = window.getCurrentPatients();
                 const p = patients.find(x => x.id === id);
                 if (!p) {
@@ -996,11 +1009,12 @@
                     loadDraft();
                 }
             } else if (editIdInput) {
-                lockBackfilledFields(false);
+                setEditMode(true);
                 editIdInput.value = '';
                 if (archivedInput) archivedInput.value = 'false';
                 if (archiveBtn) archiveBtn.classList.add('hidden');
                 if (deleteBtn) deleteBtn.classList.add('hidden');
+                if (editToggleBtn) editToggleBtn.classList.add('hidden');
             }
             if (typeof window.syncFindingsUI === 'function') {
                 window.syncFindingsUI();
@@ -1011,6 +1025,40 @@
 
         window.viewPatientCard = (id) => {
             window.openModal(id);
+        };
+
+        window.enableModalEdit = () => {
+            const editToggleBtn = document.getElementById('modal-edit-btn');
+            const saveBtn = document.getElementById('save-button');
+            const lockBackfilledFields = (locked) => {
+                const lockedIds = [
+                    'f-room', 'f-date', 'f-hospital', 'f-name', 'f-dob', 'f-mrn',
+                    'f-md', 'f-plan', 'f-proc-status', 'f-cpt-primary',
+                    'f-icd-primary', 'f-charge-codes-secondary', 'f-fu', 'f-pending'
+                ];
+                lockedIds.forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    const isSelect = el.tagName === 'SELECT';
+                    const isDateInput = el.tagName === 'INPUT' && el.type === 'date';
+                    if (isSelect || isDateInput) {
+                        el.disabled = locked;
+                    } else {
+                        el.readOnly = locked;
+                    }
+                    if (locked) {
+                        el.classList.add('opacity-70', 'cursor-not-allowed');
+                    } else {
+                        el.classList.remove('opacity-70', 'cursor-not-allowed');
+                    }
+                });
+            };
+            lockBackfilledFields(false);
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.style.opacity = '1';
+            }
+            if (editToggleBtn) editToggleBtn.classList.add('hidden');
         };
 
         window.archiveFromModal = async () => {
@@ -3251,6 +3299,7 @@
 
             <div class="flex-shrink-0 relative">
                 <div class="flex gap-2 p-3 border-t border-slate-200 bg-slate-50">
+                    <button id="modal-edit-btn" type="button" onclick="window.enableModalEdit()" class="hidden flex-1 px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded hover:bg-blue-700 transition-colors">Edit</button>
                     <button id="modal-archive-btn" type="button" onclick="window.archiveFromModal()" class="hidden flex-1 px-4 py-2 bg-slate-700 text-white font-bold text-xs rounded hover:bg-slate-800 transition-colors">Archive</button>
                     <button id="modal-delete-btn" type="button" onclick="window.deleteFromModal()" class="hidden flex-1 px-4 py-2 bg-red-600 text-white font-bold text-xs rounded hover:bg-red-700 transition-colors">Delete</button>
                 </div>
