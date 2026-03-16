@@ -1,0 +1,46 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'clinical-rounding-adaptive.html'
+      - 'm365-integration.js'
+      - '.github/workflows/deploy-to-pages.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Copy files to gh-pages
+        run: |
+          mkdir -p _site
+          cp clinical-rounding-adaptive.html _site/index.html
+          cp m365-integration.js _site/ 2>/dev/null || true
+          cp -r Images _site/ 2>/dev/null || true
+          echo "Files prepared for deployment:"
+          ls -lah _site/
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
