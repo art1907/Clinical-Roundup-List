@@ -72,9 +72,1744 @@
         
         .no-scroll { overflow: hidden !important; }
         
+        /* ============================================================================= */
+        /* DARK MODE & THEMING */
+        /* ============================================================================= */
+        body.dark-mode {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+        }
+        
+        body.dark-mode header,
+        body.dark-mode .bg-white,
+        body.dark-mode .bg-slate-50,
+        body.dark-mode .bg-slate-100 {
+            background-color: #2a2a2a !important;
+            color: #f0f0f0;
+            border-color: #444 !important;
+        }
+        
+        body.dark-mode input,
+        body.dark-mode select,
+        body.dark-mode textarea {
+            background-color: #3a3a3a !important;
+            color: #f0f0f0;
+            border-color: #555 !important;
+        }
+        
+        body.dark-mode table {
+            color: #f0f0f0;
+        }
+        
+        body.dark-mode tbody tr {
+            border-bottom-color: #444;
+        }
+        
+        body.dark-mode .text-slate-900 { color: #f0f0f0; }
+        body.dark-mode .text-slate-600 { color: #ccc; }
+        body.dark-mode .text-slate-500 { color: #999; }
+        body.dark-mode .text-slate-400 { color: #666; }
+        body.dark-mode .text-slate-700 { color: #ddd; }
+        
+        /* ============================================================================= */
+        /* ACCESSIBILITY & TEXT SIZING */
+        /* ============================================================================= */
+        body { --text-scale: 1; }
+        body.text-lg { --text-scale: 1.15; }
+        body.text-xl { --text-scale: 1.3; }
+        body.text-xxl { --text-scale: 1.5; }
+        
+        body button,
+        body input,
+        body select,
+        body textarea,
+        body table {
+            font-size: calc(100% * var(--text-scale)) !important;
+        }
+        
+        /* High contrast mode */
+        body.high-contrast {
+            --contrast-multiplier: 1.5;
+        }
+        
+        body.high-contrast button {
+            border-width: 2px;
+        }
+        
+        /* ============================================================================= */
+        /* SETTINGS & MODALS */
+        /* ============================================================================= */
+        .settings-panel {
+            display: none;
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 100%;
+            max-width: 350px;
+            height: 100vh;
+            background: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            overflow-y: auto;
+            animation: slideInRight 0.3s ease;
+        }
+        
+        body.dark-mode .settings-panel {
+            background: #2a2a2a;
+        }
+        
+        .settings-panel.active { display: flex; flex-direction: column; }
+        
+        @keyframes slideInRight {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        
+        .settings-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        body.dark-mode .settings-header {
+            border-bottom-color: #444;
+        }
+        
+        .settings-content {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+        
+        .settings-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .settings-label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        /* ============================================================================= */
+        /* SHORTCUTS HELP MODAL */
+        /* ============================================================================= */
+        .shortcuts-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .shortcuts-modal.active {
+            display: flex;
+        }
+        
+        .shortcuts-content {
+            background: white;
+            border-radius: 0.5rem;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 1.5rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        body.dark-mode .shortcuts-content {
+            background: #2a2a2a;
+        }
+        
+        .shortcut-row {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        body.dark-mode .shortcut-row {
+            border-bottom-color: #444;
+        }
+        
+        .shortcut-key {
+            font-family: monospace;
+            font-weight: bold;
+            background: #f3f4f6;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+        
+        body.dark-mode .shortcut-key {
+            background: #444;
+        }
+        
+        /* ============================================================================= */
+        /* SEARCH & ADVANCED FILTER */
+        /* ============================================================================= */
+        .advanced-search {
+            padding: 1rem;
+            background: #f9fafb;
+            border-bottom: 1px solid #e2e8f0;
+            display: none;
+        }
+        
+        body.dark-mode .advanced-search {
+            background: #2a2a2a;
+            border-bottom-color: #444;
+        }
+        
+        .advanced-search.active {
+            display: block;
+        }
+        
+        .search-box {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        body.dark-mode .search-box {
+            background: #3a3a3a;
+            color: #f0f0f0;
+            border-color: #555;
+        }
+        
+        /* ============================================================================= */
+        /* COLUMN VISIBILITY TOGGLES */
+        /* ============================================================================= */
+        .column-toggle {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .column-toggle label {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        
+        .column-toggle input[type="checkbox"] {
+            width: 1rem;
+            height: 1rem;
+            cursor: pointer;
+        }
+        
+        /* ============================================================================= */
+        /* BATCH OPERATIONS */
+        /* ============================================================================= */
+        .batch-operations {
+            display: none;
+            padding: 0.75rem;
+            background: #eff6ff;
+            border-bottom: 2px solid #3b82f6;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        body.dark-mode .batch-operations {
+            background: #1e3a8a;
+            border-bottom-color: #60a5fa;
+        }
+        
+        .batch-operations.active {
+            display: flex;
+        }
+        
+        .batch-count {
+            flex-shrink: 0;
+            padding: 0.5rem 1rem;
+            background: #3b82f6;
+            color: white;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            align-self: center;
+        }
+        
+        /* ============================================================================= */
+        /* CONTEXT MENU */
+        /* ============================================================================= */
+        .context-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-radius: 0.375rem;
+            z-index: 10000;
+            min-width: 150px;
+            overflow: hidden;
+            display: none;
+        }
+        
+        body.dark-mode .context-menu {
+            background: #2a2a2a;
+        }
+        
+        .context-menu.active {
+            display: block;
+        }
+        
+        .context-menu-item {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            border-bottom: 1px solid #e2e8f0;
+            transition: background 0.15s;
+        }
+        
+        body.dark-mode .context-menu-item {
+            border-bottom-color: #444;
+        }
+        
+        .context-menu-item:hover {
+            background: #f3f4f6;
+        }
+        
+        body.dark-mode .context-menu-item:hover {
+            background: #3a3a3a;
+        }
+        
+        .context-menu-item:last-child {
+            border-bottom: none;
+        }
+        
+        .context-menu-item.danger:hover {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        body.dark-mode .context-menu-item.danger:hover {
+            background: #7f1d1d;
+            color: #fca5a5;
+        }
+        
+        /* ============================================================================= */
+        /* OFFLINE INDICATOR */
+        /* ============================================================================= */
+        .offline-banner {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #dc2626;
+            color: white;
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.875rem;
+            font-weight: bold;
+            z-index: 999;
+        }
+        
+        .offline-banner.active {
+            display: block;
+        }
+        
+        /* ============================================================================= */
+        /* PHASE 2: FILTERING & SORTING */
+        /* ============================================================================= */
+        
+        .advanced-filter-panel {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            max-width: 400px;
+            height: 100vh;
+            background: white;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            z-index: 999;
+            overflow-y: auto;
+            animation: slideInLeft 0.3s ease;
+            flex-direction: column;
+        }
+        
+        body.dark-mode .advanced-filter-panel {
+            background: #2a2a2a;
+        }
+        
+        .advanced-filter-panel.active {
+            display: flex;
+        }
+        
+        @keyframes slideInLeft {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        
+        .filter-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        body.dark-mode .filter-header {
+            border-bottom-color: #444;
+        }
+        
+        .filter-content {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+        
+        .filter-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .filter-label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .filter-checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .filter-checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+        
+        .filter-slider {
+            width: 100%;
+            margin-top: 0.5rem;
+        }
+        
+        /* Sort indicators in table headers */
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        
+        th.sortable:hover {
+            background-color: #e5e7eb;
+        }
+        
+        body.dark-mode th.sortable:hover {
+            background-color: #3a3a3a;
+        }
+        
+        .sort-indicator {
+            display: inline-block;
+            margin-left: 0.25rem;
+            font-size: 0.75rem;
+            opacity: 0.5;
+        }
+        
+        th.sort-asc .sort-indicator::after {
+            content: ' ↑';
+            opacity: 1;
+            color: #3b82f6;
+        }
+        
+        th.sort-desc .sort-indicator::after {
+            content: ' ↓';
+            opacity: 1;
+            color: #3b82f6;
+        }
+        
+        /* Filter presets UI */
+        .filter-presets {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        
+        .filter-preset-btn {
+            padding: 0.25rem 0.75rem;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+        
+        body.dark-mode .filter-preset-btn {
+            background: #3a3a3a;
+            border-color: #555;
+        }
+        
+        .filter-preset-btn:hover {
+            background: #e5e7eb;
+            border-color: #9ca3af;
+        }
+        
+        body.dark-mode .filter-preset-btn:hover {
+            background: #444;
+            border-color: #666;
+        }
+        
+        .filter-preset-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #2563eb;
+        }
+        
+        /* Procedure category filters */
+        .procedure-category-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        
+        .procedure-btn {
+            padding: 0.5rem 0.75rem;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-weight: bold;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+        
+        body.dark-mode .procedure-btn {
+            background: #3a3a3a;
+            border-color: #555;
+            color: #f0f0f0;
+        }
+        
+        .procedure-btn:hover {
+            background: #e5e7eb;
+        }
+        
+        body.dark-mode .procedure-btn:hover {
+            background: #444;
+        }
+        
+        .procedure-btn.active {
+            background: #0ea5e9;
+            color: white;
+            border-color: #0284c7;
+        }
+        
+        /* Filter reset button */
+        .filter-actions {
+            padding: 1rem;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+        
+        body.dark-mode .filter-actions {
+            border-top-color: #444;
+        }
+        
+        .filter-actions button {
+            flex: 1;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: bold;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        
+        .filter-apply {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .filter-apply:hover {
+            background: #2563eb;
+        }
+        
+        .filter-reset {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        
+        body.dark-mode .filter-reset {
+            background: #3a3a3a;
+            color: #f0f0f0;
+        }
+        
+        .filter-reset:hover {
+            background: #d1d5db;
+        }
+        
+        body.dark-mode .filter-reset:hover {
+            background: #444;
+        }
+        
+        /* ============================================================================= */
+        /* PHASE 3: VISUALIZATION & DISPLAY */
+        /* ============================================================================= */
+        
+        /* Chart Styles */
+        .chart-container {
+            display: flex;
+            gap: 1.5rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        body.dark-mode .chart-container {
+            background: #2a2a2a;
+        }
+        
+        .chart-box {
+            flex: 1;
+            min-width: 250px;
+            padding: 1rem;
+            background: #f9fafb;
+            border-radius: 0.375rem;
+            border: 1px solid #e5e7eb;
+        }
+        
+        body.dark-mode .chart-box {
+            background: #1a1a1a;
+            border-color: #444;
+        }
+        
+        .chart-title {
+            font-weight: bold;
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+        }
+        
+        .pie-chart {
+            width: 100%;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .pie-legend {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            font-size: 0.75rem;
+        }
+        
+        .pie-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .pie-legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+        
+        /* Statistics Box */
+        .stats-box {
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        body.dark-mode .stats-box {
+            background: #1e3a8a;
+            border-left-color: #60a5fa;
+        }
+        
+        /* Hospital Grouping */
+        .hospital-group {
+            margin-bottom: 1.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        body.dark-mode .hospital-group {
+            border-color: #444;
+        }
+        
+        .hospital-group-header {
+            background: #f3f4f6;
+            padding: 0.75rem;
+            font-weight: bold;
+            font-size: 0.875rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        body.dark-mode .hospital-group-header {
+            background: #3a3a3a;
+        }
+        
+        .hospital-group-header:hover {
+            background: #e5e7eb;
+        }
+        
+        body.dark-mode .hospital-group-header:hover {
+            background: #444;
+        }
+        
+        .hospital-group-count {
+            background: #3b82f6;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        
+        .hospital-group-content {
+            overflow: hidden;
+            max-height: 1000px;
+            transition: max-height 0.3s ease;
+        }
+        
+        .hospital-group-content.collapsed {
+            max-height: 0;
+        }
+        
+        /* Card View */
+        .card-view {
+            display: none;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+        }
+        
+        .card-view.active {
+            display: grid;
+        }
+        
+        .patient-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+        
+        body.dark-mode .patient-card {
+            background: #2a2a2a;
+            border-color: #444;
+        }
+        
+        .patient-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .patient-card.stat {
+            border-left: 4px solid #dc2626;
+            background: #fef2f2;
+        }
+        
+        body.dark-mode .patient-card.stat {
+            background: #7f1d1d;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+        
+        body.dark-mode .card-header {
+            border-bottom-color: #444;
+        }
+        
+        .card-name {
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        
+        .card-mrn {
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+        
+        body.dark-mode .card-mrn {
+            color: #999;
+        }
+        
+        .card-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        
+        .card-field {
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .card-field-label {
+            font-weight: bold;
+            color: #6b7280;
+        }
+        
+        body.dark-mode .card-field-label {
+            color: #999;
+        }
+        
+        .card-field-value {
+            color: #111827;
+            margin-top: 0.25rem;
+        }
+        
+        body.dark-mode .card-field-value {
+            color: #f0f0f0;
+        }
+        
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        
+        .card-action-btn {
+            flex: 1;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        
+        .card-edit {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .card-edit:hover {
+            background: #2563eb;
+        }
+        
+        .card-print {
+            background: #6b7280;
+            color: white;
+        }
+        
+        .card-print:hover {
+            background: #4b5563;
+        }
+        
+        /* View Toggle Buttons */
+        .view-toggle {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: #f3f4f6;
+            border-radius: 0.375rem;
+            width: fit-content;
+        }
+        
+        body.dark-mode .view-toggle {
+            background: #3a3a3a;
+        }
+        
+        .view-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: white;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: bold;
+            transition: all 0.15s;
+        }
+        
+        body.dark-mode .view-btn {
+            background: #2a2a2a;
+            color: #f0f0f0;
+        }
+        
+        .view-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .view-btn:hover:not(.active) {
+            background: #e5e7eb;
+        }
+        
+        body.dark-mode .view-btn:hover:not(.active) {
+            background: #444;
+        }
+        
+        /* Patient Summary Box */
+        .patient-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        body.dark-mode .patient-summary {
+            background: #2a2a2a;
+        }
+        
+        .summary-item {
+            text-align: center;
+            padding: 1rem;
+            background: #f9fafb;
+            border-radius: 0.375rem;
+            border: 1px solid #e5e7eb;
+        }
+        
+        body.dark-mode .summary-item {
+            background: #1a1a1a;
+            border-color: #444;
+        }
+        
+        .summary-value {
+            font-size: 1.75rem;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        
+        body.dark-mode .summary-value {
+            color: #f0f0f0;
+        }
+        
+        .summary-label {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.5rem;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        
+        body.dark-mode .summary-label {
+            color: #999;
+        }
+        
+        /* Timeline View */
+        .timeline-container {
+            padding: 1rem;
+            background: white;
+            border-radius: 0.5rem;
+        }
+        
+        body.dark-mode .timeline-container {
+            background: #2a2a2a;
+        }
+        
+        .timeline-item {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-left: 2px solid #e5e7eb;
+            padding-left: 1rem;
+        }
+        
+        body.dark-mode .timeline-item {
+            border-left-color: #444;
+        }
+        
+        .timeline-dot {
+            margin-top: 0.25rem;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #3b82f6;
+            flex-shrink: 0;
+            margin-left: -1.5rem;
+        }
+        
+        .timeline-content {
+            flex: 1;
+        }
+        
+        .timeline-date {
+            font-size: 0.75rem;
+            color: #6b7280;
+            font-weight: bold;
+        }
+        
+        body.dark-mode .timeline-date {
+            color: #999;
+        }
+        
+        .timeline-text {
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+        
+        /* ============================================================================= */
+        /* PHASE 4: MOBILE & ACCESSIBILITY */
+        /* ============================================================================= */
+        
+        /* Keyboard Focus Styles */
+        button:focus,
+        input:focus,
+        select:focus,
+        textarea:focus,
+        [role="button"]:focus {
+            outline: 3px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        
+        body.high-contrast button:focus,
+        body.high-contrast input:focus,
+        body.high-contrast [role="button"]:focus {
+            outline-width: 4px;
+        }
+        
+        /* Skip to content link */
+        .skip-to-content {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: #3b82f6;
+            color: white;
+            padding: 0.5rem 1rem;
+            text-decoration: none;
+            z-index: 100;
+        }
+        
+        .skip-to-content:focus {
+            top: 0;
+        }
+        
+        /* Screen reader only text */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+        
+        /* Large touch targets for mobile */
+        @media (max-width: 768px) {
+            button,
+            input[type="checkbox"],
+            input[type="radio"],
+            [role="button"] {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            
+            .patient-card {
+                padding: 1.25rem;
+            }
+            
+            table {
+                font-size: 0.75rem;
+            }
+            
+            th, td {
+                padding: 0.75rem 0.5rem !important;
+            }
+        }
+        
+        /* Swipe gesture indication */
+        .swipe-hint {
+            display: none;
+            text-align: center;
+            padding: 0.5rem;
+            background: #fef3c7;
+            border-bottom: 1px solid #fcd34d;
+            font-size: 0.75rem;
+            color: #92400e;
+        }
+        
+        @media (max-width: 1024px) {
+            .swipe-hint {
+                display: block;
+            }
+        }
+        
+        /* Reduce motion for users who prefer it */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+        
+        /* Improve readability with larger text and spacing */
+        @media (prefers-contrast: more) {
+            body {
+                font-weight: 600;
+            }
+            
+            button,
+            input,
+            select {
+                border-width: 2px;
+            }
+        }
+        
+        /* Mobile one-hand layout */
+        @media (max-width: 480px) {
+            header {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .header-buttons {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 0.25rem;
+            }
+            
+            .header-buttons button {
+                font-size: 0.7rem;
+                padding: 0.5rem 0.25rem !important;
+                white-space: nowrap;
+            }
+            
+            nav {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .main-table-header {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .filter-preset-btn,
+            .procedure-btn {
+                font-size: 0.7rem;
+                padding: 0.4rem 0.5rem;
+            }
+        }
+        
+        /* Bottom action bar for mobile */
+        .mobile-action-bar {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            padding: 0.5rem;
+            gap: 0.25rem;
+            z-index: 40;
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+        }
+        
+        body.dark-mode .mobile-action-bar {
+            background: #2a2a2a;
+            border-top-color: #444;
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-action-bar {
+                display: flex;
+            }
+            
+            .content-area {
+                padding-bottom: 60px;
+            }
+        }
+        
+        .mobile-action-bar button {
+            flex: 1;
+            padding: 0.5rem 0.25rem;
+            font-size: 0.7rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Accessible table focus */
+        tbody tr:focus-within {
+            background: #eef2ff;
+        }
+        
+        body.dark-mode tbody tr:focus-within {
+            background: #1e3a8a;
+        }
+        
+        /* Focus visible for keyboard users only */
+        :focus-visible {
+            outline: 3px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        
+        @supports selector(:focus-visible) {
+            :focus {
+                outline: none;
+            }
+        }
+        
         @supports (-webkit-touch-callout: none) {
             /* iOS */
             body { padding-bottom: env(safe-area-inset-bottom); }
+        }
+
+        /* ====================================================================== */
+        /* PHASE 5: ADVANCED FEATURES (Timeline, PDF, Analytics, Audit Logs)    */
+        /* ====================================================================== */
+
+        /* Timeline View */
+        .timeline-view {
+            padding: 1.5rem;
+            background: white;
+            border-radius: 0.5rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        body.dark-mode .timeline-view {
+            background: #2a2a2a;
+            color: #f0f0f0;
+        }
+
+        .timeline-header {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .timeline-events {
+            position: relative;
+            padding-left: 2rem;
+        }
+
+        .timeline-events::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #3b82f6;
+        }
+
+        body.dark-mode .timeline-events::before {
+            background: #60a5fa;
+        }
+
+        .timeline-event {
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -2.25rem;
+            top: 0.25rem;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            background: #3b82f6;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
+
+        body.dark-mode .timeline-event::before {
+            background: #60a5fa;
+            border-color: #2a2a2a;
+            box-shadow: 0 0 0 2px #60a5fa;
+        }
+
+        .timeline-date {
+            font-weight: bold;
+            color: #1f2937;
+            font-size: 0.95rem;
+        }
+
+        body.dark-mode .timeline-date {
+            color: #f0f0f0;
+        }
+
+        .timeline-status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.25rem;
+            font-size: 0.85rem;
+            margin: 0.5rem 0;
+            font-weight: 500;
+        }
+
+        .timeline-notes {
+            color: #6b7280;
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            background: #f3f4f6;
+            border-radius: 0.25rem;
+            border-left: 3px solid #3b82f6;
+        }
+
+        body.dark-mode .timeline-notes {
+            color: #d1d5db;
+            background: #374151;
+            border-left-color: #60a5fa;
+        }
+
+        /* PDF Report Styles */
+        .pdf-generator {
+            background: #f9fafb;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+            margin-bottom: 1rem;
+        }
+
+        body.dark-mode .pdf-generator {
+            background: #1f2937;
+            border-color: #444;
+        }
+
+        .pdf-preview {
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 0.5rem;
+            padding: 2rem;
+            margin-top: 1rem;
+            min-height: 600px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        body.dark-mode .pdf-preview {
+            background: #2a2a2a;
+            border-color: #444;
+            color: #f0f0f0;
+        }
+
+        .pdf-page-break {
+            page-break-after: always;
+            margin-bottom: 2rem;
+            padding-bottom: 2rem;
+            border-bottom: 2px dashed #e5e7eb;
+        }
+
+        .pdf-section-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin: 1rem 0 0.5rem;
+            color: #1f2937;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 0.5rem;
+        }
+
+        body.dark-mode .pdf-section-title {
+            color: #f0f0f0;
+            border-color: #60a5fa;
+        }
+
+        /* Audit Log Styles */
+        .audit-log-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .audit-log-table thead {
+            background: #f3f4f6;
+        }
+
+        body.dark-mode .audit-log-table thead {
+            background: #374151;
+        }
+
+        .audit-log-table th {
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: bold;
+            border-bottom: 2px solid #e5e7eb;
+            color: #1f2937;
+        }
+
+        body.dark-mode .audit-log-table th {
+            color: #f0f0f0;
+            border-color: #444;
+        }
+
+        .audit-log-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+            color: #6b7280;
+        }
+
+        body.dark-mode .audit-log-table td {
+            border-color: #444;
+            color: #d1d5db;
+        }
+
+        .audit-action-create { color: #10b981; font-weight: 500; }
+        .audit-action-update { color: #f59e0b; font-weight: 500; }
+        .audit-action-delete { color: #ef4444; font-weight: 500; }
+        .audit-action-view { color: #3b82f6; font-weight: 500; }
+        .audit-action-export { color: #8b5cf6; font-weight: 500; }
+
+        /* Advanced Calendar View */
+        .calendar-advanced {
+            display: grid;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .calendar-view-toggle {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .calendar-view-toggle button {
+            padding: 0.5rem 1rem;
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .calendar-view-toggle button.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        body.dark-mode .calendar-view-toggle button {
+            background: #374151;
+            border-color: #444;
+            color: #f0f0f0;
+        }
+
+        body.dark-mode .calendar-view-toggle button.active {
+            background: #60a5fa;
+            border-color: #60a5fa;
+        }
+
+        .calendar-week-view {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 0.5rem;
+        }
+
+        .calendar-day-cell {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            background: white;
+            min-height: 120px;
+            overflow-y: auto;
+        }
+
+        body.dark-mode .calendar-day-cell {
+            background: #374151;
+            border-color: #444;
+        }
+
+        .calendar-day-header {
+            font-weight: bold;
+            color: #1f2937;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #d1d5db;
+            margin-bottom: 0.5rem;
+        }
+
+        body.dark-mode .calendar-day-header {
+            color: #f0f0f0;
+            border-color: #555;
+        }
+
+        .calendar-event-item {
+            padding: 0.5rem;
+            background: #dbeafe;
+            border-left: 3px solid #3b82f6;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            margin-bottom: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .calendar-event-item:hover {
+            background: #bfdbfe;
+            transform: translateX(2px);
+        }
+
+        body.dark-mode .calendar-event-item {
+            background: #1e3a8a;
+            border-left-color: #60a5fa;
+        }
+
+        body.dark-mode .calendar-event-item:hover {
+            background: #1e40af;
+        }
+
+        /* Analytics Dashboard */
+        .analytics-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .analytics-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        body.dark-mode .analytics-card {
+            background: #2a2a2a;
+            border-color: #444;
+            color: #f0f0f0;
+        }
+
+        .analytics-card-title {
+            font-weight: bold;
+            font-size: 0.95rem;
+            color: #6b7280;
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        body.dark-mode .analytics-card-title {
+            color: #999;
+        }
+
+        .analytics-card-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        body.dark-mode .analytics-card-value {
+            color: #f0f0f0;
+        }
+
+        .analytics-card-subtitle {
+            font-size: 0.85rem;
+            color: #9ca3af;
+        }
+
+        body.dark-mode .analytics-card-subtitle {
+            color: #bfdbfe;
+        }
+
+        .analytics-trend {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-top: 0.5rem;
+        }
+
+        .trend-up { background: #d1fae5; color: #065f46; }
+        .trend-down { background: #fee2e2; color: #7f1d1d; }
+        .trend-neutral { background: #f3f4f6; color: #4b5563; }
+
+        /* Procedure Log */
+        .procedure-log {
+            margin: 1.5rem 0;
+        }
+
+        .procedure-log-filter {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .procedure-log-item {
+            background: white;
+            border-left: 4px solid #3b82f6;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-radius: 0.375rem;
+            border: 1px solid #e5e7eb;
+            border-left-width: 4px;
+        }
+
+        body.dark-mode .procedure-log-item {
+            background: #2a2a2a;
+            border-color: #444;
+            border-left-color: #60a5fa;
+        }
+
+        .procedure-log-date {
+            font-size: 0.8rem;
+            color: #6b7280;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+
+        body.dark-mode .procedure-log-date {
+            color: #999;
+        }
+
+        .procedure-log-type {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: #f0f9ff;
+            color: #0369a1;
+            border-radius: 0.25rem;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        body.dark-mode .procedure-log-type {
+            background: #0c4a6e;
+            color: #bae6fd;
+        }
+
+        .procedure-log-description {
+            margin-top: 0.5rem;
+            color: #4b5563;
+            font-size: 0.95rem;
+        }
+
+        body.dark-mode .procedure-log-description {
+            color: #d1d5db;
+        }
+
+        /* Shift Change Report */
+        .shift-report {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        body.dark-mode .shift-report {
+            background: #2a2a2a;
+            border-color: #444;
+            color: #f0f0f0;
+        }
+
+        .shift-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        body.dark-mode .shift-header {
+            border-color: #444;
+        }
+
+        .shift-info-item {
+            text-align: center;
+        }
+
+        .shift-info-label {
+            font-size: 0.8rem;
+            color: #6b7280;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+
+        body.dark-mode .shift-info-label {
+            color: #999;
+        }
+
+        .shift-info-value {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        body.dark-mode .shift-info-value {
+            color: #f0f0f0;
+        }
+
+        .shift-summary-item {
+            padding: 0.75rem;
+            background: #f9fafb;
+            border-radius: 0.375rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        body.dark-mode .shift-summary-item {
+            background: #374151;
+        }
+
+        @media (max-width: 768px) {
+            .analytics-dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .shift-header {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .calendar-week-view {
+                grid-template-columns: repeat(4, 1fr);
+            }
         }
     </style>
     
@@ -837,6 +2572,1025 @@
                 sanitizeFilename
             };
         })();
+
+        // ============================================================================= 
+        // PHASE 1: SETTINGS, SEARCH, SHORTCUTS, BATCH OPERATIONS
+        // ============================================================================= 
+
+        // Load settings from localStorage
+        function loadSettings() {
+            const theme = localStorage.getItem('app-theme') || 'light';
+            const textSize = localStorage.getItem('app-text-size') || '1';
+            const highContrast = localStorage.getItem('app-high-contrast') === 'true';
+            
+            setTheme(theme);
+            setTextSize(textSize);
+            if (highContrast) {
+                document.getElementById('high-contrast-toggle').checked = true;
+                toggleHighContrast(true);
+            }
+            
+            // Load column visibility
+            const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
+            document.querySelectorAll('.column-vis').forEach(cb => {
+                cb.checked = visibleCols.includes(cb.value);
+            });
+        }
+
+        // Settings Panel Toggle
+        window.toggleSettings = () => {
+            const panel = document.getElementById('settings-panel');
+            panel.classList.toggle('active');
+            if (!panel.classList.contains('active')) {
+                document.body.style.overflow = '';
+            }
+        };
+
+        // Theme Management
+        window.setTheme = (theme) => {
+            localStorage.setItem('app-theme', theme);
+            const isDark = theme === 'dark';
+            document.body.classList.toggle('dark-mode', isDark);
+            document.querySelectorAll('input[name="theme"]').forEach(r => r.checked = r.value === theme);
+            showToast(`🎨 Theme: ${theme.toUpperCase()}`);
+        };
+
+        // Text Size Management
+        window.setTextSize = (size) => {
+            localStorage.setItem('app-text-size', size);
+            document.body.classList.remove('text-lg', 'text-xl', 'text-xxl');
+            if (size === '2') document.body.classList.add('text-lg');
+            else if (size === '3') document.body.classList.add('text-xl');
+            else if (size === '4') document.body.classList.add('text-xxl');
+            const sizeLabel = ['Normal', 'Large', 'Larger', 'Largest'][parseInt(size)-1];
+            showToast(`📝 Text: ${sizeLabel}`);
+        };
+
+        // High Contrast Toggle
+        window.toggleHighContrast = (checked) => {
+            localStorage.setItem('app-high-contrast', checked);
+            document.body.classList.toggle('high-contrast', checked);
+            showToast(checked ? '⚫ High Contrast ON' : '⚪ High Contrast OFF');
+        };
+
+        // Column Visibility Management
+        window.updateColumnVisibility = () => {
+            const visibleCols = Array.from(document.querySelectorAll('.column-vis:checked')).map(cb => cb.value);
+            localStorage.setItem('app-visible-columns', JSON.stringify(visibleCols));
+            renderUI();
+            showToast('👁️ Column visibility updated');
+        };
+
+        // Advanced Search Toggle
+        window.toggleAdvancedSearch = () => {
+            const search = document.getElementById('advanced-search');
+            search.classList.toggle('active');
+            if (search.classList.contains('active')) {
+                document.getElementById('search-box').focus();
+            }
+        };
+
+        // Perform Search across all patient fields
+        window.performSearch = (query) => {
+            if (!query || query.trim() === '') {
+                clearSearch();
+                return;
+            }
+            
+            const q = query.toLowerCase();
+            const filtered = patients.filter(p => {
+                const searchFields = [
+                    p.name, p.mrn, p.room, p.hospital, p.plan, 
+                    p.findingsText, p.pending, p.followUp, p.supervisingMd
+                ].map(f => (f || '').toLowerCase()).join(' ');
+                return searchFields.includes(q);
+            });
+            
+            // Temporarily override getFilteredData
+            window._searchOverride = filtered;
+            renderUI();
+        };
+
+        // Quick Filter Buttons
+        window.setQuickFilter = (type) => {
+            let filtered = [];
+            const active = patients.filter(p => !p.archived);
+            
+            switch(type) {
+                case 'stat':
+                    filtered = active.filter(p => p.stat === true || p.stat === 'true');
+                    showToast('🔴 STAT Only');
+                    break;
+                case 'procedures':
+                    filtered = active.filter(p => PROC_KEYWORDS.test(p.plan || ''));
+                    showToast('🔵 Procedures Only');
+                    break;
+                case 'inprogress':
+                    filtered = active.filter(p => p.procedureStatus === 'In-Progress');
+                    showToast('⚡ In-Progress Only');
+                    break;
+                case 'pending':
+                    filtered = active.filter(p => p.pending && p.pending.length > 0);
+                    showToast('📋 Pending Tests Only');
+                    break;
+            }
+            
+            window._searchOverride = filtered;
+            renderUI();
+        };
+
+        // Clear Search
+        window.clearSearch = () => {
+            document.getElementById('search-box').value = '';
+            window._searchOverride = null;
+            renderUI();
+            showToast('🔍 Search cleared');
+        };
+
+        // ============================================================================= 
+        // KEYBOARD SHORTCUTS
+        // ============================================================================= 
+
+        // Initialize keyboard shortcuts
+        function initKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                // Ctrl+N: New patient
+                if (e.ctrlKey && e.key === 'n') {
+                    e.preventDefault();
+                    window.openModal();
+                }
+                // Ctrl+E: Export
+                else if (e.ctrlKey && e.key === 'e') {
+                    e.preventDefault();
+                    // Find and click export button or call export
+                    if (typeof window.exportSelectedPatients === 'function') {
+                        window.exportSelectedPatients();
+                    }
+                }
+                // Ctrl+P: Print
+                else if (e.ctrlKey && e.key === 'p') {
+                    e.preventDefault();
+                    if (typeof window.printSelectedPatientRecords === 'function') {
+                        window.printSelectedPatientRecords();
+                    }
+                }
+                // Ctrl+/ : Advanced search
+                else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                    e.preventDefault();
+                    window.toggleAdvancedSearch();
+                }
+                // Ctrl+, : Settings
+                else if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+                    e.preventDefault();
+                    window.toggleSettings();
+                }
+                // Ctrl+? : Help
+                else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '?') {
+                    e.preventDefault();
+                    window.showShortcutsHelp();
+                }
+                // Alt+A: Census tab
+                else if (e.altKey && e.key === 'a') {
+                    e.preventDefault();
+                    window.setTab('active');
+                    showToast('📊 Census Tab');
+                }
+                // Alt+S: Surgical tab
+                else if (e.altKey && e.key === 's') {
+                    e.preventDefault();
+                    window.setTab('procedures');
+                    showToast('🏥 Surgical Tab');
+                }
+                // Alt+C: Calendar tab
+                else if (e.altKey && e.key === 'c') {
+                    e.preventDefault();
+                    window.setTab('calendar');
+                    showToast('📅 Calendar Tab');
+                }
+                // Alt+F: Staffing tab
+                else if (e.altKey && e.key === 'f') {
+                    e.preventDefault();
+                    window.setTab('oncall');
+                    showToast('👨‍⚕️ Staffing Tab');
+                }
+                // Alt+X: Archive tab
+                else if (e.altKey && e.key === 'x') {
+                    e.preventDefault();
+                    window.setTab('archive');
+                    showToast('📋 Archive Tab');
+                }
+                // Escape: Close dialogs
+                else if (e.key === 'Escape') {
+                    window.toggleSettings();
+                    window.closeShortcutsHelp();
+                    window.toggleAdvancedSearch();
+                    closeContextMenu();
+                }
+            });
+        }
+
+        // Show Shortcuts Help
+        window.showShortcutsHelp = () => {
+            document.getElementById('shortcuts-modal').classList.add('active');
+            document.body.classList.add('no-scroll');
+        };
+
+        // Close Shortcuts Help
+        window.closeShortcutsHelp = () => {
+            document.getElementById('shortcuts-modal').classList.remove('active');
+            document.body.classList.remove('no-scroll');
+        };
+
+        // ============================================================================= 
+        // BATCH OPERATIONS
+        // ============================================================================= 
+
+        // Toggle All Selection
+        window.toggleAllSelection = (event) => {
+            const checked = event.target.checked;
+            document.querySelectorAll('input[data-patient-checkbox]').forEach(cb => {
+                cb.checked = checked;
+            });
+            updateBatchOpCount();
+        };
+
+        // Update Batch Operation Count
+        function updateBatchOpCount() {
+            const checkedCount = document.querySelectorAll('input[data-patient-checkbox]:checked').length;
+            selectedPatientIds = new Set(
+                Array.from(document.querySelectorAll('input[data-patient-checkbox]:checked'))
+                    .map(cb => cb.value)
+            );
+            
+            const batchOps = document.getElementById('batch-operations');
+            const batchCount = document.getElementById('batch-count');
+            
+            if (checkedCount > 0) {
+                batchOps.classList.add('active');
+                batchCount.textContent = `${checkedCount} selected`;
+            } else {
+                batchOps.classList.remove('active');
+            }
+        }
+
+        // Batch Change Status
+        window.batchChangeStatus = async () => {
+            const status = prompt('Enter new status:\n1. To-Do\n2. In-Progress\n3. Completed\n4. Post-Op');
+            const statusMap = {'1': 'To-Do', '2': 'In-Progress', '3': 'Completed', '4': 'Post-Op', 'to-do': 'To-Do', 'in-progress': 'In-Progress'};
+            const newStatus = statusMap[status?.toLowerCase()] || status;
+            
+            if (!newStatus) return;
+            
+            let updated = 0;
+            for (const id of selectedPatientIds) {
+                const p = patients.find(x => x.id === id);
+                if (p) {
+                    p.procedureStatus = newStatus;
+                    updated++;
+                }
+            }
+            
+            renderUI();
+            updateBatchOpCount();
+            showToast(`✅ ${updated} records updated to ${newStatus}`);
+        };
+
+        // Batch Archive
+        window.batchArchiveSelected = async () => {
+            if (!confirm(`Archive ${selectedPatientIds.size} selected records?`)) return;
+            
+            for (const id of selectedPatientIds) {
+                const p = patients.find(x => x.id === id);
+                if (p) p.archived = true;
+            }
+            
+            renderUI();
+            updateBatchOpCount();
+            showToast(`📦 ${selectedPatientIds.size} records archived`);
+        };
+
+        // Batch Delete
+        window.batchDeleteSelected = async () => {
+            if (!confirm(`DELETE ${selectedPatientIds.size} records? This cannot be undone.`)) return;
+            
+            patients = patients.filter(p => !selectedPatientIds.has(p.id));
+            renderUI();
+            updateBatchOpCount();
+            showToast(`🗑️ ${selectedPatientIds.size} records deleted`);
+        };
+
+        // Cancel Batch Operation
+        window.cancelBatchOp = () => {
+            document.querySelectorAll('input[data-patient-checkbox]').forEach(cb => cb.checked = false);
+            updateBatchOpCount();
+        };
+
+        // ============================================================================= 
+        // DATA MANAGEMENT
+        // ============================================================================= 
+
+        // Export Local Data
+        window.exportLocalData = () => {
+            const data = {
+                patients,
+                onCallSchedule,
+                settings: globalSettings,
+                exportDate: new Date().toISOString()
+            };
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `clinical-rounding-backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('💾 Data exported');
+        };
+
+        // Import Local Data
+        window.importLocalData = () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const data = JSON.parse(evt.target.result);
+                        if (confirm(`Restore ${data.patients?.length || 0} patients and settings?`)) {
+                            if (data.patients) patients = data.patients;
+                            if (data.onCallSchedule) onCallSchedule = data.onCallSchedule;
+                            if (data.settings) globalSettings = data.settings;
+                            renderUI();
+                            showToast('✅ Data restored');
+                        }
+                    } catch (err) {
+                        showToast('❌ Invalid backup file');
+                        console.error(err);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        };
+
+        // Clear All Data
+        window.clearAllData = () => {
+            patients = [];
+            onCallSchedule = [];
+            globalSettings = { onCall: "", hospitals: "" };
+            selectedPatientIds.clear();
+            localStorage.clear();
+            renderUI();
+            showToast('🗑️ All data cleared');
+        };
+
+        // Set Auto-Save Interval
+        window.setAutoSaveInterval = (seconds) => {
+            localStorage.setItem('app-autosave-interval', seconds);
+            showToast(`⏱️ Auto-save: ${seconds}s`);
+        };
+
+        // ============================================================================= 
+        // CONTEXT MENU (Right-click)
+        // ============================================================================= 
+
+        function closeContextMenu() {
+            document.getElementById('context-menu').classList.remove('active');
+        }
+
+        window.openContextMenu = (event, patientId) => {
+            event.preventDefault();
+            const menu = document.getElementById('context-menu');
+            const p = patients.find(x => x.id === patientId);
+            if (!p) return;
+            
+            menu.innerHTML = `
+                <div class="context-menu-item" onclick="window.openModal('${patientId}'); closeContextMenu();">✏️ Edit</div>
+                <div class="context-menu-item" onclick="window.toggleArchive('${patientId}', ${!p.archived}); closeContextMenu();">${p.archived ? '↩️ Restore' : '📦 Archive'}</div>
+                <div class="context-menu-item danger" onclick="window.deletePatient('${patientId}'); closeContextMenu();">🗑️ Delete</div>
+            `;
+            
+            menu.classList.add('active');
+            menu.style.top = event.clientY + 'px';
+            menu.style.left = event.clientX + 'px';
+        };
+
+        document.addEventListener('click', closeContextMenu);
+
+        // ============================================================================= 
+        // OFFLINE DETECTION
+        // ============================================================================= 
+
+        function updateOfflineStatus() {
+            const banner = document.getElementById('offline-banner');
+            const isOnline = navigator.onLine;
+            banner.classList.toggle('active', !isOnline);
+            isConnected = isOnline;
+        }
+
+        window.addEventListener('online', updateOfflineStatus);
+        window.addEventListener('offline', updateOfflineStatus);
+
+        // ============================================================================= 
+        // INIT PHASE 1 FEATURES
+        // ============================================================================= 
+
+        function initPhase1Features() {
+            loadSettings();
+            initKeyboardShortcuts();
+            updateOfflineStatus();
+            
+            // Initialize Phase 2 (Sorting & Filtering)
+            setTimeout(() => window.initSortableHeaders(), 500);
+        }
+
+        // ============================================================================= 
+        // PHASE 2: FILTERING & SORTING
+        // ============================================================================= 
+
+        // Global state for sorting and filtering
+        let currentSort = { column: 'date', direction: 'asc' };
+        let activeFilters = {};
+        let activeProcedureFilter = null;
+
+        // Toggle Advanced Filter Panel
+        window.toggleAdvancedFilterPanel = () => {
+            const panel = document.getElementById('advanced-filter-panel');
+            panel.classList.toggle('active');
+            if (!panel.classList.contains('active')) {
+                document.body.style.overflow = '';
+            }
+        };
+
+        // Update sorting when table header clicked
+        window.initSortableHeaders = () => {
+            document.querySelectorAll('th.sortable').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    const column = header.dataset.sortColumn;
+                    if (!column) return;
+                    
+                    // Toggle direction if same column
+                    if (currentSort.column === column) {
+                        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        currentSort.direction = 'asc';
+                    }
+                    
+                    // Update header styling
+                    document.querySelectorAll('th.sortable').forEach(h => {
+                        h.classList.remove('sort-asc', 'sort-desc');
+                    });
+                    header.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                    
+                    renderUI();
+                });
+            });
+        };
+
+        // Sort patients by current sort settings
+        function sortPatients(patientList) {
+            const list = [...patientList];
+            const { column, direction } = currentSort;
+            
+            list.sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+                
+                // Handle date sorting
+                if (column === 'date') {
+                    aVal = new Date(aVal || 0).getTime();
+                    bVal = new Date(bVal || 0).getTime();
+                } else if (column === 'room') {
+                    // Natural sort for room numbers
+                    aVal = parseInt(aVal) || 0;
+                    bVal = parseInt(bVal) || 0;
+                } else {
+                    // String comparison
+                    aVal = (aVal || '').toString().toLowerCase();
+                    bVal = (bVal || '').toString().toLowerCase();
+                }
+                
+                if (direction === 'asc') {
+                    return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+                } else {
+                    return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+                }
+            });
+            
+            return list;
+        }
+
+        // Apply Advanced Filters
+        window.applyAdvancedFilters = () => {
+            const statuses = Array.from(document.querySelectorAll('.filter-status:checked')).map(cb => cb.value);
+            const priorities = Array.from(document.querySelectorAll('.filter-priority:checked')).map(cb => cb.value);
+            const hospitals = Array.from(document.querySelectorAll('.filter-hospital-cb:checked')).map(cb => cb.value);
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+            const losMax = document.getElementById('filter-los').value;
+            const showArchived = document.getElementById('filter-show-archived').checked;
+            
+            activeFilters = {
+                statuses: statuses.length > 0 ? statuses : null,
+                priorities: priorities.length > 0 ? priorities : null,
+                hospitals: hospitals.length > 0 ? hospitals : null,
+                dateFrom,
+                dateTo,
+                losMax: parseInt(losMax),
+                showArchived
+            };
+            
+            renderUI();
+            window.toggleAdvancedFilterPanel();
+            showToast('✓ Filters applied');
+        };
+
+        // Reset Advanced Filters
+        window.resetAdvancedFilters = () => {
+            document.querySelectorAll('.filter-status, .filter-priority, .filter-hospital-cb').forEach(cb => cb.checked = false);
+            document.getElementById('filter-date-from').value = '';
+            document.getElementById('filter-date-to').value = '';
+            document.getElementById('filter-los').value = 30;
+            document.getElementById('filter-show-archived').checked = false;
+            document.getElementById('filter-los-display').textContent = 30;
+            
+            activeFilters = {};
+            activeProcedureFilter = null;
+            renderUI();
+            showToast('↻ Filters reset');
+        };
+
+        // Load Filter Preset
+        window.loadFilterPreset = (preset) => {
+            const today = new Date().toISOString().split('T')[0];
+            
+            activeFilters = {};
+            activeProcedureFilter = null;
+            
+            switch(preset) {
+                case 'morning':
+                    // Morning rounds: active only, last 24 hours
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    activeFilters.dateFrom = yesterday.toISOString().split('T')[0];
+                    activeFilters.dateTo = today;
+                    activeFilters.showArchived = false;
+                    showToast('🌅 Morning Rounds preset loaded');
+                    break;
+                case 'postop':
+                    // Post-op: status = Post-Op, last 7 days
+                    activeFilters.statuses = ['Post-Op'];
+                    const sevenDaysAgo = new Date();
+                    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                    activeFilters.dateFrom = sevenDaysAgo.toISOString().split('T')[0];
+                    activeFilters.dateTo = today;
+                    showToast('⭐ Post-Op Check preset loaded');
+                    break;
+                case 'statonly':
+                    // STAT cases only
+                    activeFilters.priorities = ['stat'];
+                    showToast('🔴 STAT Cases preset loaded');
+                    break;
+                case 'pending':
+                    // Pending tests
+                    showToast('📋 Pending Tests preset loaded');
+                    break;
+            }
+            
+            renderUI();
+        };
+
+        // Filter by Procedure Type
+        window.filterByProcedure = (procedure) => {
+            if (procedure === 'all') {
+                activeProcedureFilter = null;
+                showToast('🏥 All Procedures');
+            } else {
+                activeProcedureFilter = procedure;
+                showToast(`Filtered: ${procedure.toUpperCase()}`);
+            }
+            renderUI();
+        };
+
+        // Apply all active filters to patient list
+        function applyActiveFilters(patientList) {
+            let filtered = patientList;
+            
+            // Apply archive filter
+            if (!activeFilters.showArchived) {
+                filtered = filtered.filter(p => !p.archived);
+            }
+            
+            // Apply status filter
+            if (activeFilters.statuses && activeFilters.statuses.length > 0) {
+                filtered = filtered.filter(p => activeFilters.statuses.includes(p.procedureStatus || 'To-Do'));
+            }
+            
+            // Apply priority filter
+            if (activeFilters.priorities && activeFilters.priorities.length > 0) {
+                filtered = filtered.filter(p => {
+                    const isStat = p.stat === true || p.stat === 'true';
+                    const hasStatPriority = activeFilters.priorities.includes('stat');
+                    const hasNormalPriority = activeFilters.priorities.includes('normal');
+                    
+                    if (hasStatPriority && isStat) return true;
+                    if (hasNormalPriority && !isStat) return true;
+                    return false;
+                });
+            }
+            
+            // Apply hospital filter
+            if (activeFilters.hospitals && activeFilters.hospitals.length > 0) {
+                filtered = filtered.filter(p => activeFilters.hospitals.includes(p.hospital));
+            }
+            
+            // Apply date range filter
+            if (activeFilters.dateFrom) {
+                filtered = filtered.filter(p => new Date(p.date) >= new Date(activeFilters.dateFrom));
+            }
+            if (activeFilters.dateTo) {
+                filtered = filtered.filter(p => new Date(p.date) <= new Date(activeFilters.dateTo));
+            }
+            
+            // Apply length of stay filter
+            if (activeFilters.losMax !== undefined && activeFilters.losMax >= 0) {
+                const today = new Date();
+                filtered = filtered.filter(p => {
+                    if (!p.date) return true;
+                    const admitDate = new Date(p.date);
+                    const daysAdmitted = Math.floor((today - admitDate) / (1000 * 60 * 60 * 24));
+                    return daysAdmitted <= activeFilters.losMax;
+                });
+            }
+            
+            // Apply procedure category filter
+            if (activeProcedureFilter) {
+                const regex = new RegExp(activeProcedureFilter, 'i');
+                filtered = filtered.filter(p => regex.test(p.plan || ''));
+            }
+            
+            return filtered;
+        }
+
+        // Override getFilteredData to include Phase 2 filters
+        const originalGetFilteredData = window.getFilteredData || function() {
+            let f = [];
+            if (currentTab === 'active') f = patients.filter(p => !p.archived);
+            else if (currentTab === 'procedures') f = patients.filter(p => !p.archived && PROC_KEYWORDS.test(p.plan || ''));
+            else if (currentTab === 'archive') f = patients.filter(p => p.archived);
+            return f;
+        };
+
+        window.getFilteredData = function() {
+            let filtered = originalGetFilteredData();
+            
+            // Apply search override
+            if (window._searchOverride) return window._searchOverride;
+            
+            // Apply advanced filters
+            filtered = applyActiveFilters(filtered);
+            
+            // Apply sorting
+            filtered = sortPatients(filtered);
+            
+            return filtered;
+        };
+
+        // Update LOS display on slider change
+        document.addEventListener('input', (e) => {
+            if (e.target.id === 'filter-los') {
+                document.getElementById('filter-los-display').textContent = e.target.value;
+            }
+        });
+
+        // Add keyboard shortcut for filters
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
+                e.preventDefault();
+                window.toggleAdvancedFilterPanel();
+            }
+        });
+
+        // ============================================================================= 
+        // PHASE 3: VISUALIZATION & DISPLAY
+        // ============================================================================= 
+
+        // Global state for view mode
+        let currentViewMode = 'table';
+
+        // Set View Mode
+        window.setViewMode = (mode) => {
+            currentViewMode = mode;
+            
+            const tableView = document.querySelector('.view-toggle .view-btn:nth-child(1)');
+            const cardView = document.querySelector('.view-toggle .view-btn:nth-child(2)');
+            const groupedView = document.querySelector('.view-toggle .view-btn:nth-child(3)');
+            
+            [tableView, cardView, groupedView].forEach(btn => btn?.classList.remove('active'));
+            
+            if (mode === 'table') {
+                tableView?.classList.add('active');
+                document.getElementById('table-section').style.display = '';
+                document.getElementById('card-view-container').classList.remove('active');
+                document.getElementById('grouped-view-container').innerHTML = '';
+            } else if (mode === 'card') {
+                cardView?.classList.add('active');
+                document.getElementById('table-section').style.display = 'none';
+                window.renderCardView();
+            } else if (mode === 'grouped') {
+                groupedView?.classList.add('active');
+                document.getElementById('table-section').style.display = 'none';
+                document.getElementById('card-view-container').classList.remove('active');
+                window.renderGroupedView();
+            }
+            
+            showToast(`📊 ${mode === 'table' ? 'Table View' : mode === 'card' ? 'Card View' : 'Hospital Grouping'}`);
+        };
+
+        // Calculate Patient Age from DOB
+        window.calculateAge = (dob) => {
+            if (!dob) return null;
+            const birthDate = new Date(dob);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
+        };
+
+        // Calculate Length of Stay
+        window.calculateLOS = (admitDate) => {
+            if (!admitDate) return 0;
+            const admit = new Date(admitDate);
+            const today = new Date();
+            const diffTime = today - admit;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays;
+        };
+
+        // Render Status Distribution Pie Chart
+        window.renderStatusChart = () => {
+            const filtered = window._searchOverride || getFilteredData();
+            const statuses = ['To-Do', 'In-Progress', 'Completed', 'Post-Op'];
+            const counts = statuses.map(s => filtered.filter(p => (p.procedureStatus || 'To-Do') === s).length);
+            const colors = ['#d1d5db', '#3b82f6', '#10b981', '#f59e0b'];
+            
+            const total = counts.reduce((a,b) => a+b, 0);
+            if (total === 0) return;
+            
+            const svg = document.getElementById('status-pie-chart');
+            svg.innerHTML = '';
+            
+            let startAngle = -90;
+            counts.forEach((count, i) => {
+                const sliceAngle = (count / total) * 360;
+                const endAngle = startAngle + sliceAngle;
+                
+                const start = polarToCartesian(50, 50, 40, endAngle);
+                const end = polarToCartesian(50, 50, 40, startAngle);
+                const largeArc = sliceAngle > 180 ? 1 : 0;
+                
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const d = [
+                    `M 50 50`,
+                    `L ${end.x} ${end.y}`,
+                    `A 40 40 0 ${largeArc} 0 ${start.x} ${start.y}`,
+                    'Z'
+                ].join(' ');
+                path.setAttribute('d', d);
+                path.setAttribute('fill', colors[i]);
+                path.setAttribute('stroke', '#fff');
+                path.setAttribute('stroke-width', '2');
+                svg.appendChild(path);
+                
+                startAngle = endAngle;
+            });
+            
+            const legend = document.getElementById('status-legend');
+            legend.innerHTML = statuses.map((s, i) => `
+                <div class="pie-legend-item">
+                    <div class="pie-legend-color" style="background: ${colors[i]}"></div>
+                    <span>${s} (${counts[i]})</span>
+                </div>
+            `).join('');
+        };
+
+        function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+            const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+            return {
+                x: centerX + radius * Math.cos(angleInRadians),
+                y: centerY + radius * Math.sin(angleInRadians)
+            };
+        }
+
+        // Render Quick Stats
+        window.renderQuickStats = () => {
+            const filtered = window._searchOverride || getFilteredData();
+            const stats = {
+                'Total Patients': filtered.length,
+                'STAT Priority': filtered.filter(p => p.stat === true || p.stat === 'true').length,
+                'Pending Tests': filtered.filter(p => p.pending && p.pending.length > 0).length,
+                'Avg LOS': filtered.length > 0 ? Math.round(filtered.reduce((sum, p) => sum + (window.calculateLOS(p.date) || 0), 0) / filtered.length) : 0
+            };
+            
+            const html = Object.entries(stats).map(([label, value]) => `
+                <div class="stats-box">
+                    <strong>${value}</strong><br>
+                    <small>${label}</small>
+                </div>
+            `).join('');
+            
+            document.getElementById('quick-stats').innerHTML = html;
+        };
+
+        // Render Patient Summary Statistics
+        window.renderPatientSummary = () => {
+            const filtered = window._searchOverride || getFilteredData();
+            
+            const lostmean = filtered.length > 0 
+                ? Math.round(filtered.reduce((sum, p) => sum + (window.calculateLOS(p.date) || 0), 0) / filtered.length)
+                : 0;
+            
+            const statCount = filtered.filter(p => p.stat === true || p.stat === 'true').length;
+            const procedureCount = filtered.filter(p => PROC_KEYWORDS.test(p.plan || '')).length;
+            const ageAvg = filtered.filter(p => p.dob).length > 0 
+                ? Math.round(filtered.filter(p => p.dob).reduce((sum, p) => sum + (window.calculateAge(p.dob) || 0), 0) / filtered.filter(p => p.dob).length)
+                : '-';
+            
+            const html = `
+                <div class="summary-item">
+                    <div class="summary-value">${filtered.length}</div>
+                    <div class="summary-label">Total Patients</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${statCount}</div>
+                    <div class="summary-label">STAT Cases 🔴</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${procedureCount}</div>
+                    <div class="summary-label">Procedures</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${lostmean}</div>
+                    <div class="summary-label">Avg Days Admitted</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${ageAvg}</div>
+                    <div class="summary-label">Avg Age</div>
+                </div>
+            `;
+            
+            document.getElementById('patient-summary').innerHTML = html;
+        };
+
+        // Render Card View
+        window.renderCardView = () => {
+            const filtered = window._searchOverride || getFilteredData();
+            const container = document.getElementById('card-view-container');
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="padding: 2rem; text-align: center; color: #999;">No patients</div>';
+                container.classList.add('active');
+                return;
+            }
+            
+            container.innerHTML = filtered.map(p => {
+                const age = window.calculateAge(p.dob);
+                const los = window.calculateLOS(p.date);
+                const statClass = (p.stat === true || p.stat === 'true') ? 'stat' : '';
+                const status = p.procedureStatus || 'To-Do';
+                const statusObj = STATUS_COLORS[status] || STATUS_COLORS['To-Do'];
+                
+                return `
+                    <div class="patient-card ${statClass}">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-name">${p.name || 'Anon'}</div>
+                                <div class="card-mrn">MRN: ${p.mrn || 'N/A'}</div>
+                            </div>
+                            <span class="card-badge ${statusObj.bg} ${statusObj.text}">${status}</span>
+                        </div>
+                        
+                        <div class="card-field">
+                            <div class="card-field-label">🏥 Hospital</div>
+                            <div class="card-field-value">${p.hospital || 'N/A'}</div>
+                        </div>
+                        
+                        <div class="card-field">
+                            <div class="card-field-label">🛏️ Room</div>
+                            <div class="card-field-value">${p.room || 'N/A'}</div>
+                        </div>
+                        
+                        ${age ? `<div class="card-field">
+                            <div class="card-field-label">👤 Age</div>
+                            <div class="card-field-value">${age} years</div>
+                        </div>` : ''}
+                        
+                        <div class="card-field">
+                            <div class="card-field-label">📅 Admitted</div>
+                            <div class="card-field-value">${p.date} (${los} days ago)</div>
+                        </div>
+                        
+                        <div class="card-field">
+                            <div class="card-field-label">📋 Plan</div>
+                            <div class="card-field-value">${p.plan || '-'}</div>
+                        </div>
+                        
+                        <div class="card-field">
+                            <div class="card-field-label">🔍 Findings</div>
+                            <div class="card-field-value">${p.findingsText || p.findingsCodes?.join(', ') || '-'}</div>
+                        </div>
+                        
+                        ${p.pending ? `<div class="card-field">
+                            <div class="card-field-label">⏳ Pending</div>
+                            <div class="card-field-value">${p.pending}</div>
+                        </div>` : ''}
+                        
+                        <div class="card-actions">
+                            <button class="card-action-btn card-edit" onclick="window.openModal('${p.id}')">Edit</button>
+                            <button class="card-action-btn card-print" onclick="window.printPatientRecord('${p.id}')">Print</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.classList.add('active');
+        };
+
+        // Render Grouped View (By Hospital)
+        window.renderGroupedView = () => {
+            const filtered = window._searchOverride || getFilteredData();
+            const container = document.getElementById('grouped-view-container');
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="padding: 2rem; text-align: center; color: #999;">No patients</div>';
+                return;
+            }
+            
+            // Group by hospital
+            const grouped = {};
+            filtered.forEach(p => {
+                const hospital = p.hospital || 'Unassigned';
+                if (!grouped[hospital]) grouped[hospital] = [];
+                grouped[hospital].push(p);
+            });
+            
+            const html = Object.entries(grouped).map(([hospital, patients]) => `
+                <div class="hospital-group">
+                    <div class="hospital-group-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+                        <span>🏥 ${hospital}</span>
+                        <span class="hospital-group-count">${patients.length}</span>
+                    </div>
+                    <div class="hospital-group-content">
+                        ${patients.map(p => {
+                            const age = window.calculateAge(p.dob);
+                            const los = window.calculateLOS(p.date);
+                            
+                            return `
+                                <div style="padding: 0.75rem; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-weight: bold;">${p.name}</div>
+                                        <div style="font-size: 0.75rem; color: #666;">MRN: ${p.mrn} ${age ? '| Age: ' + age : ''} | Room: ${p.room}</div>
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button onclick="window.openModal('${p.id}')" style="padding: 0.25rem 0.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Edit</button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = html;
+        };
+
+        // Update charts and stats when data changes
+        const originalRenderUI = window.renderUI;
+        window.renderUI = function() {
+            originalRenderUI.call(this);
+            
+            // Render visualizations
+            setTimeout(() => {
+                window.renderStatusChart();
+                window.renderQuickStats();
+                window.renderPatientSummary();
+                
+                if (currentViewMode === 'card') {
+                    window.renderCardView();
+                } else if (currentViewMode === 'grouped') {
+                    window.renderGroupedView();
+                }
+                
+                window.initSortableHeaders();
+            }, 50);
+        };
 
         window.openModal = (id = null) => {
             const modal = document.getElementById('patient-modal');
@@ -2153,7 +4907,8 @@
 
         window.setTab = (tab) => {
             currentTab = tab;
-            ['table-section', 'calendar-section', 'oncall-section'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+            ['table-section', 'calendar-section', 'oncall-section', 'timeline-section', 'analytics-section', 'reports-section', 'audit-section', 'procedure-log-section', 'shift-report-section'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+            
             if (tab === 'calendar') {
                 document.getElementById('calendar-section')?.classList.remove('hidden');
                 renderCalendar();
@@ -2178,14 +4933,38 @@
                         cb.checked = lastHospitals.includes(cb.value);
                     });
                 }
+            } else if (tab === 'timeline') {
+                document.getElementById('timeline-section')?.classList.remove('hidden');
+            } else if (tab === 'analytics') {
+                document.getElementById('analytics-section')?.classList.remove('hidden');
+                window.loadAnalyticsDashboard();
+            } else if (tab === 'reports') {
+                document.getElementById('reports-section')?.classList.remove('hidden');
+            } else if (tab === 'audit') {
+                document.getElementById('audit-section')?.classList.remove('hidden');
+                window.loadAuditLogs();
+            } else if (tab === 'procedure-log') {
+                document.getElementById('procedure-log-section')?.classList.remove('hidden');
+                window.renderProcedureLog();
+            } else if (tab === 'shift-report') {
+                document.getElementById('shift-report-section')?.classList.remove('hidden');
             } else {
                 document.getElementById('table-section')?.classList.remove('hidden');
             }
 
-            ['active', 'procedures', 'calendar', 'oncall', 'archive'].forEach(b => {
+            ['active', 'procedures', 'calendar', 'oncall', 'archive', 'timeline', 'analytics', 'reports', 'audit', 'procedure-log', 'shift-report'].forEach(b => {
                 const el = document.getElementById(`tab-${b}-btn`);
                 if (el) el.className = (b === tab) ? "flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" : "flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase";
             });
+            
+            // Update ARIA attributes
+            ['active', 'procedures', 'calendar', 'oncall', 'archive', 'timeline', 'analytics', 'reports', 'audit', 'procedure-log', 'shift-report'].forEach(b => {
+                const el = document.getElementById(`tab-${b}-btn`);
+                if (el) {
+                    el.setAttribute('aria-selected', b === tab ? 'true' : 'false');
+                }
+            });
+            
             renderUI();
         };
 
@@ -2248,16 +5027,24 @@
             if (currentTab === 'calendar') renderCalendar();
             else renderMainTable();
             updateStats();
+            
+            // Initialize Phase 2 sortable headers
+            setTimeout(() => window.initSortableHeaders(), 50);
         }
 
         function renderMainTable() {
             const container = document.getElementById('table-body');
             if (!container) return;
-            const filtered = getFilteredData();
+            const filtered = window._searchOverride || getFilteredData();
+            
             if (filtered.length === 0) {
                 container.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 text-sm">No entries</td></tr>`;
                 return;
             }
+            
+            // Get visible columns
+            const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
+            
             container.innerHTML = filtered.map(p => {
                 const isProc = PROC_KEYWORDS.test(p.plan || '');
                 const status = p.procedureStatus || 'To-Do';
@@ -2265,24 +5052,20 @@
                 const findingsDisplay = p.findingsCodes?.length ? p.findingsCodes.join(', ') : (p.findingsText || '-');
                 const visitTimeDisplay = p.visitTime ? new Date(p.visitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                 
+                const statClass = (p.stat === true || p.stat === 'true') ? 'bg-red-600 text-white border-4 border-red-800 shadow-lg shadow-red-500/50' : 'bg-white border-b border-slate-100';
+                
                 return `
-                <tr class="border-b bg-white border-slate-100 hover:${statusObj.bgHeavy} transition-colors">
-                    <td class="p-3"><input type="checkbox" onchange="window.togglePatientSelection('${p.id}')" ${selectedPatientIds.has(p.id)?'checked':''} class="w-5 h-5 rounded cursor-pointer"></td>
-                    <td class="p-3">
-                        <div class="font-bold text-sm text-slate-900">${p.room}</div>
-                    </td>
-                    <td class="p-3">
-                        <div class="text-xs font-semibold text-slate-700">${p.hospital || 'N/A'}</div>
-                    </td>
+                <tr class="hover:bg-slate-50 transition-colors ${statClass}" oncontextmenu="window.openContextMenu(event, '${p.id}')">
+                    <td class="p-3"><input type="checkbox" data-patient-checkbox value="${p.id}" onchange="updateBatchOpCount()" class="w-5 h-5 rounded cursor-pointer" ${selectedPatientIds.has(p.id)?'checked':''}></td>
+                    ${visibleCols.includes('room') ? `<td class="p-3"><div class="font-bold text-sm text-slate-900">${p.room}</div></td>` : ''}
+                    ${visibleCols.includes('hospital') ? `<td class="p-3"><div class="text-xs font-semibold text-slate-700">${p.hospital || 'N/A'}</div></td>` : ''}
                     <td class="p-3">
                         <div class="text-sm font-bold text-slate-900">${p.name || 'Anon'}</div>
                         <div class="text-xs text-slate-500 mt-0.5">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
                     </td>
+                    ${visibleCols.includes('findings') ? `<td class="p-3"><div class="text-xs text-slate-600 line-clamp-2">${findingsDisplay}</div></td>` : ''}
+                    ${visibleCols.includes('plan') ? `<td class="p-3"><div class="text-xs font-bold text-slate-800 mb-1">${p.plan || '-'}</div></td>` : ''}
                     <td class="p-3">
-                        <div class="text-xs text-slate-600 line-clamp-2">${findingsDisplay}</div>
-                    </td>
-                    <td class="p-3">
-                        <div class="text-xs font-bold text-slate-800 mb-1">${p.plan || '-'}</div>
                         ${isProc ? `<div class="flex items-center gap-2">
                             <select onchange="window.updateStatusQuick('${p.id}', this.value)" class="text-[8px] rounded px-1.5 py-1 ${statusObj.bg} border font-bold flex-1">
                                 <option value="To-Do" ${status === 'To-Do' ? 'selected' : ''}>To-Do ⬜</option>
@@ -2294,7 +5077,7 @@
                         </div>` : ''}
                     </td>
                     <td class="p-3 flex gap-1 flex-col">
-                        <button onclick="window.viewPatientCard('${p.id}')" class="text-[9px] font-bold bg-blue-600 text-white px-2 py-1.5 rounded hover:bg-blue-700 transition-colors">View</button>
+                        <button onclick="window.openModal('${p.id}')" class="text-[9px] font-bold bg-blue-600 text-white px-2 py-1.5 rounded hover:bg-blue-700 transition-colors">Edit</button>
                         <button onclick="window.printPatientRecord('${p.id}')" class="text-[9px] font-bold bg-slate-700 text-white px-2 py-1.5 rounded hover:bg-slate-800 transition-colors">Print</button>
                     </td>
                 </tr>`;
@@ -3072,10 +5855,16 @@
             } else {
                 console.error('setTab function not defined yet');
             }
+            
+            // Initialize Phase 1 Features
+            if (typeof initPhase1Features === 'function') {
+                initPhase1Features();
+            }
         }
     </script>
 </head>
 <body class="bg-slate-50 text-slate-900">
+    <a href="#main-content" class="skip-to-content">Skip to main content</a>
     <div class="main-container">
         <!-- Header -->
         <header class="bg-white border-b border-slate-200 px-4 py-3 flex-shrink-0 flex items-center justify-between shadow-sm">
@@ -3086,11 +5875,254 @@
                 <button id="m365-login-btn" onclick="window.m365Login && window.m365Login()" class="flex-shrink-0 px-3 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-700">🔐 Login</button>
                 <button onclick="document.getElementById('csv-file-input').click()" class="flex-shrink-0 px-3 py-2.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700">📥 Import Files</button>
                 <button onclick="window.openModal()" class="flex-shrink-0 px-4 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">+ Add</button>
+                <button onclick="window.toggleAdvancedFilterPanel()" title="Advanced Filters (Ctrl+Shift+F)" class="flex-shrink-0 px-3 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700">🔽 Filters</button>
+                <button onclick="window.toggleAdvancedSearch()" title="Advanced Search (Ctrl+/)" class="flex-shrink-0 px-3 py-2.5 bg-slate-600 text-white text-xs font-bold rounded-lg hover:bg-slate-700">🔍</button>
+                <button onclick="window.toggleSettings()" title="Settings (Ctrl+,)" class="flex-shrink-0 px-3 py-2.5 bg-slate-600 text-white text-xs font-bold rounded-lg hover:bg-slate-700">⚙️</button>
+                <button onclick="window.showShortcutsHelp()" title="Keyboard Shortcuts (Ctrl+?)" class="flex-shrink-0 px-3 py-2.5 bg-slate-600 text-white text-xs font-bold rounded-lg hover:bg-slate-700">?</button>
             </div>
         </header>
 
         <!-- Hidden CSV File Input -->
         <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" multiple style="display:none;" onchange="window.handleBulkImport(event)">
+
+        <!-- Offline Indicator Banner -->
+        <div id="offline-banner" class="offline-banner">
+            🔴 You are offline. Changes will be saved when connection restored.
+        </div>
+
+        <!-- Settings Panel -->
+        <div id="settings-panel" class="settings-panel">
+            <div class="settings-header">
+                <h3 class="font-bold text-lg">Settings</h3>
+                <button onclick="window.toggleSettings()" class="text-2xl font-bold text-slate-400 hover:text-slate-600">×</button>
+            </div>
+            <div class="settings-content">
+                <!-- Theme -->
+                <div class="settings-group">
+                    <label class="settings-label">🎨 Theme</label>
+                    <label class="flex items-center gap-2 cursor-pointer mb-2">
+                        <input type="radio" name="theme" value="light" checked onchange="window.setTheme('light')"> Light
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="theme" value="dark" onchange="window.setTheme('dark')"> Dark
+                    </label>
+                </div>
+                
+                <!-- Text Size -->
+                <div class="settings-group">
+                    <label class="settings-label">📝 Text Size</label>
+                    <input type="range" min="1" max="4" value="1" onchange="window.setTextSize(this.value)" class="w-full">
+                    <div class="flex justify-between text-xs text-slate-500 mt-1">
+                        <span>Small</span>
+                        <span>Large</span>
+                    </div>
+                </div>
+                
+                <!-- High Contrast -->
+                <div class="settings-group">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="high-contrast-toggle" onchange="window.toggleHighContrast(this.checked)"> ⚫ High Contrast
+                    </label>
+                </div>
+                
+                <!-- Column Visibility -->
+                <div class="settings-group">
+                    <label class="settings-label">👁️ Visible Columns</label>
+                    <div class="column-toggle">
+                        <label><input type="checkbox" class="column-vis" value="room" checked onchange="window.updateColumnVisibility()"> Room</label>
+                        <label><input type="checkbox" class="column-vis" value="hospital" checked onchange="window.updateColumnVisibility()"> Hospital</label>
+                        <label><input type="checkbox" class="column-vis" value="findings" checked onchange="window.updateColumnVisibility()"> Findings</label>
+                        <label><input type="checkbox" class="column-vis" value="plan" checked onchange="window.updateColumnVisibility()"> Plan</label>
+                    </div>
+                </div>
+                
+                <!-- Auto-save Interval -->
+                <div class="settings-group">
+                    <label class="settings-label">⏱️ Auto-Save Interval</label>
+                    <select onchange="window.setAutoSaveInterval(this.value)" class="w-full p-2 border border-slate-300 rounded text-sm">
+                        <option value="5">5 seconds</option>
+                        <option value="10" selected>10 seconds</option>
+                        <option value="30">30 seconds</option>
+                        <option value="60">1 minute</option>
+                    </select>
+                </div>
+                
+                <!-- Data Management -->
+                <div class="settings-group">
+                    <label class="settings-label">💾 Data</label>
+                    <button onclick="window.exportLocalData()" class="w-full p-2 text-left text-sm bg-blue-50 border border-blue-300 rounded hover:bg-blue-100 text-blue-700">📥 Export Local Data</button>
+                    <button onclick="window.importLocalData()" class="w-full p-2 text-left text-sm bg-green-50 border border-green-300 rounded hover:bg-green-100 text-green-700 mt-2">📤 Import Local Data</button>
+                    <button onclick="if(confirm('Clear all local data? This cannot be undone.')) window.clearAllData()" class="w-full p-2 text-left text-sm bg-red-50 border border-red-300 rounded hover:bg-red-100 text-red-700 mt-2">🗑️ Clear All Data</button>
+                </div>
+                
+                <!-- About -->
+                <div class="settings-group border-t pt-4 mt-4">
+                    <p class="text-xs text-slate-500">Clinical Rounding Platform<br>v3.0 - March 2026<br>All features | No SharePoint changes</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shortcuts Help Modal -->
+        <div id="shortcuts-modal" class="shortcuts-modal">
+            <div class="shortcuts-content">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">⌨️ Keyboard Shortcuts</h2>
+                
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Ctrl + N</span>
+                    <span>New patient record</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Ctrl + E</span>
+                    <span>Export to Excel</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Ctrl + P</span>
+                    <span>Print selected records</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Ctrl + /</span>
+                    <span>Toggle advanced search</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Ctrl + ,</span>
+                    <span>Open settings</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Ctrl + ?</span>
+                    <span>Show this help</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Ctrl + Shift + F</span>
+                    <span>Advanced filters panel</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Alt + A</span>
+                    <span>Go to Census tab</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Alt + S</span>
+                    <span>Go to Surgical tab</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Alt + C</span>
+                    <span>Go to Calendar tab</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Alt + F</span>
+                    <span>Go to Staffing tab</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-key">Escape</span>
+                    <span>Close any dialog/menu</span>
+                </div>
+                
+                <button onclick="window.closeShortcutsHelp()" class="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">Got It</button>
+            </div>
+        </div>
+
+        <!-- Advanced Filter Panel -->
+        <div id="advanced-filter-panel" class="advanced-filter-panel">
+            <div class="filter-header">
+                <h3 class="font-bold text-lg">Advanced Filters</h3>
+                <button onclick="window.toggleAdvancedFilterPanel()" class="text-2xl font-bold text-slate-400 hover:text-slate-600">×</button>
+            </div>
+            <div class="filter-content">
+                <!-- Filter Presets -->
+                <div class="filter-group">
+                    <label class="filter-label">⭐ Quick Presets</label>
+                    <div class="filter-presets">
+                        <button onclick="window.loadFilterPreset('morning')" class="filter-preset-btn">🌅 Morning Rounds</button>
+                        <button onclick="window.loadFilterPreset('postop')" class="filter-preset-btn">⭐ Post-Op Check</button>
+                        <button onclick="window.loadFilterPreset('statonly')" class="filter-preset-btn">🔴 STAT Cases</button>
+                        <button onclick="window.loadFilterPreset('pending')" class="filter-preset-btn">📋 Pending Tests</button>
+                    </div>
+                </div>
+
+                <!-- Procedure Categories -->
+                <div class="filter-group">
+                    <label class="filter-label">🏥 Procedure Categories</label>
+                    <div class="procedure-category-buttons">
+                        <button onclick="window.filterByProcedure('cysto')" class="procedure-btn">Cysto</button>
+                        <button onclick="window.filterByProcedure('stent')" class="procedure-btn">Stent</button>
+                        <button onclick="window.filterByProcedure('turbt')" class="procedure-btn">TURBT</button>
+                        <button onclick="window.filterByProcedure('laser')" class="procedure-btn">Laser</button>
+                        <button onclick="window.filterByProcedure('robotic')" class="procedure-btn">Robotic</button>
+                        <button onclick="window.filterByProcedure('biopsy')" class="procedure-btn">Biopsy</button>
+                        <button onclick="window.filterByProcedure('all')" class="procedure-btn">All Procedures</button>
+                    </div>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">📊 Status</label>
+                    <div class="filter-checkbox-group">
+                        <label><input type="checkbox" class="filter-status" value="To-Do"> To-Do ⬜</label>
+                        <label><input type="checkbox" class="filter-status" value="In-Progress"> In-Progress 🔵</label>
+                        <label><input type="checkbox" class="filter-status" value="Completed"> Completed ✅</label>
+                        <label><input type="checkbox" class="filter-status" value="Post-Op"> Post-Op ⭐</label>
+                    </div>
+                </div>
+
+                <!-- Priority Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">🎯 Priority</label>
+                    <div class="filter-checkbox-group">
+                        <label><input type="checkbox" class="filter-priority" value="stat"> STAT Priority 🔴</label>
+                        <label><input type="checkbox" class="filter-priority" value="normal"> Normal 🟢</label>
+                    </div>
+                </div>
+
+                <!-- Hospital Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">🏥 Hospitals</label>
+                    <div class="filter-checkbox-group">
+                        <label><input type="checkbox" class="filter-hospital-cb" value="WGMC"> WGMC</label>
+                        <label><input type="checkbox" class="filter-hospital-cb" value="AWC"> AWC</label>
+                        <label><input type="checkbox" class="filter-hospital-cb" value="BTMC"> BTMC</label>
+                        <label><input type="checkbox" class="filter-hospital-cb" value="Westgate"> Westgate</label>
+                        <label><input type="checkbox" class="filter-hospital-cb" value="CRMC"> CRMC</label>
+                    </div>
+                </div>
+
+                <!-- Date Range Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">📅 Date Range</label>
+                    <div>
+                        <label class="text-xs my-2 block">From:</label>
+                        <input type="date" id="filter-date-from" class="w-full p-2 border border-slate-300 rounded text-sm">
+                    </div>
+                    <div class="mt-2">
+                        <label class="text-xs my-2 block">To:</label>
+                        <input type="date" id="filter-date-to" class="w-full p-2 border border-slate-300 rounded text-sm">
+                    </div>
+                </div>
+
+                <!-- Length of Stay Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">⏳ Length of Stay (days)</label>
+                    <input type="range" id="filter-los" min="0" max="30" value="30" class="filter-slider">
+                    <div class="text-xs text-slate-500 mt-1">≤ <span id="filter-los-display">30</span> days admitted</div>
+                </div>
+
+                <!-- Archived Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">📦 Status</label>
+                    <div class="filter-checkbox-group">
+                        <label><input type="checkbox" id="filter-show-archived" value="archived"> Show Archived Records</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filter-actions">
+                <button class="filter-apply" onclick="window.applyAdvancedFilters()">✓ Apply Filters</button>
+                <button class="filter-reset" onclick="window.resetAdvancedFilters()">↻ Reset</button>
+            </div>
+        </div>
+
+        <!-- Context Menu -->
+        <div id="context-menu" class="context-menu">
+            <!-- Populated by JavaScript -->
+        </div>
 
         <!-- Connection Status Bar -->
         <div id="connection-status-bar" class="px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-amber-50 border-b border-amber-200 gap-1">
@@ -3111,18 +6143,71 @@
             <div class="text-center"><p class="text-[8px] font-bold text-slate-500 uppercase">Archive</p><p id="count-archived" class="text-lg font-black text-slate-500">0</p></div>
         </div>
 
+        <div class="swipe-hint">👆 Swipe left/right to navigate tabs on mobile</div>
+
         <!-- Tabs -->
-        <nav class="px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto">
-            <button id="tab-active-btn" onclick="window.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase">Census</button>
-            <button id="tab-procedures-btn" onclick="window.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase">Surgical</button>
-            <button id="tab-calendar-btn" onclick="window.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase">Calendar</button>
-            <button id="tab-oncall-btn" onclick="window.setTab('oncall')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase">Staffing</button>
-            <button id="tab-archive-btn" onclick="window.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase">Archive</button>
+        <nav class="px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" role="tablist" aria-label="Main Navigation">
+            <button id="tab-active-btn" onclick="window.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="active-panel">Census</button>
+            <button id="tab-procedures-btn" onclick="window.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedures-panel">Surgical</button>
+            <button id="tab-calendar-btn" onclick="window.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-panel">Calendar</button>
+            <button id="tab-oncall-btn" onclick="window.setTab('oncall')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="oncall-panel">Staffing</button>
+            <button id="tab-archive-btn" onclick="window.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="archive-panel">Archive</button>
+            <button id="tab-timeline-btn" onclick="window.setTab('timeline')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="timeline-panel">Timeline</button>
+            <button id="tab-analytics-btn" onclick="window.setTab('analytics')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="analytics-panel">Analytics</button>
+            <button id="tab-reports-btn" onclick="window.setTab('reports')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="reports-panel">Reports</button>
+            <button id="tab-audit-btn" onclick="window.setTab('audit')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="audit-panel">Audit</button>
+            <button id="tab-procedure-log-btn" onclick="window.setTab('procedure-log')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedure-log-panel">Procedures</button>
+            <button id="tab-shift-report-btn" onclick="window.setTab('shift-report')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="shift-report-panel">Shifts</button>
         </nav>
 
         <!-- Content Area -->
         <div class="content-area">
+            <!-- Advanced Search Panel -->
+            <div id="advanced-search" class="advanced-search">
+                <label class="text-xs font-bold text-slate-600 block mb-1">🔍 Search</label>
+                <input type="text" id="search-box" class="search-box" placeholder="Search by name, MRN, room, hospital, or findings..." onkeyup="window.performSearch(this.value)">
+                <div class="flex gap-2 mt-2 flex-wrap">
+                    <button onclick="window.setQuickFilter('stat')" class="px-2 py-1 bg-red-100 border border-red-300 text-red-700 text-xs rounded hover:bg-red-200">STAT Only 🔴</button>
+                    <button onclick="window.setQuickFilter('procedures')" class="px-2 py-1 bg-blue-100 border border-blue-300 text-blue-700 text-xs rounded hover:bg-blue-200">Procedures 🔵</button>
+                    <button onclick="window.setQuickFilter('inprogress')" class="px-2 py-1 bg-yellow-100 border border-yellow-300 text-yellow-700 text-xs rounded hover:bg-yellow-200">In Progress ⚡</button>
+                    <button onclick="window.setQuickFilter('pending')" class="px-2 py-1 bg-orange-100 border border-orange-300 text-orange-700 text-xs rounded hover:bg-orange-200">Pending Tests 📋</button>
+                    <button onclick="window.clearSearch()" class="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300">Clear</button>
+                </div>
+            </div>
+
+            <!-- Batch Operations Bar -->
+            <div id="batch-operations" class="batch-operations">
+                <div class="batch-count" id="batch-count">0 selected</div>
+                <button onclick="window.batchChangeStatus()" class="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Change Status</button>
+                <button onclick="window.batchArchiveSelected()" class="px-3 py-1 bg-amber-600 text-white text-xs font-bold rounded hover:bg-amber-700">Archive</button>
+                <button onclick="window.batchDeleteSelected()" class="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700">Delete</button>
+                <button onclick="window.cancelBatchOp()" class="px-3 py-1 bg-slate-400 text-white text-xs font-bold rounded hover:bg-slate-500 ml-auto">Cancel</button>
+            </div>
+
             <div id="table-section" class="h-full">
+                <!-- Chart Dashboard -->
+                <div id="chart-dashboard" class="chart-container">
+                    <div class="chart-box">
+                        <div class="chart-title">📊 Status Distribution</div>
+                        <svg id="status-pie-chart" class="pie-chart" viewBox="0 0 100 100"></svg>
+                        <div class="pie-legend" id="status-legend"></div>
+                    </div>
+                    <div class="chart-box">
+                        <div class="chart-title">📈 Quick Stats</div>
+                        <div id="quick-stats"></div>
+                    </div>
+                </div>
+
+                <!-- Patient Summary Statistics -->
+                <div id="patient-summary" class="patient-summary"></div>
+
+                <!-- View Toggle Buttons -->
+                <div class="view-toggle">
+                    <button class="view-btn active" onclick="window.setViewMode('table')">📊 Table View</button>
+                    <button class="view-btn" onclick="window.setViewMode('card')">🃏 Card View</button>
+                    <button class="view-btn" onclick="window.setViewMode('grouped')">🏥 By Hospital</button>
+                </div>
+
                 <!-- Filter Controls -->
                 <div id="main-table-header" class="flex gap-2 mb-2 p-3 bg-slate-50 border-b border-slate-200 flex-wrap items-center">
                     <div class="flex flex-col">
@@ -3162,17 +6247,23 @@
                         <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
                                 <th class="p-3 w-12"><input type="checkbox" onchange="window.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer"></th>
-                                <th class="p-3 text-left font-bold text-slate-700">Room</th>
-                                <th class="p-3 text-left font-bold text-slate-700">Hospital</th>
-                                <th class="p-3 text-left font-bold text-slate-700">Patient</th>
+                                <th class="p-3 text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
+                                <th class="p-3 text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
+                                <th class="p-3 text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
                                 <th class="p-3 text-left font-bold text-slate-700">Findings</th>
-                                <th class="p-3 text-left font-bold text-slate-700">Plan/Status</th>
+                                <th class="p-3 text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
                                 <th class="p-3 text-left font-bold text-slate-700">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="table-body" class="divide-y divide-slate-100"></tbody>
                     </table>
                 </div>
+
+                <!-- Card View Container -->
+                <div id="card-view-container" class="card-view"></div>
+
+                <!-- Grouped View Container (By Hospital) -->
+                <div id="grouped-view-container"></div>
             </div>
 
             <div id="calendar-section" class="hidden h-full p-4">
@@ -3239,6 +6330,127 @@
                     <div id="oc-schedule-list" class="flex-1 overflow-y-auto space-y-2"></div>
                 </div>
             </div>
+
+            <!-- Timeline Section -->
+            <div id="timeline-section" class="hidden h-full p-4 overflow-y-auto">
+                <div class="timeline-view">
+                    <div class="timeline-header">📅 Patient Timeline</div>
+                    <div class="grid grid-cols-3 gap-2 mb-4 flex-shrink-0">
+                        <input type="text" id="timeline-filter-mrn" placeholder="Filter by MRN" class="p-2 text-xs border rounded focus:ring-2 focus:ring-blue-500" />
+                        <input type="date" id="timeline-filter-from" placeholder="From" class="p-2 text-xs border rounded focus:ring-2 focus:ring-blue-500" />
+                        <button onclick="window.loadPatientTimeline()" class="p-2 px-4 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Load Timeline</button>
+                    </div>
+                    <div id="timeline-content" class="timeline-events"></div>
+                </div>
+            </div>
+
+            <!-- Analytics Dashboard Section -->
+            <div id="analytics-section" class="hidden h-full p-4 overflow-y-auto">
+                <div>
+                    <div class="text-2xl font-bold mb-4">📊 Analytics Dashboard</div>
+                    <div id="analytics-content" class="analytics-dashboard"></div>
+                </div>
+            </div>
+
+            <!-- PDF Reports Section -->
+            <div id="reports-section" class="hidden h-full p-4 overflow-y-auto">
+                <div>
+                    <div class="text-2xl font-bold mb-4">📄 PDF Reports</div>
+                    <div class="pdf-generator">
+                        <h3 class="font-bold mb-3">Generate Report</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                            <select id="report-type" class="p-2 text-xs border rounded">
+                                <option value="daily">Daily Rounding</option>
+                                <option value="surgical">Surgical Procedures</option>
+                                <option value="patient-summary">Patient Summary</option>
+                                <option value="hospital-census">Hospital Census</option>
+                                <option value="shift-handoff">Shift Handoff</option>
+                            </select>
+                            <input type="date" id="report-date" class="p-2 text-xs border rounded" />
+                            <select id="report-hospital" class="p-2 text-xs border rounded">
+                                <option value="">All Hospitals</option>
+                                <option value="WGMC">WGMC</option>
+                                <option value="AWC">AWC</option>
+                                <option value="BTMC">BTMC</option>
+                            </select>
+                            <button onclick="window.generatePDFReport()" class="p-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Generate PDF</button>
+                        </div>
+                    </div>
+                    <div id="pdf-preview" class="pdf-preview">
+                        <p class="text-center text-slate-500">PDF preview will appear here...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audit Logs Section -->
+            <div id="audit-section" class="hidden h-full p-4 overflow-y-auto">
+                <div>
+                    <div class="text-2xl font-bold mb-4">🔐 Audit Logs</div>
+                    <div class="mb-4">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 flex-shrink-0">
+                            <select id="audit-filter-action" class="p-2 text-xs border rounded">
+                                <option value="">All Actions</option>
+                                <option value="create">Create</option>
+                                <option value="update">Update</option>
+                                <option value="delete">Delete</option>
+                                <option value="view">View</option>
+                                <option value="export">Export</option>
+                            </select>
+                            <input type="date" id="audit-filter-from" placeholder="From" class="p-2 text-xs border rounded" />
+                            <input type="date" id="audit-filter-to" placeholder="To" class="p-2 text-xs border rounded" />
+                            <button onclick="window.loadAuditLogs()" class="p-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Load Logs</button>
+                        </div>
+                    </div>
+                    <div id="audit-content" class="overflow-x-auto">
+                        <table class="audit-log-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Record ID</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-log-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Procedure Log Section -->
+            <div id="procedure-log-section" class="hidden h-full p-4 overflow-y-auto">
+                <div>
+                    <div class="text-2xl font-bold mb-4">🔪 Surgical Procedures</div>
+                    <div class="procedure-log">
+                        <div class="procedure-log-filter mb-4 flex-shrink-0">
+                            <button onclick="window.filterProcedures('all')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-blue-600 text-white">All</button>
+                            <button onclick="window.filterProcedures('cysto')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Cysto</button>
+                            <button onclick="window.filterProcedures('stent')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Stent</button>
+                            <button onclick="window.filterProcedures('turbt')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">TURBT</button>
+                            <button onclick="window.filterProcedures('robotic')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Robotic</button>
+                            <button onclick="window.filterProcedures('laser')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Laser</button>
+                        </div>
+                        <div id="procedure-log-content"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shift Report Section -->
+            <div id="shift-report-section" class="hidden h-full p-4 overflow-y-auto">
+                <div>
+                    <div class="text-2xl font-bold mb-4">📋 Shift Handoff Report</div>
+                    <div class="mb-4 flex-shrink-0">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                            <input type="date" id="shift-report-date" placeholder="Report Date" class="p-2 text-xs border rounded" />
+                            <input type="time" id="shift-start-time" placeholder="Shift Start" class="p-2 text-xs border rounded" />
+                            <input type="time" id="shift-end-time" placeholder="Shift End" class="p-2 text-xs border rounded" />
+                            <button onclick="window.generateShiftReport()" class="p-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Generate Report</button>
+                        </div>
+                    </div>
+                    <div id="shift-report-content"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Footer -->
@@ -3277,14 +6489,14 @@
                 
                 <!-- Room & Date at top -->
                 <div class="grid grid-cols-2 gap-3">
-                    <input type="text" id="f-room" placeholder="Room" class="p-3 bg-slate-50 rounded-lg border border-slate-200" required>
-                    <input type="date" id="f-date" class="p-3 bg-slate-50 rounded-lg border border-slate-200" required>
+                    <input type="text" id="f-room" placeholder="Room" aria-label="Patient Room or Bed Number" class="p-3 bg-slate-50 rounded-lg border border-slate-200" required>
+                    <input type="date" id="f-date" aria-label="Visit Date" class="p-3 bg-slate-50 rounded-lg border border-slate-200" required>
                 </div>
 
                 <!-- Hospital Selection -->
                 <div>
-                    <label class="text-xs font-bold text-slate-600">Hospital (Excel: Hospital/Room #)</label>
-                    <select id="f-hospital" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <label for="f-hospital" class="text-xs font-bold text-slate-600">Hospital (Excel: Hospital/Room #)</label>
+                    <select id="f-hospital" aria-label="Selected Hospital" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <option value="">Select Hospital</option>
                         <option value="WGMC">Westgate Medical Center (WGMC)</option>
                         <option value="AWC">Abrazo West Campus (AWC)</option>
@@ -3299,19 +6511,19 @@
 
                 <!-- Provider/Attending Physician -->
                 <div>
-                    <label class="text-xs font-bold text-slate-600">👨‍⚕️ Provider / Attending Physician</label>
-                    <input type="text" id="f-md" placeholder="Dr. Smith" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <label for="f-md" class="text-xs font-bold text-slate-600">👨‍⚕️ Provider / Attending Physician</label>
+                    <input type="text" id="f-md" placeholder="Dr. Smith" aria-label="Attending Physician or Provider Name" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 </div>
 
                 <!-- Created By (Auto-filled from login) -->
                 <div>
-                    <label class="text-xs font-bold text-slate-400">📝 Created By</label>
-                    <input type="text" id="f-created-by" placeholder="Auto-filled from login" class="w-full mt-2 p-3 bg-slate-100 rounded-lg border border-slate-200 text-slate-600" readonly>
+                    <label for="f-created-by" class="text-xs font-bold text-slate-400">📝 Created By</label>
+                    <input type="text" id="f-created-by" placeholder="Auto-filled from login" aria-label="Created By, auto-filled from login" class="w-full mt-2 p-3 bg-slate-100 rounded-lg border border-slate-200 text-slate-600" readonly>
                 </div>
 
                 <div>
-                    <label class="text-xs font-bold text-slate-600">Status</label>
-                    <select id="f-proc-status" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <label for="f-proc-status" class="text-xs font-bold text-slate-600">Status</label>
+                    <select id="f-proc-status" aria-label="Patient Status Category" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <option>NEW CONSULT</option>
                         <option>SURGICAL PATIENT (SAME DAY SURGERY)</option>
                         <option>NEW SURGICAL PATIENT (AM ADMIT)</option>
@@ -3321,11 +6533,11 @@
                     </select>
                 </div>
 
-                <input type="text" id="f-name" placeholder="Patient Name" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <input type="text" id="f-name" placeholder="Patient Name" aria-label="Patient Full Name" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200">
                 
                 <div class="grid grid-cols-2 gap-3">
-                    <input type="text" id="f-dob" placeholder="DOB" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <input type="text" id="f-mrn" placeholder="MRN" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <input type="text" id="f-dob" placeholder="DOB" aria-label="Date of Birth" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <input type="text" id="f-mrn" placeholder="MRN" aria-label="Medical Record Number" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
                 </div>
 
                 <!-- Findings -->
@@ -5582,6 +8794,760 @@
             console.log(`Integration Status: Phases 0-9 all linked and functional`);
             return results;
         };
+
+        // ============================================================================
+        // PHASE 4: MOBILE & ACCESSIBILITY - JavaScript
+        // ============================================================================
+
+        // Track current focused row for keyboard navigation
+        let currentFocusedRowIndex = 0;
+
+        // Keyboard Navigation: Tab and Arrow keys through patient table rows
+        window.initKeyboardNavigation = () => {
+            const tableBody = document.querySelector('tbody');
+            if (!tableBody) return;
+
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+                    // Don't interfere with form input
+                    return;
+                }
+
+                const rows = Array.from(tableBody.querySelectorAll('tr'));
+                if (rows.length === 0) return;
+
+                switch (e.key) {
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        currentFocusedRowIndex = Math.min(currentFocusedRowIndex + 1, rows.length - 1);
+                        rows[currentFocusedRowIndex].focus();
+                        rows[currentFocusedRowIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        currentFocusedRowIndex = Math.max(currentFocusedRowIndex - 1, 0);
+                        rows[currentFocusedRowIndex].focus();
+                        rows[currentFocusedRowIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        break;
+                    case 'ArrowRight':
+                    case 'ArrowLeft':
+                        // Navigate between tabs on arrow keys
+                        const tabs = document.querySelectorAll('[role="tab"]');
+                        const currentTabIndex = Array.from(tabs).findIndex(t => t.getAttribute('aria-selected') === 'true');
+                        if (currentTabIndex === -1) return;
+                        
+                        const direction = e.key === 'ArrowRight' ? 1 : -1;
+                        const newTabIndex = Math.max(0, Math.min(currentTabIndex + direction, tabs.length - 1));
+                        
+                        if (newTabIndex !== currentTabIndex) {
+                            e.preventDefault();
+                            tabs[newTabIndex].click();
+                            tabs[newTabIndex].focus();
+                        }
+                        break;
+                    case 'Enter':
+                        // Open modal for focused row
+                        if (currentFocusedRowIndex < rows.length) {
+                            const patientId = rows[currentFocusedRowIndex].getAttribute('data-patient-id');
+                            if (patientId) {
+                                e.preventDefault();
+                                window.openModal(patientId);
+                            }
+                        }
+                        break;
+                }
+            });
+        };
+
+        // Swipe Gesture Detection for mobile tab navigation
+        window.initSwipeNavigation = () => {
+            let touchStartX = 0;
+            let touchEndX = 0;
+            const SWIPE_THRESHOLD = 50;
+
+            document.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+            }, true);
+
+            document.addEventListener('touchend', (e) => {
+                touchEndX = e.changedTouches[0].screenX;
+                const diff = touchStartX - touchEndX;
+
+                if (Math.abs(diff) > SWIPE_THRESHOLD) {
+                    const tabs = document.querySelectorAll('[role="tab"]');
+                    const currentTabIndex = Array.from(tabs).findIndex(t => t.getAttribute('aria-selected') === 'true');
+                    
+                    if (currentTabIndex !== -1) {
+                        // Swipe left (negative diff) → next tab
+                        // Swipe right (positive diff) → previous tab
+                        const direction = diff > 0 ? -1 : 1;
+                        const newTabIndex = Math.max(0, Math.min(currentTabIndex + direction, tabs.length - 1));
+                        
+                        if (newTabIndex !== currentTabIndex) {
+                            tabs[newTabIndex].click();
+                            showToast('👆 Swiped to tab');
+                        }
+                    }
+                }
+            }, true);
+        };
+
+        // Focus Trap in Modals (prevent Tab from escaping modal)
+        window.initModalFocusTrap = () => {
+            const modal = document.getElementById('patient-modal');
+            if (!modal) return;
+
+            modal.addEventListener('keydown', (e) => {
+                if (e.key !== 'Tab') return;
+
+                const focusableElements = modal.querySelectorAll(
+                    'button, [href], input, select, textarea, [role="button"], [role="tab"]'
+                );
+                const firstElement = focusableElements[0];
+                const lastElement = focusableElements[focusableElements.length - 1];
+
+                if (e.shiftKey) {
+                    // Backwards tab
+                    if (document.activeElement === firstElement) {
+                        e.preventDefault();
+                        lastElement.focus();
+                    }
+                } else {
+                    // Forwards tab
+                    if (document.activeElement === lastElement) {
+                        e.preventDefault();
+                        firstElement.focus();
+                    }
+                }
+            });
+        };
+
+        // Mobile Action Bar Initialization
+        window.initMobileActionBar = () => {
+            const actionBar = document.querySelector('.mobile-action-bar');
+            if (!actionBar) return;
+
+            const addBtn = actionBar.querySelector('[data-action="add"]');
+            const archiveBtn = actionBar.querySelector('[data-action="archive"]');
+            const deleteBtn = actionBar.querySelector('[data-action="delete"]');
+
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    window.openModal();
+                });
+            }
+
+            if (archiveBtn) {
+                archiveBtn.addEventListener('click', () => {
+                    const selected = Array.from(selectedPatientIds);
+                    if (selected.length === 0) {
+                        showToast('⚠️  Select patients to archive');
+                        return;
+                    }
+                    if (confirm(`Archive ${selected.length} patient(s)?`)) {
+                        selected.forEach(id => window.toggleArchive(id, true));
+                    }
+                });
+            }
+
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', () => {
+                    const selected = Array.from(selectedPatientIds);
+                    if (selected.length === 0) {
+                        showToast('⚠️  Select patients to delete');
+                        return;
+                    }
+                    if (confirm(`Delete ${selected.length} patient(s)? This cannot be undone.`)) {
+                        selected.forEach(id => window.deletePatient(id));
+                    }
+                });
+            }
+        };
+
+        // Respect User's Motion Preferences
+        window.initReducedMotionSupport = () => {
+            const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            
+            if (prefersReducedMotion) {
+                document.documentElement.classList.add('reduce-motion');
+                console.log('✓ Reduced motion detected - animations disabled');
+            }
+
+            // Listen for changes
+            window.matchMedia('(prefers-reduced-motion: reduce)').addListener((e) => {
+                if (e.matches) {
+                    document.documentElement.classList.add('reduce-motion');
+                } else {
+                    document.documentElement.classList.remove('reduce-motion');
+                }
+            });
+        };
+
+        // Page-level focus management
+        window.focusMainContent = () => {
+            const mainContent = document.getElementById('main-content');
+            if (mainContent) {
+                mainContent.focus();
+                mainContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+
+        // Screen reader announcements
+        window.announceToScreenReader = (message) => {
+            const announcementZone = document.createElement('div');
+            announcementZone.setAttribute('role', 'alert');
+            announcementZone.setAttribute('aria-live', 'polite');
+            announcementZone.className = 'sr-only';
+            announcementZone.textContent = message;
+            document.body.appendChild(announcementZone);
+            
+            setTimeout(() => {
+                announcementZone.remove();
+            }, 3000);
+        };
+
+        // Initialize all Phase 4 features on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            window.initKeyboardNavigation();
+            window.initSwipeNavigation();
+            window.initModalFocusTrap();
+            window.initMobileActionBar();
+            window.initReducedMotionSupport();
+            console.log('✓ Phase 4: Mobile & Accessibility features initialized');
+        });
+
+        console.log('✓ Phase 5: Advanced Features initialized (Timeline, Analytics, PDF, Audit, Procedures, Shift Reports)');
+    </script>
+</body>
+</html>
+        let currentFocusedRowIndex = 0;
+
+        // Keyboard Navigation: Tab and Arrow keys through patient table rows
+        window.initKeyboardNavigation = () => {
+            const tableBody = document.querySelector('tbody');
+            if (!tableBody) return;
+
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+                    // Don't interfere with form input
+                    return;
+                }
+
+                const rows = Array.from(tableBody.querySelectorAll('tr'));
+                if (rows.length === 0) return;
+
+                switch (e.key) {
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        currentFocusedRowIndex = Math.min(currentFocusedRowIndex + 1, rows.length - 1);
+                        rows[currentFocusedRowIndex].focus();
+                        rows[currentFocusedRowIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        currentFocusedRowIndex = Math.max(currentFocusedRowIndex - 1, 0);
+                        rows[currentFocusedRowIndex].focus();
+                        rows[currentFocusedRowIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        break;
+                    case 'ArrowRight':
+                    case 'ArrowLeft':
+                        // Navigate between tabs on arrow keys
+                        const tabs = document.querySelectorAll('[role="tab"]');
+                        const currentTabIndex = Array.from(tabs).findIndex(t => t.getAttribute('aria-selected') === 'true');
+                        if (currentTabIndex === -1) return;
+                        
+                        const direction = e.key === 'ArrowRight' ? 1 : -1;
+                        const newTabIndex = Math.max(0, Math.min(currentTabIndex + direction, tabs.length - 1));
+                        
+                        if (newTabIndex !== currentTabIndex) {
+                            e.preventDefault();
+                            tabs[newTabIndex].click();
+                            tabs[newTabIndex].focus();
+                        }
+                        break;
+                    case 'Enter':
+                        // Open modal for focused row
+                        if (currentFocusedRowIndex < rows.length) {
+                            const patientId = rows[currentFocusedRowIndex].getAttribute('data-patient-id');
+                            if (patientId) {
+                                e.preventDefault();
+                                window.openModal(patientId);
+                            }
+                        }
+                        break;
+                }
+            });
+        };
+
+        // Swipe Gesture Detection for mobile tab navigation
+        window.initSwipeNavigation = () => {
+            let touchStartX = 0;
+            let touchEndX = 0;
+            const SWIPE_THRESHOLD = 50;
+
+            document.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+            }, true);
+
+            document.addEventListener('touchend', (e) => {
+                touchEndX = e.changedTouches[0].screenX;
+                const diff = touchStartX - touchEndX;
+
+                if (Math.abs(diff) > SWIPE_THRESHOLD) {
+                    const tabs = document.querySelectorAll('[role="tab"]');
+                    const currentTabIndex = Array.from(tabs).findIndex(t => t.getAttribute('aria-selected') === 'true');
+                    
+                    if (currentTabIndex !== -1) {
+                        // Swipe left (negative diff) → next tab
+                        // Swipe right (positive diff) → previous tab
+                        const direction = diff > 0 ? -1 : 1;
+                        const newTabIndex = Math.max(0, Math.min(currentTabIndex + direction, tabs.length - 1));
+                        
+                        if (newTabIndex !== currentTabIndex) {
+                            tabs[newTabIndex].click();
+                            showToast('👆 Swiped to tab');
+                        }
+                    }
+                }
+            }, true);
+        };
+
+        // Focus Trap in Modals (prevent Tab from escaping modal)
+        window.initModalFocusTrap = () => {
+            const modal = document.getElementById('patient-modal');
+            if (!modal) return;
+
+            modal.addEventListener('keydown', (e) => {
+                if (e.key !== 'Tab') return;
+
+                const focusableElements = modal.querySelectorAll(
+                    'button, [href], input, select, textarea, [role="button"], [role="tab"]'
+                );
+                const firstElement = focusableElements[0];
+                const lastElement = focusableElements[focusableElements.length - 1];
+
+                if (e.shiftKey) {
+                    // Backwards tab
+                    if (document.activeElement === firstElement) {
+                        e.preventDefault();
+                        lastElement.focus();
+                    }
+                } else {
+                    // Forwards tab
+                    if (document.activeElement === lastElement) {
+                        e.preventDefault();
+                        firstElement.focus();
+                    }
+                }
+            });
+        };
+
+        // Mobile Action Bar Initialization
+        window.initMobileActionBar = () => {
+            const actionBar = document.querySelector('.mobile-action-bar');
+            if (!actionBar) return;
+
+            const addBtn = actionBar.querySelector('[data-action="add"]');
+            const archiveBtn = actionBar.querySelector('[data-action="archive"]');
+            const deleteBtn = actionBar.querySelector('[data-action="delete"]');
+
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    window.openModal();
+                });
+            }
+
+            if (archiveBtn) {
+                archiveBtn.addEventListener('click', () => {
+                    const selected = Array.from(selectedPatientIds);
+                    if (selected.length === 0) {
+                        showToast('⚠️  Select patients to archive');
+                        return;
+                    }
+                    if (confirm(`Archive ${selected.length} patient(s)?`)) {
+                        selected.forEach(id => window.toggleArchive(id, true));
+                    }
+                });
+            }
+
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', () => {
+                    const selected = Array.from(selectedPatientIds);
+                    if (selected.length === 0) {
+                        showToast('⚠️  Select patients to delete');
+                        return;
+                    }
+                    if (confirm(`Delete ${selected.length} patient(s)? This cannot be undone.`)) {
+                        selected.forEach(id => window.deletePatient(id));
+                    }
+                });
+            }
+        };
+
+        // Respect User's Motion Preferences
+        window.initReducedMotionSupport = () => {
+            const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            
+            if (prefersReducedMotion) {
+                document.documentElement.classList.add('reduce-motion');
+                console.log('✓ Reduced motion detected - animations disabled');
+            }
+
+            // Listen for changes
+            window.matchMedia('(prefers-reduced-motion: reduce)').addListener((e) => {
+                if (e.matches) {
+                    document.documentElement.classList.add('reduce-motion');
+                } else {
+                    document.documentElement.classList.remove('reduce-motion');
+                }
+            });
+        };
+
+        // Page-level focus management
+        window.focusMainContent = () => {
+            const mainContent = document.getElementById('main-content');
+            if (mainContent) {
+                mainContent.focus();
+                mainContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+
+        // Screen reader announcements
+        window.announceToScreenReader = (message) => {
+            const announcementZone = document.createElement('div');
+            announcementZone.setAttribute('role', 'alert');
+            announcementZone.setAttribute('aria-live', 'polite');
+            announcementZone.className = 'sr-only';
+            announcementZone.textContent = message;
+            document.body.appendChild(announcementZone);
+            
+            setTimeout(() => {
+                announcementZone.remove();
+            }, 3000);
+        };
+
+        // Initialize all Phase 4 features on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            window.initKeyboardNavigation();
+            window.initSwipeNavigation();
+            window.initModalFocusTrap();
+            window.initMobileActionBar();
+            window.initReducedMotionSupport();
+            console.log('✓ Phase 4: Mobile & Accessibility features initialized');
+        });
+
+        // ============================================================================
+        // PHASE 5: ADVANCED FEATURES (Timeline, PDF, Analytics, Audit, Procedures)
+        // ============================================================================
+
+        // Timeline Management
+        let patientTimeline = {};
+
+        window.loadPatientTimeline = async () => {
+            const mrn = document.getElementById('timeline-filter-mrn')?.value || '';
+            const fromDate = document.getElementById('timeline-filter-from')?.value || '';
+
+            if (!mrn) {
+                showToast('⚠️  Enter MRN to load timeline');
+                return;
+            }
+
+            const filtered = patients.filter(p => p.mrn === mrn);
+            if (filtered.length === 0) {
+                showToast('❌ No records found for MRN: ' + mrn);
+                return;
+            }
+
+            // Sort by date descending (newest first)
+            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            // Render timeline
+            renderTimeline(filtered);
+            showToast(`✓ Loaded ${filtered.length} records`);
+        };
+
+        window.renderTimeline = (recordList) => {
+            const container = document.getElementById('timeline-content');
+            if (!container) return;
+
+            container.innerHTML = recordList.map((p, idx) => {
+                const statusBg = STATUS_COLORS[p.procedureStatus]?.bgHeavy || 'bg-slate-200';
+                const statusText = STATUS_COLORS[p.procedureStatus]?.text || 'text-slate-700';
+                
+                return `
+                    <div class="timeline-event">
+                        <div class="timeline-date">${new Date(p.date).toLocaleDateString()}</div>
+                        <div class="timeline-status ${statusBg} ${statusText}">${p.procedureStatus || 'To-Do'}</div>
+                        <div class="timeline-notes">
+                            <strong>Room:</strong> ${p.room} | <strong>Hospital:</strong> ${p.hospital}
+                            <br><strong>Plan:</strong> ${p.plan || 'N/A'}
+                            <br><strong>Findings:</strong> ${p.findingsText || 'None documented'}
+                            ${p.pending ? `<br><strong>Pending:</strong> ${p.pending}` : ''}
+                            ${p.followUp ? `<br><strong>Follow-up:</strong> ${p.followUp}` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        // Analytics & Statistics
+        window.loadAnalyticsDashboard = () => {
+            const container = document.getElementById('analytics-content');
+            if (!container) return;
+
+            const stats = window.calculateAnalytics();
+            container.innerHTML = `
+                <div class="analytics-card">
+                    <div class="analytics-card-title">Total Patients</div>
+                    <div class="analytics-card-value">${stats.total}</div>
+                    <div class="analytics-card-subtitle">Active records</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-card-title">STAT Cases</div>
+                    <div class="analytics-card-value">${stats.statCount}</div>
+                    <div class="analytics-trend trend-up">↑ Urgent</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-card-title">Surgical Cases</div>
+                    <div class="analytics-card-value">${stats.surgicalCount}</div>
+                    <div class="analytics-card-subtitle">${((stats.surgicalCount / stats.total) * 100).toFixed(1)}%</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-card-title">Avg LOS</div>
+                    <div class="analytics-card-value">${stats.avgLOS.toFixed(1)}</div>
+                    <div class="analytics-card-subtitle">days in hospital</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-card-title">Pending Tests</div>
+                    <div class="analytics-card-value">${stats.pendingCount}</div>
+                    <div class="analytics-trend trend-down">↓ Need follow-up</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-card-title">Users Today</div>
+                    <div class="analytics-card-value">${new Set(AuditLogger.getLogs().filter(l => {
+                        const logDate = new Date(l.timestamp);
+                        const today = new Date();
+                        return logDate.toDateString() === today.toDateString();
+                    }).map(l => l.userId)).size}</div>
+                    <div class="analytics-card-subtitle">active sessions</div>
+                </div>
+            `;
+        };
+
+        window.calculateAnalytics = () => {
+            const total = patients.length;
+            const statCount = patients.filter(p => p.priority === 'yes' || p.priority === true).length;
+            const surgicalCount = patients.filter(p => PROC_KEYWORDS.test(p.plan || '')).length;
+            const pendingCount = patients.filter(p => p.pending && p.pending.trim()).length;
+
+            let totalLOS = 0;
+            let losCount = 0;
+            patients.forEach(p => {
+                if (p.date) {
+                    const los = window.calculateLOS(p.date);
+                    if (!isNaN(los)) {
+                        totalLOS += los;
+                        losCount++;
+                    }
+                }
+            });
+
+            return {
+                total,
+                statCount,
+                surgicalCount,
+                pendingCount,
+                avgLOS: losCount > 0 ? totalLOS / losCount : 0
+            };
+        };
+
+        // PDF Report Generation
+        window.generatePDFReport = async () => {
+            const reportType = document.getElementById('report-type')?.value || 'daily';
+            const reportDate = document.getElementById('report-date')?.value || new Date().toISOString().split('T')[0];
+            const hospital = document.getElementById('report-hospital')?.value || '';
+
+            let filtered = patients.filter(p => p.date === reportDate);
+            if (hospital) filtered = filtered.filter(p => p.hospital === hospital);
+
+            if (filtered.length === 0) {
+                showToast('❌ No records for selected date/hospital');
+                return;
+            }
+
+            // Build PDF content
+            const titleMap = {
+                'daily': '📋 Daily Rounding Report',
+                'surgical': '🔪 Surgical Procedures',
+                'patient-summary': '👥 Patient Summary',
+                'hospital-census': '🏥 Hospital Census',
+                'shift-handoff': '🔄 Shift Handoff'
+            };
+
+            let htmlContent = `
+                <h1>${titleMap[reportType]}</h1>
+                <p><strong>Date:</strong> ${new Date(reportDate).toLocaleDateString()}</p>
+                <p><strong>Hospital:</strong> ${hospital || 'All Hospitals'}</p>
+                <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+                <hr>
+            `;
+
+            filtered.forEach((p, idx) => {
+                htmlContent += `
+                    <div style="page-break-inside: avoid; margin-bottom: 20px; border: 1px solid #ddd; padding: 10px;">
+                        <p><strong>[${idx + 1}] ${p.room} - ${p.name}</strong></p>
+                        <p>MRN: ${p.mrn} | DOB: ${p.dob} | Hospital: ${p.hospital}</p>
+                        <p><strong>Plan:</strong> ${p.plan || 'N/A'}</p>
+                        <p><strong>Findings:</strong> ${p.findingsText || 'None'}</p>
+                        ${p.pending ? `<p><strong>Pending:</strong> ${p.pending}</p>` : ''}
+                        <p><strong>Supervising MD:</strong> ${p.supervisingMd || 'TBD'}</p>
+                        <p><strong>Status:</strong> ${p.procedureStatus}</p>
+                    </div>
+                `;
+            });
+
+            // Show preview (in production, this would use jsPDF)
+            const preview = document.getElementById('pdf-preview');
+            if (preview) {
+                preview.innerHTML = `<div style="white-space: pre-wrap; font-family: monospace; font-size: 12px;">${htmlContent}</div>`;
+            }
+
+            showToast(`✓ PDF report ready (${filtered.length} records)`);
+        };
+
+        // Audit Logging
+        window.loadAuditLogs = async () => {
+            const actionFilter = document.getElementById('audit-filter-action')?.value || '';
+            const fromDate = document.getElementById('audit-filter-from')?.value || '';
+            const toDate = document.getElementById('audit-filter-to')?.value || '';
+
+            let logs = AuditLogger.getLogs();
+
+            if (actionFilter) logs = logs.filter(l => l.action === actionFilter);
+            if (fromDate) logs = logs.filter(l => new Date(l.timestamp) >= new Date(fromDate));
+            if (toDate) logs = logs.filter(l => new Date(l.timestamp) <= new Date(toDate));
+
+            // Sort by timestamp descending
+            logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            const tbody = document.getElementById('audit-log-body');
+            if (!tbody) return;
+
+            tbody.innerHTML = logs.slice(0, 100).map(log => `
+                <tr>
+                    <td>${new Date(log.timestamp).toLocaleString()}</td>
+                    <td>${log.userId || 'Unknown'}</td>
+                    <td><span class="audit-action-${log.action}">${log.action.toUpperCase()}</span></td>
+                    <td>${log.recordId?.substring(0, 12) || '-'}</td>
+                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${log.details || JSON.stringify(log.changes || {}).substring(0, 50)}</td>
+                </tr>
+            `).join('');
+
+            showToast(`✓ Loaded ${logs.length} audit logs`);
+        };
+
+        // Procedure Log Management
+        let procedureFilter = 'all';
+
+        window.filterProcedures = (type) => {
+            procedureFilter = type;
+            window.renderProcedureLog();
+        };
+
+        window.renderProcedureLog = () => {
+            const container = document.getElementById('procedure-log-content');
+            if (!container) return;
+
+            let filtered = patients.filter(p => PROC_KEYWORDS.test(p.plan || ''));
+
+            if (procedureFilter !== 'all') {
+                const filterRegex = new RegExp(procedureFilter, 'i');
+                filtered = filtered.filter(p => filterRegex.test(p.plan || ''));
+            }
+
+            // Sort by date descending
+            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            container.innerHTML = filtered.map(p => {
+                const procType = procedureFilter === 'all' 
+                    ? (p.plan.match(/(cysto|stent|turbt|laser|robotic|biopsy)/i)?.[0] || 'procedure').toUpperCase()
+                    : procedureFilter.toUpperCase();
+                
+                return `
+                    <div class="procedure-log-item">
+                        <div class="procedure-log-date">${new Date(p.date).toLocaleDateString()}</div>
+                        <div class="procedure-log-type">${procType}</div>
+                        <div><strong>${p.name}</strong> (${p.mrn}) - Room ${p.room}</div>
+                        <div class="procedure-log-description">${p.plan}</div>
+                        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #9ca3af;">
+                            Status: <span style="font-weight: bold;">${p.procedureStatus}</span> | 
+                            Hospital: ${p.hospital} | 
+                            MD: ${p.supervisingMd || 'TBD'}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        // Shift Report Generation
+        window.generateShiftReport = async () => {
+            const shiftDate = document.getElementById('shift-report-date')?.value || new Date().toISOString().split('T')[0];
+            const startTime = document.getElementById('shift-start-time')?.value || '06:00';
+            const endTime = document.getElementById('shift-end-time')?.value || '18:00';
+
+            const dayRecords = patients.filter(p => p.date === shiftDate);
+            if (dayRecords.length === 0) {
+                showToast('⚠️  No records for selected date');
+                return;
+            }
+
+            const hospitals = [...new Set(dayRecords.map(p => p.hospital))];
+            const surgicalCount = dayRecords.filter(p => PROC_KEYWORDS.test(p.plan || '')).length;
+            const onCallProvider = globalSettings.onCall || 'TBD';
+
+            const container = document.getElementById('shift-report-content');
+            if (!container) return;
+
+            container.innerHTML = `
+                <div class="shift-report">
+                    <div class="shift-header">
+                        <div class="shift-info-item">
+                            <div class="shift-info-label">📅 Date</div>
+                            <div class="shift-info-value">${new Date(shiftDate).toLocaleDateString()}</div>
+                        </div>
+                        <div class="shift-info-item">
+                            <div class="shift-info-label">🕐 Shift Time</div>
+                            <div class="shift-info-value">${startTime} - ${endTime}</div>
+                        </div>
+                        <div class="shift-info-item">
+                            <div class="shift-info-label">👨‍⚕️ On-Call</div>
+                            <div class="shift-info-value">${onCallProvider}</div>
+                        </div>
+                        <div class="shift-info-item">
+                            <div class="shift-info-label">👥 Total Patients</div>
+                            <div class="shift-info-value">${dayRecords.length}</div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <h4 style="font-weight: bold; margin-bottom: 0.5rem;">Hospital Breakdown</h4>
+                        ${hospitals.map(h => {
+                            const count = dayRecords.filter(p => p.hospital === h).length;
+                            return `<div class="shift-summary-item"><span>${h}</span><span style="font-weight: bold;">${count} patient${count !== 1 ? 's' : ''}</span></div>`;
+                        }).join('')}
+                    </div>
+                    <div>
+                        <h4 style="font-weight: bold; margin-bottom: 0.5rem;">Summary</h4>
+                        <div class="shift-summary-item"><span>Surgical Procedures</span><span style="font-weight: bold;">${surgicalCount}</span></div>
+                        <div class="shift-summary-item"><span>Pending Tests</span><span style="font-weight: bold;">${dayRecords.filter(p => p.pending).length}</span></div>
+                        <div class="shift-summary-item"><span>Follow-ups</span><span style="font-weight: bold;">${dayRecords.filter(p => p.followUp).length}</span></div>
+                    </div>
+                </div>
+            `;
+
+            showToast('✓ Shift report generated');
+        };
+
+        console.log('✓ Phase 5: Advanced Features initialized (Timeline, Analytics, PDF, Audit, Procedures, Shift Reports)');
     </script>
 </body>
 </html>
