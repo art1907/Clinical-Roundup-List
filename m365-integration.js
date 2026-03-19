@@ -98,6 +98,15 @@ let msalInstance = null;
 let currentAccount = null;
 let pollTimer = null;
 
+function parseBoolish(value) {
+    if (value === true || value === 1) return true;
+    if (typeof value === 'string') {
+        const v = value.trim().toLowerCase();
+        return v === 'true' || v === 'yes' || v === 'y' || v === '1' || v === 'stat' || v === 'urgent';
+    }
+    return false;
+}
+
 function initializeMSAL() {
     try {
         msalInstance = new msal.PublicClientApplication({
@@ -444,10 +453,13 @@ async function api_fetchPatients(dateFilter = null) {
         
         const response = await graphRequest(endpoint);
         
-        const patients = response.value.map(item => ({
+        const patients = response.value.map(item => {
+            const rawPriority = item.fields.Priority ?? item.fields.Stat ?? item.fields.STAT ?? item.fields.StatPriority ?? item.fields.IsSTAT;
+            const statValue = parseBoolish(rawPriority);
+            return ({
             // Keep STAT compatibility across app variants (stat and priority)
-            stat: item.fields.Priority === true || item.fields.Priority === 'Yes' || item.fields.Priority === 'true',
-            priority: item.fields.Priority === true || item.fields.Priority === 'Yes' || item.fields.Priority === 'true',
+            stat: statValue,
+            priority: statValue,
             id: item.id,
             room: item.fields.Room || '',
             date: item.fields.Date || '',
@@ -472,9 +484,10 @@ async function api_fetchPatients(dateFilter = null) {
             cptPrimary: item.fields.CPTPrimary || '',
             icdPrimary: item.fields.ICDPrimary || '',
             chargeCodesSecondary: item.fields.ChargeCodesSecondary ? JSON.parse(item.fields.ChargeCodesSecondary) : [],
-            archived: item.fields.Archived === true || item.fields.Archived === 'Yes',
+            archived: parseBoolish(item.fields.Archived),
             lastUpdated: item.fields.Modified || item.fields.Created
-        }));
+        });
+        });
         
         // Cache in localStorage
         cacheData('patients', patients);
@@ -494,9 +507,8 @@ async function api_normalizePriorityFields(options = {}) {
     const siteId = M365_CONFIG.sharepoint.siteId;
 
     const normalizePriorityValue = (raw) => {
-        if (forceNo) return 'No';
-        if (raw === 'Yes' || raw === true || raw === 'true' || raw === 1 || raw === '1') return 'Yes';
-        return 'No';
+        if (forceNo) return false;
+        return parseBoolish(raw);
     };
 
     const endpoint = `/sites/${siteId}/lists/${listId}/items?expand=fields&$top=1000`;
@@ -508,13 +520,14 @@ async function api_normalizePriorityFields(options = {}) {
     const failed = [];
 
     for (const item of items) {
-        const currentPriority = item?.fields?.Priority;
+        const priorityFieldKey = ['Priority', 'Stat', 'STAT', 'StatPriority', 'IsSTAT']
+            .find((k) => Object.prototype.hasOwnProperty.call(item?.fields || {}, k)) || 'Priority';
+
+        const currentPriority = item?.fields?.[priorityFieldKey];
         const nextPriority = normalizePriorityValue(currentPriority);
 
-        // Accept both SharePoint Choice/YesNo representations as already-normalized.
-        const isAlreadyNormalized = (currentPriority === nextPriority)
-            || (nextPriority === 'Yes' && (currentPriority === true || currentPriority === 'true' || currentPriority === 1 || currentPriority === '1'))
-            || (nextPriority === 'No' && (currentPriority === false || currentPriority === 'false' || currentPriority === 0 || currentPriority === '0' || currentPriority == null || currentPriority === ''));
+        // Treat semantic match as already normalized.
+        const isAlreadyNormalized = parseBoolish(currentPriority) === nextPriority;
 
         if (isAlreadyNormalized) {
             skipped += 1;
@@ -523,7 +536,30 @@ async function api_normalizePriorityFields(options = {}) {
 
         if (!dryRun) {
             try {
-                await graphRequest(`/sites/${siteId}/lists/${listId}/items/${item.id}/fields`, 'PATCH', { Priority: nextPriority });
+                const endpointPatch = `/sites/${siteId}/lists/${listId}/items/${item.id}/fields`;
+                const candidates = [
+                    { [priorityFieldKey]: nextPriority },
+                    { [priorityFieldKey]: nextPriority ? 'Yes' : 'No' },
+                    { [priorityFieldKey]: nextPriority ? 'STAT' : 'Normal' },
+                    { Priority: nextPriority },
+                    { Priority: nextPriority ? 'Yes' : 'No' },
+                    { Stat: nextPriority }
+                ];
+
+                let patched = false;
+                for (const payload of candidates) {
+                    try {
+                        await graphRequest(endpointPatch, 'PATCH', payload);
+                        patched = true;
+                        break;
+                    } catch (_) {
+                        // try next candidate
+                    }
+                }
+
+                if (!patched) {
+                    throw new Error('Unable to patch Priority using any supported payload shape');
+                }
             } catch (err) {
                 failed.push({ id: item.id, error: String(err?.message || err) });
                 continue;
@@ -557,7 +593,7 @@ async function api_savePatient(patientData) {
         return dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00Z`;
     };
 
-    const normalizeBool = (val) => val === true || val === 'true' || val === 'Yes' || val === 1;
+    const normalizeBool = (val) => parseBoolish(val);
 
     const visitTimeValue = patientData.visitTime || (isUpdate ? '' : new Date().toISOString());
     const visitKeyValue = patientData.visitKey || (isUpdate ? '' : `${patientData.mrn}|${patientData.date}|${visitTimeValue}`);
@@ -579,12 +615,12 @@ async function api_savePatient(patientData) {
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
-        Priority: normalizeBool(patientData.stat) || normalizeBool(patientData.priority) ? 'Yes' : 'No',
+        Priority: normalizeBool(patientData.stat) || normalizeBool(patientData.priority),
         ProcedureStatus: patientData.procedureStatus || 'To-Do',
         CPTPrimary: patientData.cptPrimary || '',
         ICDPrimary: patientData.icdPrimary || '',
         ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '[]',
-        Archived: normalizeBool(patientData.archived) ? 'Yes' : 'No'
+        Archived: normalizeBool(patientData.archived)
     };
 
     let fieldsToSend = { ...fields };
@@ -678,10 +714,35 @@ async function api_savePatient(patientData) {
                             await graphRequest(endpoint, 'PATCH', { [key]: value });
                             validEntries.push([key, value]);
                         } catch (fieldErr) {
-                            invalidKeys.push(key);
-                            const unknownFieldFromSingle = extractUnknownFieldName(fieldErr);
-                            if (unknownFieldFromSingle) {
-                                UNSUPPORTED_PATIENT_FIELDS.add(unknownFieldFromSingle);
+                            // Try alternative representations for schema-variant fields.
+                            let recovered = false;
+                            if (key === 'Priority' || key === 'Archived') {
+                                const asBool = parseBoolish(value);
+                                const alternates = [
+                                    asBool,
+                                    asBool ? 'Yes' : 'No',
+                                    asBool ? 'STAT' : 'Normal',
+                                    asBool ? 'true' : 'false'
+                                ];
+                                for (const alt of alternates) {
+                                    try {
+                                        await graphRequest(endpoint, 'PATCH', { [key]: alt });
+                                        recovered = true;
+                                        break;
+                                    } catch (_) {
+                                        // keep trying alternatives
+                                    }
+                                }
+                            }
+
+                            if (!recovered) {
+                                invalidKeys.push(key);
+                                const unknownFieldFromSingle = extractUnknownFieldName(fieldErr);
+                                if (unknownFieldFromSingle) {
+                                    UNSUPPORTED_PATIENT_FIELDS.add(unknownFieldFromSingle);
+                                }
+                            } else {
+                                validEntries.push([key, value]);
                             }
                         }
                     }
