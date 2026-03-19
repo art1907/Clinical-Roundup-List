@@ -573,6 +573,34 @@ async function api_savePatient(patientData) {
         return patch;
     };
 
+    const extractUnknownFieldName = (err) => {
+        const message = String(err?.message || '');
+        const match = message.match(/Field '([^']+)' is not recognized/i);
+        return match ? match[1] : null;
+    };
+
+    const patchFieldsWithRetry = async (endpoint, payload) => {
+        const mutablePayload = { ...payload };
+        let attempts = 0;
+
+        while (attempts < 8) {
+            attempts += 1;
+            try {
+                return await graphRequest(endpoint, 'PATCH', mutablePayload);
+            } catch (err) {
+                const unknownField = extractUnknownFieldName(err);
+                if (unknownField && Object.prototype.hasOwnProperty.call(mutablePayload, unknownField)) {
+                    console.warn(`SAVE patch retry: dropping unknown field '${unknownField}' and retrying`);
+                    delete mutablePayload[unknownField];
+                    continue;
+                }
+                throw err;
+            }
+        }
+
+        throw new Error('PATCH retry limit exceeded while removing unknown SharePoint fields');
+    };
+
     try {
         if (patientData.id && patientData.id.startsWith('local-')) {
             console.log('SAVE create (local id)');
@@ -583,14 +611,14 @@ async function api_savePatient(patientData) {
             const patchFields = buildPatchFields();
             if (Object.keys(patchFields).length > 0) {
                 console.log('SAVE patch after create (local id)', Object.keys(patchFields));
-                await graphRequest(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, 'PATCH', patchFields);
+                await patchFieldsWithRetry(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, patchFields);
             }
             console.log('SAVE created id', newId);
             return newId;
         } else if (patientData.id) {
             console.log('SAVE update id', patientData.id);
             const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientData.id}/fields`;
-            const response = await graphRequest(endpoint, 'PATCH', fieldsToSend);
+            const response = await patchFieldsWithRetry(endpoint, fieldsToSend);
             console.log('SAVE patch response', response);
             return patientData.id;
         } else {
@@ -603,7 +631,7 @@ async function api_savePatient(patientData) {
             if (Object.keys(patchFields).length > 0) {
                 console.log('SAVE patch after create (no id)', Object.keys(patchFields));
                 try {
-                    await graphRequest(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, 'PATCH', patchFields);
+                    await patchFieldsWithRetry(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, patchFields);
                 } catch (patchErr) {
                     console.error('SAVE patch failed after create; isolating invalid fields', patchErr);
                     const invalidFields = [];
