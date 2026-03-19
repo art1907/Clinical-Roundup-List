@@ -504,7 +504,6 @@ async function api_savePatient(patientData) {
         Date: normalizeDateForSharePoint(patientData.date || ''),
         Title: patientData.name || '',
         Name: patientData.name || '',
-        CreatedBy: patientData.createdBy || '',
         DateofBirth: patientData.dob || '',
         MRN: patientData.mrn || '',
         Hospital_x0028_s_x0029_: patientData.hospital || '',
