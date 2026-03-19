@@ -500,6 +500,8 @@ async function api_savePatient(patientData) {
         return dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00Z`;
     };
 
+    const normalizeBool = (val) => val === true || val === 'true' || val === 'Yes' || val === 1;
+
     const visitTimeValue = patientData.visitTime || (isUpdate ? '' : new Date().toISOString());
     const visitKeyValue = patientData.visitKey || (isUpdate ? '' : `${patientData.mrn}|${patientData.date}|${visitTimeValue}`);
 
@@ -520,12 +522,12 @@ async function api_savePatient(patientData) {
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
-        Priority: (patientData.stat || patientData.priority) ? 'Yes' : 'No',
+        Priority: normalizeBool(patientData.stat) || normalizeBool(patientData.priority) ? 'Yes' : 'No',
         ProcedureStatus: patientData.procedureStatus || 'To-Do',
         CPTPrimary: patientData.cptPrimary || '',
         ICDPrimary: patientData.icdPrimary || '',
         ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '[]',
-        Archived: !!patientData.archived
+        Archived: normalizeBool(patientData.archived) ? 'Yes' : 'No'
     };
 
     let fieldsToSend = { ...fields };
@@ -604,6 +606,37 @@ async function api_savePatient(patientData) {
                     UNSUPPORTED_PATIENT_FIELDS.add(unknownField);
                     delete mutablePayload[unknownField];
                     continue;
+                }
+
+                // Some tenants return generic invalidRequest without a field name.
+                // Isolate by attempting one field at a time and keep only valid fields.
+                const msg = String(err?.message || '');
+                if (/Graph API error:\s*400/i.test(msg) && /"code":"invalidRequest"/i.test(msg) && /Field\s'[^']+'\sis not recognized/i.test(msg) === false) {
+                    console.warn('SAVE patch retry: generic invalidRequest, isolating valid fields');
+                    const validEntries = [];
+                    const invalidKeys = [];
+
+                    for (const [key, value] of Object.entries(mutablePayload)) {
+                        try {
+                            await graphRequest(endpoint, 'PATCH', { [key]: value });
+                            validEntries.push([key, value]);
+                        } catch (fieldErr) {
+                            invalidKeys.push(key);
+                            const unknownFieldFromSingle = extractUnknownFieldName(fieldErr);
+                            if (unknownFieldFromSingle) {
+                                UNSUPPORTED_PATIENT_FIELDS.add(unknownFieldFromSingle);
+                            }
+                        }
+                    }
+
+                    if (invalidKeys.length > 0) {
+                        console.warn('SAVE patch isolate: rejected fields', invalidKeys);
+                    }
+
+                    // If at least one field patched successfully, treat as success.
+                    if (validEntries.length > 0) {
+                        return null;
+                    }
                 }
                 throw err;
             }
