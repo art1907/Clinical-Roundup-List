@@ -88,6 +88,7 @@ const M365_CONFIG = {
 
 const VISIT_TIME_FIELD = (M365_CONFIG.sharepoint.fields && M365_CONFIG.sharepoint.fields.visitTime) || 'VisitTime';
 let patientDocsDriveIdCache = null;
+const UNSUPPORTED_PATIENT_FIELDS = new Set();
 
 // =============================================================================
 // MSAL INITIALIZATION
@@ -444,6 +445,9 @@ async function api_fetchPatients(dateFilter = null) {
         const response = await graphRequest(endpoint);
         
         const patients = response.value.map(item => ({
+            // Keep STAT compatibility across app variants (stat and priority)
+            stat: item.fields.Priority === true || item.fields.Priority === 'Yes' || item.fields.Priority === 'true',
+            priority: item.fields.Priority === true || item.fields.Priority === 'Yes' || item.fields.Priority === 'true',
             id: item.id,
             room: item.fields.Room || '',
             date: item.fields.Date || '',
@@ -516,6 +520,7 @@ async function api_savePatient(patientData) {
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
+        Priority: (patientData.stat || patientData.priority) ? 'Yes' : 'No',
         ProcedureStatus: patientData.procedureStatus || 'To-Do',
         CPTPrimary: patientData.cptPrimary || '',
         ICDPrimary: patientData.icdPrimary || '',
@@ -524,6 +529,11 @@ async function api_savePatient(patientData) {
     };
 
     let fieldsToSend = { ...fields };
+
+    // Skip fields already known to be unsupported in this tenant/list schema.
+    UNSUPPORTED_PATIENT_FIELDS.forEach((fieldName) => {
+        delete fieldsToSend[fieldName];
+    });
 
     if (M365_CONFIG.debug && M365_CONFIG.debug.minimalSave) {
         console.warn('DEBUG minimal save disabled; sending full payload');
@@ -591,6 +601,7 @@ async function api_savePatient(patientData) {
                 const unknownField = extractUnknownFieldName(err);
                 if (unknownField && Object.prototype.hasOwnProperty.call(mutablePayload, unknownField)) {
                     console.warn(`SAVE patch retry: dropping unknown field '${unknownField}' and retrying`);
+                    UNSUPPORTED_PATIENT_FIELDS.add(unknownField);
                     delete mutablePayload[unknownField];
                     continue;
                 }
