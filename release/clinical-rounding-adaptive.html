@@ -1030,29 +1030,14 @@
             };
         })();
 
-        // US Federal + Canadian Statutory Holidays
+        // US Federal Holidays
         const FIXED_HOLIDAYS = {
-            '01-01': [{ name: "New Year's Day",              emoji: '🎉' }],
-            '06-19': [{ name: 'Juneteenth',                  emoji: '✊' }],
-            '07-01': [{ name: 'Canada Day',                  emoji: '🍁' }],
-            '07-04': [{ name: 'Independence Day',            emoji: '🎆' }],
-            '09-30': [{ name: 'Truth & Reconciliation Day',  emoji: '🧡' }],
-            '11-11': [{ name: 'Veterans / Remembrance Day',  emoji: '🎖️' }],
-            '12-25': [{ name: 'Christmas Day',               emoji: '🎄' }],
-            '12-26': [{ name: 'Boxing Day',                  emoji: '🎁' }],
+            '01-01': [{ name: "New Year's Day",  emoji: '🎉' }],
+            '06-19': [{ name: 'Juneteenth',       emoji: '✊' }],
+            '07-04': [{ name: 'Independence Day', emoji: '🎆' }],
+            '11-11': [{ name: 'Veterans Day',     emoji: '🎖️' }],
+            '12-25': [{ name: 'Christmas Day',    emoji: '🎄' }],
         };
-
-        function calculateEaster(year) {
-            const a = year % 19, b = Math.floor(year / 100), c = year % 100;
-            const d = Math.floor(b / 4), e = b % 4;
-            const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
-            const h = (19 * a + b - d - g + 15) % 30;
-            const i = Math.floor(c / 4), k = c % 4;
-            const l = (32 + 2 * e + 2 * i - h - k) % 7;
-            const mo = Math.floor((h + l - 7 * (Math.floor((a + 11 * h + 22 * l) / 451)) + 114) / 31);
-            const dy = ((h + l - 7 * (Math.floor((a + 11 * h + 22 * l) / 451)) + 114) % 31) + 1;
-            return new Date(year, mo - 1, dy);
-        }
 
         function getVariableHolidays(year) {
             const holidays = {};
@@ -1074,38 +1059,20 @@
             pres.setDate(pres.getDate() + 14);
             add(pres, "Presidents' Day", '🇺🇸');
 
-            // CA: Good Friday – 2 days before Easter
-            const easter = calculateEaster(year);
-            const gf = new Date(easter); gf.setDate(gf.getDate() - 2);
-            add(gf, 'Good Friday', '✝️');
-
-            // CA: Easter Monday – 1 day after Easter
-            const em = new Date(easter); em.setDate(em.getDate() + 1);
-            add(em, 'Easter Monday', '🐣');
-
-            // CA: Victoria Day – last Monday on or before May 24
-            const vic = new Date(year, 4, 24);
-            while (vic.getDay() !== 1) vic.setDate(vic.getDate() - 1);
-            add(vic, 'Victoria Day', '👑');
-
             // US: Memorial Day – last Monday of May
             const mem = new Date(year, 4, 31);
             while (mem.getDay() !== 1) mem.setDate(mem.getDate() - 1);
             add(mem, 'Memorial Day', '🙏');
 
-            // US + CA: Labor / Labour Day – 1st Monday of September
+            // US: Labor Day – 1st Monday of September
             const lab = new Date(year, 8, 1);
             while (lab.getDay() !== 1) lab.setDate(lab.getDate() + 1);
-            add(lab, 'Labor / Labour Day', '💼');
+            add(lab, 'Labor Day', '💼');
 
-            // CA: Thanksgiving – 2nd Monday of October
-            const caTh = new Date(year, 9, 1);
-            while (caTh.getDay() !== 1) caTh.setDate(caTh.getDate() + 1);
-            caTh.setDate(caTh.getDate() + 7);
-            add(caTh, 'Thanksgiving (CA)', '🍂');
-
-            // US: Columbus Day – 2nd Monday of October (same date as CA Thanksgiving)
-            const col = new Date(caTh);
+            // US: Columbus Day – 2nd Monday of October
+            const col = new Date(year, 9, 1);
+            while (col.getDay() !== 1) col.setDate(col.getDate() + 1);
+            col.setDate(col.getDate() + 7);
             add(col, 'Columbus Day', '⛵');
 
             // US: Thanksgiving – 4th Thursday of November
