@@ -435,6 +435,69 @@ async function api_logAuditEvent(event) {
     }
 }
 
+async function api_fetchAuditLogs(filters = {}) {
+    try {
+        const listId = M365_CONFIG.sharepoint.lists.auditLogs;
+        const siteId = M365_CONFIG.sharepoint.siteId;
+        const fieldsMap = M365_CONFIG.sharepoint.auditFields || {};
+        const endpoint = `/sites/${siteId}/lists/${listId}/items?expand=fields&$top=500`;
+        const response = await graphRequest(endpoint);
+
+        const logs = (response.value || []).map((item) => {
+            const fields = item.fields || {};
+            const detailsRaw = fields[fieldsMap.details || 'Details'] || '';
+            let detailsObj = null;
+            try {
+                detailsObj = detailsRaw ? JSON.parse(detailsRaw) : null;
+            } catch (e) {
+                console.debug('Audit details parse skipped:', e?.message || e);
+                detailsObj = null;
+            }
+
+            return {
+                id: item.id,
+                createdDateTime: item.createdDateTime,
+                timestamp: fields[fieldsMap.timestamp || 'Timestamp'] || item.createdDateTime || '',
+                userId: fields[fieldsMap.userIdentity || 'UserIdentity'] || detailsObj?.userId || 'unknown',
+                userIdentity: fields[fieldsMap.userIdentity || 'UserIdentity'] || detailsObj?.userId || 'unknown',
+                action: fields[fieldsMap.actionType || 'ActionType'] || detailsObj?.action || detailsObj?.type || 'event',
+                type: detailsObj?.type || fields[fieldsMap.actionType || 'ActionType'] || 'event',
+                recordId: fields[fieldsMap.recordId || 'RecordId'] || detailsObj?.recordId || detailsObj?.patientId || '',
+                patientId: detailsObj?.patientId || fields[fieldsMap.recordId || 'RecordId'] || '',
+                fieldChanged: detailsObj?.fieldChanged || '',
+                message: detailsObj?.message || '',
+                errorType: detailsObj?.errorType || '',
+                detailsSummary: detailsObj?.fieldChanged
+                    ? `${detailsObj.fieldChanged} changed`
+                    : (detailsObj?.message || detailsRaw || '-'),
+                details: detailsRaw,
+                source: 'm365'
+            };
+        });
+
+        let filtered = logs;
+        if (filters.fromDate) {
+            const from = new Date(`${filters.fromDate}T00:00:00`).getTime();
+            filtered = filtered.filter((log) => {
+                const t = new Date(log.timestamp).getTime();
+                return Number.isFinite(t) && t >= from;
+            });
+        }
+        if (filters.toDate) {
+            const to = new Date(`${filters.toDate}T23:59:59`).getTime();
+            filtered = filtered.filter((log) => {
+                const t = new Date(log.timestamp).getTime();
+                return Number.isFinite(t) && t <= to;
+            });
+        }
+
+        return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    } catch (err) {
+        console.warn('Audit log fetch failed:', err.message || err);
+        return [];
+    }
+}
+
 // -----------------------------------------------------------------------------
 // PATIENTS
 // -----------------------------------------------------------------------------
@@ -873,12 +936,21 @@ async function api_fetchOnCallSchedule() {
         
         const response = await graphRequest(endpoint);
         
-        const schedule = response.value.map(item => ({
-            id: item.id,
-            date: item.fields.Date || '',
-            provider: item.fields.Provider || '',
-            hospitals: item.fields.Hospitals || ''
-        }));
+        const schedule = response.value.map(item => {
+            const providerRaw = item.fields.Provider || '';
+            const providers = String(providerRaw)
+                .split(/\s*\|\s*|\s*,\s*/)
+                .map(v => v.trim())
+                .filter(Boolean);
+            return {
+                id: item.id,
+                date: item.fields.Date || '',
+                provider: providers[0] || providerRaw || '',
+                provider2: providers[1] || '',
+                provider3: providers[2] || '',
+                hospitals: item.fields.Hospitals || ''
+            };
+        });
         
         cacheData('onCallSchedule', schedule);
         return schedule;
@@ -892,9 +964,12 @@ async function api_saveOnCallShift(shiftData) {
     const listId = M365_CONFIG.sharepoint.lists.onCallSchedule;
     const siteId = M365_CONFIG.sharepoint.siteId;
     
+    const providerValues = [shiftData.provider, shiftData.provider2, shiftData.provider3]
+        .map(v => String(v || '').trim())
+        .filter(Boolean);
     const fields = {
         Date: shiftData.date || '',
-        Provider: shiftData.provider || '',
+        Provider: providerValues.join(' | '),
         Hospitals: shiftData.hospitals || ''
     };
     
@@ -1315,6 +1390,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.m365FetchOnCall = api_fetchOnCallSchedule;
     window.m365SaveOnCall = api_saveOnCallShift;
     window.m365DeleteOnCall = api_deleteOnCallShift;
+    window.m365SaveOnCallShift = api_saveOnCallShift;
+    window.m365DeleteOnCallShift = api_deleteOnCallShift;
+    window.m365GetAuditLogs = api_fetchAuditLogs;
     window.m365SaveSetting = api_saveSetting;
     window.m365NormalizePriorityFields = api_normalizePriorityFields;
     window.m365GetCurrentUser = getCurrentUser;
@@ -1349,6 +1427,7 @@ if (typeof module !== 'undefined' && module.exports) {
         fetchOnCallSchedule: api_fetchOnCallSchedule,
         saveOnCallShift: api_saveOnCallShift,
         deleteOnCallShift: api_deleteOnCallShift,
+        fetchAuditLogs: api_fetchAuditLogs,
         fetchSettings: api_fetchSettings,
         saveSetting: api_saveSetting,
         normalizePriorityFields: api_normalizePriorityFields,

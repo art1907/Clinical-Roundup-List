@@ -3598,22 +3598,63 @@
                 return { valid: false, message: 'Invalid characters in query.' };
             }
 
-            const parts = input.split(':');
-            if (parts.length !== 2) {
+            const splitIndex = input.indexOf(':');
+            if (splitIndex <= 0 || splitIndex === input.length - 1) {
                 return { valid: false, message: 'Use format key:value (example: hospital:WGMC).' };
             }
 
-            const key = parts[0].trim().toLowerCase();
-            const value = parts[1].trim();
-            const allowedKeys = ['hospital', 'status', 'mrn', 'name', 'date', 'stat'];
-            if (!allowedKeys.includes(key)) {
-                return { valid: false, message: `Key must be one of: ${allowedKeys.join(', ')}` };
+            const key = input.slice(0, splitIndex).trim();
+            const value = input.slice(splitIndex + 1).trim();
+            const normalize = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const keyNorm = normalize(key);
+
+            const aliasToField = {
+                any: '__any__',
+                hospital: 'hospital',
+                status: 'procedureStatus',
+                procedurestatus: 'procedureStatus',
+                mrn: 'mrn',
+                name: 'name',
+                date: 'date',
+                stat: 'stat',
+                room: 'room',
+                dob: 'dob',
+                plan: 'plan',
+                pending: 'pending',
+                followup: 'followUp',
+                followupnotes: 'followUp',
+                supervisingmd: 'supervisingMd',
+                md: 'supervisingMd',
+                findings: 'findingsText',
+                findingstext: 'findingsText',
+                findingscodes: 'findingsCodes',
+                cpt: 'cptPrimary',
+                cpd: 'cptPrimary',
+                cptprimary: 'cptPrimary',
+                icd: 'icdPrimary',
+                icdprimary: 'icdPrimary',
+                chargecodes: 'chargeCodesSecondary',
+                chargecodessecondary: 'chargeCodesSecondary',
+                archived: 'archived'
+            };
+
+            const knownFields = new Set([
+                'id', 'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
+                'pending', 'followUp', 'stat', 'priority', 'procedureStatus', 'cptPrimary', 'icdPrimary',
+                'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues', 'archived',
+                ...patients.flatMap((p) => Object.keys(p || {}))
+            ]);
+            const fieldByNorm = new Map(Array.from(knownFields).map((field) => [normalize(field), field]));
+            const resolvedField = aliasToField[keyNorm] || fieldByNorm.get(keyNorm);
+
+            if (!resolvedField) {
+                return { valid: false, message: 'Unknown key. Use any patient column key (examples: cpt, icd, hospital, procedureStatus, supervisingMd).' };
             }
             if (!value) {
                 return { valid: false, message: 'Value is required after colon.' };
             }
 
-            return { valid: true, key, value };
+            return { valid: true, key, keyNorm, field: resolvedField, value };
         };
 
         globalThis.runCustomAnalytics = () => {
@@ -3633,24 +3674,42 @@
             const valueLower = result.value.toLowerCase();
             let matches = [];
 
-            if (result.key === 'hospital') {
-                matches = patients.filter((p) => !p.archived && (p.hospital || '').toLowerCase() === valueLower);
-            } else if (result.key === 'status') {
-                matches = patients.filter((p) => !p.archived && (p.procedureStatus || 'To-Do').toLowerCase() === valueLower);
-            } else if (result.key === 'mrn') {
-                matches = patients.filter((p) => !p.archived && String(p.mrn || '').toLowerCase().includes(valueLower));
-            } else if (result.key === 'name') {
-                matches = patients.filter((p) => !p.archived && String(p.name || '').toLowerCase().includes(valueLower));
-            } else if (result.key === 'date') {
-                matches = patients.filter((p) => !p.archived && String(p.date || '') === result.value);
-            } else if (result.key === 'stat') {
-                const wantStat = ['true', 'yes', '1', 'on'].includes(valueLower);
-                matches = patients.filter((p) => !p.archived && (p.stat === true || p.stat === 'true') === wantStat);
+            const isTruthyInput = ['true', 'yes', '1', 'on', 'y'].includes(valueLower);
+            const isFalsyInput = ['false', 'no', '0', 'off', 'n'].includes(valueLower);
+
+            const patientFieldMatches = (patient, fieldName) => {
+                const raw = patient[fieldName];
+                if (fieldName === 'stat' || fieldName === 'archived') {
+                    const boolValue = raw === true || raw === 'true';
+                    if (isTruthyInput) return boolValue === true;
+                    if (isFalsyInput) return boolValue === false;
+                }
+                if (fieldName === 'date') {
+                    return String(raw || '').toLowerCase() === valueLower;
+                }
+                if (Array.isArray(raw)) {
+                    return raw.some((item) => String(item || '').toLowerCase().includes(valueLower));
+                }
+                if (raw && typeof raw === 'object') {
+                    return JSON.stringify(raw).toLowerCase().includes(valueLower);
+                }
+                return String(raw || '').toLowerCase().includes(valueLower);
+            };
+
+            if (result.field === '__any__') {
+                const fieldsToSearch = Array.from(new Set([
+                    'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd', 'pending',
+                    'followUp', 'stat', 'procedureStatus', 'cptPrimary', 'icdPrimary', 'chargeCodesSecondary',
+                    'findingsText', 'findingsCodes', ...patients.flatMap((p) => Object.keys(p || {}))
+                ]));
+                matches = patients.filter((p) => !p.archived && fieldsToSearch.some((field) => patientFieldMatches(p, field)));
+            } else {
+                matches = patients.filter((p) => !p.archived && patientFieldMatches(p, result.field));
             }
 
             const activeCount = patients.filter((p) => !p.archived).length;
             renderAnalyticsCards([
-                { title: 'Custom Filter', value: `${result.key}:${result.value}`, subtitle: 'Validated query' },
+                { title: 'Custom Filter', value: `${result.key}:${result.value}`, subtitle: `Field: ${result.field === '__any__' ? 'any field' : result.field}` },
                 { title: 'Matching Patients', value: matches.length, subtitle: 'Active records returned' },
                 { title: 'Total Active Census', value: activeCount, subtitle: 'Current active denominator' },
                 { title: 'Match Rate', value: `${activeCount ? Math.round((matches.length / activeCount) * 100) : 0}%`, subtitle: 'Match percentage' }
@@ -3664,6 +3723,113 @@
                 messageEl.textContent = 'Query accepted and executed.';
             }
             showToast('✓ Custom analytics complete');
+        };
+
+        globalThis.loadAuditLogs = async () => {
+            const tableBody = document.getElementById('audit-log-body');
+            if (!tableBody) return;
+
+            const actionFilterRaw = String(document.getElementById('audit-filter-action')?.value || '').toLowerCase();
+            const fromDate = document.getElementById('audit-filter-from')?.value || '';
+            const toDate = document.getElementById('audit-filter-to')?.value || '';
+            tableBody.innerHTML = '<tr><td colspan="5" class="p-3 text-center text-slate-500">Loading audit logs...</td></tr>';
+
+            const normalizeAction = (entry) => {
+                const type = String(entry.type || '').toLowerCase();
+                const action = String(entry.action || '').toLowerCase();
+                const fieldChanged = String(entry.fieldChanged || '').toLowerCase();
+
+                if (action === 'create' || (type === 'data_change' && fieldChanged === 'record' && entry.oldValue == null)) return 'create';
+                if (action === 'delete') return 'delete';
+                if (action === 'view' || type === 'patient_access' || type === 'access') return 'view';
+                if (action === 'export' || type === 'export') return 'export';
+                if (type === 'data_change' || action === 'update' || fieldChanged) return 'update';
+                return action || type || 'event';
+            };
+
+            const actionClass = (action) => {
+                if (action === 'create') return 'audit-action-create';
+                if (action === 'update') return 'audit-action-update';
+                if (action === 'delete') return 'audit-action-delete';
+                if (action === 'view') return 'audit-action-view';
+                if (action === 'export') return 'audit-action-export';
+                return '';
+            };
+
+            const safeText = (v) => String(v == null ? '' : v)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;');
+
+            const summarizeDetails = (entry) => {
+                if (entry.detailsSummary) return entry.detailsSummary;
+                if (entry.fieldChanged) return `${entry.fieldChanged} changed`;
+                if (entry.message) return entry.message;
+                if (entry.errorType) return `${entry.errorType}: ${entry.message || ''}`;
+                return '-';
+            };
+
+            try {
+                const localLogs = (typeof AuditLogger !== 'undefined' && typeof AuditLogger.getLogs === 'function')
+                    ? AuditLogger.getLogs().map((entry) => ({ ...entry, source: 'local' }))
+                    : [];
+
+                let remoteLogs = [];
+                if (typeof globalThis.m365GetAuditLogs === 'function') {
+                    remoteLogs = await globalThis.m365GetAuditLogs({ fromDate, toDate });
+                }
+
+                let logs = [...localLogs, ...remoteLogs].map((entry) => ({
+                    ...entry,
+                    normalizedAction: normalizeAction(entry),
+                    normalizedTimestamp: entry.timestamp || entry.createdDateTime || ''
+                }));
+
+                if (actionFilterRaw) {
+                    logs = logs.filter((entry) => entry.normalizedAction === actionFilterRaw);
+                }
+                if (fromDate) {
+                    const from = new Date(`${fromDate}T00:00:00`).getTime();
+                    logs = logs.filter((entry) => {
+                        const t = new Date(entry.normalizedTimestamp).getTime();
+                        return Number.isFinite(t) && t >= from;
+                    });
+                }
+                if (toDate) {
+                    const to = new Date(`${toDate}T23:59:59`).getTime();
+                    logs = logs.filter((entry) => {
+                        const t = new Date(entry.normalizedTimestamp).getTime();
+                        return Number.isFinite(t) && t <= to;
+                    });
+                }
+
+                logs.sort((a, b) => new Date(b.normalizedTimestamp) - new Date(a.normalizedTimestamp));
+
+                if (!logs.length) {
+                    tableBody.innerHTML = '<tr><td colspan="5" class="p-3 text-center text-slate-500">No audit logs found for the selected filters.</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = logs.slice(0, 500).map((entry) => {
+                    const when = entry.normalizedTimestamp ? new Date(entry.normalizedTimestamp).toLocaleString() : '-';
+                    const user = entry.userId || entry.userIdentity || 'unknown';
+                    const action = entry.normalizedAction;
+                    const recordId = entry.recordId || entry.patientId || '-';
+                    const details = summarizeDetails(entry);
+                    return `
+                        <tr>
+                            <td>${safeText(when)}</td>
+                            <td>${safeText(user)}</td>
+                            <td><span class="${actionClass(action)}">${safeText(action)}</span></td>
+                            <td>${safeText(recordId)}</td>
+                            <td>${safeText(details)}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Audit log load failed:', err);
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-red-600">Failed to load audit logs: ${safeText(err.message || err)}</td></tr>`;
+            }
         };
 
         // Render Card View
@@ -5207,11 +5373,19 @@
                 // Auto-backfill provider and hospitals from last entry or global settings
                 const lastShift = onCallSchedule.length > 0 ? onCallSchedule[onCallSchedule.length - 1] : null;
                 const providerInput = document.getElementById('oc-provider');
+                const providerInput2 = document.getElementById('oc-provider-2');
+                const providerInput3 = document.getElementById('oc-provider-3');
                 const dateInput = document.getElementById('oc-date');
                 const hospitalCheckboxes = document.querySelectorAll('.oc-hospital-checkbox');
                 
                 if (providerInput && !providerInput.value) {
                     providerInput.value = lastShift ? lastShift.provider : (globalSettings.onCall || '');
+                }
+                if (providerInput2 && !providerInput2.value) {
+                    providerInput2.value = lastShift ? (lastShift.provider2 || '') : '';
+                }
+                if (providerInput3 && !providerInput3.value) {
+                    providerInput3.value = lastShift ? (lastShift.provider3 || '') : '';
                 }
                 if (dateInput && !dateInput.value) {
                     dateInput.value = new Date().toISOString().split('T')[0];
@@ -5365,9 +5539,15 @@
         function renderOnCallSchedule() {
             const list = document.getElementById('oc-schedule-list');
             if (!list) return;
+            const providersForShift = (shift) => {
+                const values = [shift.provider, shift.provider2, shift.provider3]
+                    .map(v => String(v || '').trim())
+                    .filter(Boolean);
+                return values.length ? values : ['Unassigned'];
+            };
             list.innerHTML = onCallSchedule.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(s => `
                 <div class="flex items-center justify-between p-3 bg-white rounded border border-slate-200 mb-2">
-                    <div><p class="text-xs font-bold text-slate-400">${s.date}</p><p class="text-sm font-black text-slate-800">${s.provider}</p><p class="text-xs text-slate-500">${s.hospitals || '-'}</p></div>
+                    <div><p class="text-xs font-bold text-slate-400">${s.date}</p><p class="text-sm font-black text-slate-800">${providersForShift(s).join(', ')}</p><p class="text-xs text-slate-500">${s.hospitals || '-'}</p></div>
                     <button onclick="globalThis.deleteShift('${s.id}')" class="text-red-600 font-bold text-xs px-2 py-1 rounded bg-red-50">Delete</button>
                 </div>`).join('');
         }
@@ -5377,7 +5557,12 @@
             const shift = onCallSchedule.find(s => s.date === today);
             const p = document.getElementById('on-call-provider');
             const h = document.getElementById('on-call-hospitals');
-            if (p) p.value = shift ? shift.provider : globalSettings.onCall || "";
+            if (p) {
+                const providers = shift
+                    ? [shift.provider, shift.provider2, shift.provider3].map(v => String(v || '').trim()).filter(Boolean).join(', ')
+                    : '';
+                p.value = providers || globalSettings.onCall || "";
+            }
             if (h) h.value = shift ? shift.hospitals : globalSettings.hospitals || "";
         }
 
@@ -5579,12 +5764,15 @@
 
         globalThis.saveOnCallShift = async () => {
             const date = document.getElementById('oc-date').value;
-            const provider = document.getElementById('oc-provider').value;
+            const provider = String(document.getElementById('oc-provider')?.value || '').trim();
+            const provider2 = String(document.getElementById('oc-provider-2')?.value || '').trim();
+            const provider3 = String(document.getElementById('oc-provider-3')?.value || '').trim();
             const hospitalCheckboxes = document.querySelectorAll('.oc-hospital-checkbox:checked');
             const selectedOptions = Array.from(hospitalCheckboxes).map(cb => cb.value);
             const hospitals = selectedOptions.join(', ');
+            const providerList = [provider, provider2, provider3].filter(Boolean);
             
-            if (!date || !provider) return showToast("⚠️ Date and Provider required");
+            if (!date || providerList.length === 0) return showToast("⚠️ Date and at least one provider are required");
             if (selectedOptions.length === 0) return showToast("⚠️ Select at least one hospital");
             
             try {
@@ -5592,13 +5780,15 @@
                 if (existing) {
                     // Update existing
                     existing.provider = provider;
+                    existing.provider2 = provider2;
+                    existing.provider3 = provider3;
                     existing.hospitals = hospitals;
                     if (isConnected && typeof globalThis.m365SaveOnCallShift === 'function') {
                         await globalThis.m365SaveOnCallShift(existing);
                     }
                 } else {
                     // Create new
-                    const newShift = { id: Date.now().toString(), date, provider, hospitals };
+                    const newShift = { id: Date.now().toString(), date, provider, provider2, provider3, hospitals };
                     onCallSchedule.push(newShift);
                     if (isConnected && typeof globalThis.m365SaveOnCallShift === 'function') {
                         await globalThis.m365SaveOnCallShift(newShift);
@@ -6542,14 +6732,22 @@
                 <div class="space-y-4">
                     <div class="bg-white rounded-lg p-4 flex-shrink-0">
                         <h3 class="text-sm font-bold mb-3">Coverage Assignment</h3>
-                        <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                             <div>
                                 <label class="text-xs font-bold text-slate-600 block mb-1">Date</label>
                                 <input type="date" id="oc-date" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-slate-600 block mb-1">Provider</label>
+                                <label class="text-xs font-bold text-slate-600 block mb-1">Primary Provider</label>
                                 <input type="text" id="oc-provider" placeholder="Dr. Name" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-600 block mb-1">Additional Provider 1</label>
+                                <input type="text" id="oc-provider-2" placeholder="Dr. Name" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-600 block mb-1">Additional Provider 2</label>
+                                <input type="text" id="oc-provider-3" placeholder="Dr. Name" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
                             </div>
                         </div>
                         <div class="mb-3">
@@ -6631,7 +6829,7 @@
                         <div class="mt-2 flex justify-end">
                             <button onclick="globalThis.runCustomAnalytics()" class="px-3 py-2 bg-slate-700 text-white text-xs font-bold rounded hover:bg-slate-800">Run Custom Query</button>
                         </div>
-                        <div id="analytics-validation-message" class="text-xs text-slate-500 mt-2">Allowed keys: hospital, status, mrn, name, date, stat.</div>
+                        <div id="analytics-validation-message" class="text-xs text-slate-500 mt-2">Use key:value across patient columns (examples: icd: N20, cpt: 52356, supervisingMd: smith, procedureStatus: completed, any: westgate).</div>
                     </div>
                     <div id="analytics-content" class="analytics-dashboard"></div>
                     <div id="analytics-details" class="mt-4"></div>
