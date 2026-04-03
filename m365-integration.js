@@ -596,6 +596,7 @@ async function api_fetchPatients(dateFilter = null) {
                 : (item.fields.FindingsData ? Object.keys(JSON.parse(item.fields.FindingsData)) : []),
             findingsText: item.fields.FindingsText || '',
             plan: item.fields.Plan || '',
+            progressNotes: item.fields.ProgressNotes || item.fields.Progress_x0020_Notes || '',
             supervisingMd: item.fields.SupervisingMD || '',
             pending: item.fields.Pending || '',
             followUp: item.fields.FollowUp || '',
@@ -604,6 +605,9 @@ async function api_fetchPatients(dateFilter = null) {
             icdPrimary: item.fields.ICDPrimary || '',
             chargeCodesSecondary: item.fields.ChargeCodesSecondary ? JSON.parse(item.fields.ChargeCodesSecondary) : [],
             archived: parseBoolish(item.fields.Archived),
+            notesHistory: item.fields.ChangeNotesHistory
+                ? JSON.parse(item.fields.ChangeNotesHistory)
+                : (item.fields.NotesHistory ? JSON.parse(item.fields.NotesHistory) : []),
             lastUpdated: item.fields.Modified || item.fields.Created
         });
         });
@@ -731,6 +735,7 @@ async function api_savePatient(patientData) {
         FindingsDates: patientData.findingsDates ? JSON.stringify(patientData.findingsDates) : '{}',
         FindingsText: patientData.findingsText || '',
         Plan: patientData.plan || '',
+        ProgressNotes: patientData.progressNotes || '',
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
@@ -739,7 +744,8 @@ async function api_savePatient(patientData) {
         CPTPrimary: patientData.cptPrimary || '',
         ICDPrimary: patientData.icdPrimary || '',
         ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '[]',
-        Archived: normalizeBool(patientData.archived)
+        Archived: normalizeBool(patientData.archived),
+        ChangeNotesHistory: patientData.notesHistory ? JSON.stringify(patientData.notesHistory) : '[]'
     };
 
     let fieldsToSend = { ...fields };

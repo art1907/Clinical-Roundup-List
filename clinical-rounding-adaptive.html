@@ -2837,84 +2837,127 @@
             
             const batchOps = document.getElementById('batch-operations');
             const batchCount = document.getElementById('batch-count');
+            const batchPrint = document.getElementById('batch-print-selected');
             
             if (checkedCount > 0) {
                 batchOps.classList.add('active');
                 batchCount.textContent = `${checkedCount} selected`;
+                if (batchPrint) batchPrint.disabled = false;
             } else {
                 batchOps.classList.remove('active');
+                if (batchPrint) batchPrint.disabled = true;
             }
         }
 
         // Batch Change Status
         globalThis.batchChangeStatus = async () => {
-            const status = prompt('Enter new status:\n1. To-Do\n2. In-Progress\n3. Completed\n4. Post-Op');
-            const statusMap = {'1': 'To-Do', '2': 'In-Progress', '3': 'Completed', '4': 'Post-Op', 'to-do': 'To-Do', 'in-progress': 'In-Progress'};
-            const newStatus = statusMap[status?.toLowerCase()] || status;
-            
+            const newStatus = await getBatchStatusSelection();
             if (!newStatus) return;
-            const changeNote = getRequiredChangeNote('batch status update');
+            const changeNote = await getRequiredChangeNote('batch status update');
             if (!changeNote) return;
-            
+
+            const ids = [...selectedPatientIds];
             let updated = 0;
-            for (const id of selectedPatientIds) {
+            let failed = 0;
+            const useCloud = isConnected && useM365 && typeof globalThis.m365SavePatient === 'function';
+            if (useCloud) showToast(`⏳ Saving ${ids.length} records…`);
+
+            for (const id of ids) {
                 const p = patients.find(x => x.id === id);
-                if (p) {
-                    const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                    AuditLogger.logDataChange(auditUser, id, 'procedureStatus', p.procedureStatus, newStatus);
-                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
-                    p.procedureStatus = newStatus;
-                    p.lastChangeNote = changeNote;
-                    p.lastChangeNoteAt = new Date().toISOString();
-                    p.lastChangeNoteBy = auditUser;
+                if (!p) continue;
+                const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                AuditLogger.logDataChange(auditUser, id, 'procedureStatus', p.procedureStatus, newStatus);
+                AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
+                p.procedureStatus = newStatus;
+                p.lastChangeNote = changeNote;
+                p.lastChangeNoteAt = new Date().toISOString();
+                p.lastChangeNoteBy = auditUser;
+                p.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(p), changeNote, auditUser, 'batch status update');
+                if (useCloud) {
+                    try { await globalThis.m365SavePatient(p); updated++; }
+                    catch (err) { console.error('Batch status save error for', id, err); failed++; }
+                } else {
                     updated++;
                 }
             }
-            
+
             renderUI();
             updateBatchOpCount();
-            showToast(`✅ ${updated} records updated to ${newStatus}`);
+            showToast(failed ? `⚠️ ${updated} saved, ${failed} failed` : `✅ ${updated} records updated to ${newStatus}`);
         };
 
         // Batch Archive
         globalThis.batchArchiveSelected = async () => {
             if (!confirm(`Archive ${selectedPatientIds.size} selected records?`)) return;
-            const changeNote = getRequiredChangeNote('batch archive');
+            const changeNote = await getRequiredChangeNote('batch archive');
             if (!changeNote) return;
-            
-            for (const id of selectedPatientIds) {
+
+            const ids = [...selectedPatientIds];
+            let archived = 0;
+            let failed = 0;
+            const useCloud = isConnected && useM365 && typeof globalThis.m365SavePatient === 'function';
+            if (useCloud) showToast(`⏳ Archiving ${ids.length} records…`);
+
+            for (const id of ids) {
                 const p = patients.find(x => x.id === id);
-                if (p) {
-                    const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                    AuditLogger.logDataChange(auditUser, id, 'archived', p.archived, true);
-                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
-                    p.archived = true;
-                    p.lastChangeNote = changeNote;
-                    p.lastChangeNoteAt = new Date().toISOString();
-                    p.lastChangeNoteBy = auditUser;
+                if (!p) continue;
+                const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                AuditLogger.logDataChange(auditUser, id, 'archived', p.archived, true);
+                AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
+                p.archived = true;
+                p.lastChangeNote = changeNote;
+                p.lastChangeNoteAt = new Date().toISOString();
+                p.lastChangeNoteBy = auditUser;
+                p.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(p), changeNote, auditUser, 'batch archive');
+                if (useCloud) {
+                    try { await globalThis.m365SavePatient(p); archived++; }
+                    catch (err) { console.error('Batch archive save error for', id, err); failed++; }
+                } else {
+                    archived++;
                 }
             }
-            
+
             renderUI();
             updateBatchOpCount();
-            showToast(`📦 ${selectedPatientIds.size} records archived`);
+            showToast(failed ? `⚠️ ${archived} archived, ${failed} failed` : `📦 ${archived} records archived`);
         };
 
         // Batch Delete
         globalThis.batchDeleteSelected = async () => {
             if (!confirm(`DELETE ${selectedPatientIds.size} records? This cannot be undone.`)) return;
-            const changeNote = getRequiredChangeNote('batch delete');
+            const changeNote = await getRequiredChangeNote('batch delete');
             if (!changeNote) return;
-            
+
+            const ids = [...selectedPatientIds];
             const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-            selectedPatientIds.forEach(id => {
-                AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
-                AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
-            });
-            patients = patients.filter(p => !selectedPatientIds.has(p.id));
+            const useCloud = isConnected && useM365 && typeof globalThis.m365DeletePatient === 'function';
+            if (useCloud) showToast(`⏳ Deleting ${ids.length} records…`);
+
+            let deleted = 0;
+            let failed = 0;
+            if (useCloud) {
+                for (const id of ids) {
+                    AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
+                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
+                    try { await globalThis.m365DeletePatient(id); deleted++; }
+                    catch (err) { console.error('Batch delete error for', id, err); failed++; }
+                }
+                // Refetch to sync list after M365 deletes
+                if (typeof globalThis.m365FetchPatients === 'function') {
+                    try { await globalThis.m365FetchPatients(); } catch (_) {}
+                }
+            } else {
+                ids.forEach(id => {
+                    AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
+                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
+                });
+                patients = patients.filter(p => !selectedPatientIds.has(p.id));
+                deleted = ids.length;
+            }
+
             renderUI();
             updateBatchOpCount();
-            showToast(`🗑️ ${selectedPatientIds.size} records deleted`);
+            showToast(failed ? `⚠️ ${deleted} deleted, ${failed} failed` : `🗑️ ${deleted} records deleted`);
         };
 
         // Cancel Batch Operation
@@ -4113,6 +4156,7 @@
                     </div>
                 </div>
                 ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
+                ${p.progressNotes ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Progress Notes:</strong> ${esc(p.progressNotes)}</div>` : ''}
                 ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
                 ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
             </div>`;
@@ -4132,6 +4176,7 @@
                 statPts.forEach(p => {
                     lines.push(`  [STAT] ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${p.procedureStatus||'To-Do'}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
                     if (p.plan) lines.push(`    Plan: ${p.plan}`);
+                    if (p.progressNotes) lines.push(`    Progress Notes: ${p.progressNotes}`);
                     if (p.pending) lines.push(`    Pending: ${p.pending}`);
                     if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
                 });
@@ -4142,6 +4187,7 @@
                 groups[hosp].forEach(p => {
                     lines.push(`  ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${p.procedureStatus||'Not-Set'}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
                     if (p.plan) lines.push(`    Plan: ${p.plan}`);
+                    if (p.progressNotes) lines.push(`    Progress Notes: ${p.progressNotes}`);
                     if (p.pending) lines.push(`    Pending: ${p.pending}`);
                     if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
                 });
@@ -4312,6 +4358,7 @@
                         ${p.supervisingMd ? `<span class="text-[10px] text-slate-500">· ${esc(p.supervisingMd)}</span>` : ''}
                     </div>
                     ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
+                    ${p.progressNotes ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Progress Notes:</strong> ${esc(p.progressNotes)}</div>` : ''}
                     ${p.findingsText ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Findings:</strong> ${esc(p.findingsText)}</div>` : ''}
                     ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
                     ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
@@ -4360,6 +4407,7 @@
                         <td>${esc(p.hospital||'')}</td>
                         <td>${esc(p.procedureStatus||'')}</td>
                         <td>${esc(p.plan||'')}</td>
+                        <td>${esc(p.progressNotes||'')}</td>
                         <td>${esc(p.pending||'')}</td>
                         <td>${esc(p.supervisingMd||p.md||'')}</td>
                     </tr>`).join('');
@@ -4376,7 +4424,7 @@
                             <thead><tr class="bg-slate-100 text-slate-600">
                                 <th class="px-2 py-2 text-left">Date</th><th class="px-2 py-2 text-left">Patient</th><th class="px-2 py-2 text-left">Room</th>
                                 <th class="px-2 py-2 text-left">MRN</th><th class="px-2 py-2 text-left">Hospital</th><th class="px-2 py-2 text-left">Status</th>
-                                <th class="px-2 py-2 text-left">Plan</th><th class="px-2 py-2 text-left">Pending</th><th class="px-2 py-2 text-left">MD</th>
+                                <th class="px-2 py-2 text-left">Plan</th><th class="px-2 py-2 text-left">Progress Notes</th><th class="px-2 py-2 text-left">Pending</th><th class="px-2 py-2 text-left">MD</th>
                             </tr></thead>
                             <tbody class="divide-y divide-slate-100">${rows}</tbody>
                         </table>
@@ -4416,11 +4464,11 @@
                 doc.text(subLine, 14, 22);
 
                 // Table
-                const cols = ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Pending', 'MD'];
+                const cols = ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Progress Notes', 'Pending', 'MD'];
                 const rows = data.map(p => [
                     p.date || '', p.name || '—', p.room || '', p.mrn || '',
                     p.hospital || '', p.procedureStatus || 'To-Do',
-                    (p.plan || '').slice(0, 60), (p.pending || '').slice(0, 40),
+                    (p.plan || '').slice(0, 50), (p.progressNotes || '').slice(0, 50), (p.pending || '').slice(0, 35),
                     p.supervisingMd || p.md || ''
                 ]);
 
@@ -4432,8 +4480,9 @@
                     headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 8 },
                     bodyStyles: { fontSize: 7.5, cellPadding: 2 },
                     columnStyles: {
-                        6: { cellWidth: 55 }, // Plan
-                        7: { cellWidth: 40 }, // Pending
+                        6: { cellWidth: 42 }, // Plan
+                        7: { cellWidth: 42 }, // Progress Notes
+                        8: { cellWidth: 30 }, // Pending
                     },
                     margin: { left: 14, right: 14 },
                     didDrawPage: (hookData) => {
@@ -4667,6 +4716,7 @@
             const saveBtn = document.getElementById('save-button');
             const changeNoteInput = document.getElementById('f-change-note');
             if (changeNoteInput) changeNoteInput.value = '';
+            renderPatientChangeHistory(null);
 
             const setEditMode = (isEditing) => {
                 lockBackfilledFields(!isEditing);
@@ -4770,9 +4820,9 @@
                     AuditLogger.logDataAccess(auditUser, id, 'view');
                 }
                 if (p) {
-                    ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
+                    ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'progress-notes', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
-                        if (el) el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
+                        if (el) el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'progress-notes': 'progressNotes', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
                     if (dateInput) dateInput.value = p.date || "";
                     if (visitTimeInput) visitTimeInput.value = p.visitTime || '';
@@ -4788,6 +4838,7 @@
                     }
                     if (statusInput) statusInput.value = p.procedureStatus || 'To-Do';
                     if (statInput) statInput.checked = p.stat === true || p.stat === 'true';
+                    renderPatientChangeHistory(p);
                     
                     // Show who created the record when editing
                     const createdByField = document.getElementById('f-created-by');
@@ -5623,12 +5674,180 @@
         let isSaving = false;  // Prevent concurrent saves
 
         function getRequiredChangeNote(actionLabel) {
-            const note = prompt(`Note required for ${actionLabel}. Please enter a brief reason:`);
-            if (!note || !note.trim()) {
-                showToast('⚠️ Note is required to proceed');
-                return null;
+            return new Promise((resolve) => {
+                const modal = document.getElementById('change-reason-modal');
+                const title = document.getElementById('change-reason-title');
+                const input = document.getElementById('change-reason-input');
+                const confirmBtn = document.getElementById('change-reason-confirm');
+                const cancelBtn = document.getElementById('change-reason-cancel');
+                const closeBtn = document.getElementById('change-reason-close');
+
+                if (!modal || !title || !input || !confirmBtn || !cancelBtn || !closeBtn) {
+                    showToast('⚠️ Change reason dialog unavailable');
+                    resolve(null);
+                    return;
+                }
+
+                title.textContent = `Reason Required: ${actionLabel}`;
+                input.value = '';
+                modal.classList.remove('hidden');
+                setTimeout(() => input.focus(), 0);
+
+                const cleanup = () => {
+                    modal.classList.add('hidden');
+                    confirmBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                    closeBtn.onclick = null;
+                    input.onkeydown = null;
+                };
+
+                const cancel = () => {
+                    cleanup();
+                    showToast('⚠️ Note is required to proceed');
+                    resolve(null);
+                };
+
+                const confirm = () => {
+                    const note = input.value.trim();
+                    if (!note) {
+                        showToast('⚠️ Note is required to proceed');
+                        input.focus();
+                        return;
+                    }
+                    cleanup();
+                    resolve(note);
+                };
+
+                confirmBtn.onclick = confirm;
+                cancelBtn.onclick = cancel;
+                closeBtn.onclick = cancel;
+                input.onkeydown = (event) => {
+                    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                        event.preventDefault();
+                        confirm();
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        cancel();
+                    }
+                };
+            });
+        }
+
+        function getBatchStatusSelection() {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('batch-status-modal');
+                const select = document.getElementById('batch-status-select');
+                const confirmBtn = document.getElementById('batch-status-confirm');
+                const cancelBtn = document.getElementById('batch-status-cancel');
+                const closeBtn = document.getElementById('batch-status-close');
+
+                if (!modal || !select || !confirmBtn || !cancelBtn || !closeBtn) {
+                    showToast('⚠️ Status dialog unavailable');
+                    resolve(null);
+                    return;
+                }
+
+                select.value = '';
+                modal.classList.remove('hidden');
+                setTimeout(() => select.focus(), 0);
+
+                const cleanup = () => {
+                    modal.classList.add('hidden');
+                    confirmBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                    closeBtn.onclick = null;
+                    select.onkeydown = null;
+                };
+
+                const cancel = () => {
+                    cleanup();
+                    resolve(null);
+                };
+
+                const confirm = () => {
+                    const value = select.value || '';
+                    if (!value) {
+                        showToast('⚠️ Select a new status');
+                        select.focus();
+                        return;
+                    }
+                    cleanup();
+                    resolve(value);
+                };
+
+                confirmBtn.onclick = confirm;
+                cancelBtn.onclick = cancel;
+                closeBtn.onclick = cancel;
+                select.onkeydown = (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        confirm();
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        cancel();
+                    }
+                };
+            });
+        }
+
+        function appendPatientChangeNote(existingHistory, noteText, author, actionLabel) {
+            const history = Array.isArray(existingHistory) ? [...existingHistory] : [];
+            if (!noteText || !String(noteText).trim()) return history;
+            history.push({
+                note: String(noteText).trim(),
+                author: author || 'unknown',
+                action: actionLabel || 'update',
+                timestamp: new Date().toISOString()
+            });
+            return history;
+        }
+
+        function normalizePatientChangeHistory(record) {
+            if (Array.isArray(record?.notesHistory) && record.notesHistory.length) {
+                return record.notesHistory;
             }
-            return note.trim();
+            if (record?.lastChangeNote) {
+                return [{
+                    note: record.lastChangeNote,
+                    author: record.lastChangeNoteBy || record.createdBy || 'unknown',
+                    action: 'update',
+                    timestamp: record.lastChangeNoteAt || record.lastUpdated || ''
+                }];
+            }
+            return [];
+        }
+
+        function renderPatientChangeHistory(record) {
+            const container = document.getElementById('patient-change-history');
+            if (!container) return;
+            const esc = (v) => String(v == null ? '' : v)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;');
+            const formatClinicalTimestamp = (timestamp) => {
+                if (!timestamp) return '-';
+                const value = new Date(timestamp);
+                if (Number.isNaN(value.getTime())) return String(timestamp);
+                const mm = String(value.getMonth() + 1).padStart(2, '0');
+                const dd = String(value.getDate()).padStart(2, '0');
+                const yyyy = value.getFullYear();
+                const hh = String(value.getHours()).padStart(2, '0');
+                const mi = String(value.getMinutes()).padStart(2, '0');
+                return `${mm}/${dd}/${yyyy} ${hh}:${mi}`;
+            };
+            const history = normalizePatientChangeHistory(record).slice().reverse();
+            if (!history.length) {
+                container.innerHTML = '<div class="text-xs text-slate-400">No change notes recorded yet.</div>';
+                return;
+            }
+            container.innerHTML = history.map((entry) => {
+                const when = formatClinicalTimestamp(entry.timestamp);
+                const line = `${when} - ${entry.author || 'unknown'}${entry.action ? ` - ${entry.action}` : ''} - ${entry.note || ''}`;
+                return `
+                    <div class="border border-slate-200 rounded-lg p-3 bg-white">
+                        <div class="text-xs text-slate-700 whitespace-pre-wrap leading-5">${esc(line)}</div>
+                    </div>`;
+            }).join('');
         }
         
         // Version marker for debugging - includes timestamp to prevent cache reversion
@@ -5716,6 +5935,7 @@
                 findingsDates: findingsDates,
                 findingsText: document.getElementById('f-findings-text').value,
                 plan: document.getElementById('f-plan').value, 
+                progressNotes: document.getElementById('f-progress-notes').value,
                 supervisingMd: document.getElementById('f-md').value,
                 pending: document.getElementById('f-pending').value, 
                 followUp: document.getElementById('f-fu').value,
@@ -5725,7 +5945,8 @@
                 icdPrimary: document.getElementById('f-icd-primary').value,
                 chargeCodesSecondary: document.getElementById('f-charge-codes-secondary').value,
                 createdBy: document.getElementById('f-created-by').value || currentUser || 'Unknown',
-                archived: document.getElementById('f-archived')?.value === 'true'
+                archived: document.getElementById('f-archived')?.value === 'true',
+                notesHistory: []
             };
 
             const changeNoteInput = document.getElementById('f-change-note');
@@ -5750,6 +5971,11 @@
                     const existing = patients.find(p => p.id === editId);
                     return existing || null;
                 };
+                const previousPatient = getPreviousPatient();
+                data.notesHistory = normalizePatientChangeHistory(previousPatient);
+                if (editId && changeNote) {
+                    data.notesHistory = appendPatientChangeNote(data.notesHistory, changeNote, auditUser, 'edit');
+                }
 
                 // Normalize a field value to a stable string for comparison.
                 // null, undefined, "" and empty collections all become "".
@@ -5808,6 +6034,7 @@
                                 patients[index].lastChangeNote = changeNote;
                                 patients[index].lastChangeNoteAt = new Date().toISOString();
                                 patients[index].lastChangeNoteBy = auditUser;
+                                patients[index].notesHistory = data.notesHistory;
                             }
                             diffAndLog(previous, patients[index], editId);
                             if (changeNote) {
@@ -5856,7 +6083,7 @@
                             
                             // Success - result should be an ID (string/number)
                             const recordId = editId || result;
-                            diffAndLog(getPreviousPatient(), data, recordId);
+                            diffAndLog(previousPatient, data, recordId);
                             if (editId && changeNote) {
                                 AuditLogger.logDataChange(auditUser, recordId, 'changeNote', null, changeNote);
                             }
@@ -5904,7 +6131,7 @@
         };
 
         globalThis.toggleArchive = async (id, shouldArchive) => {
-            const changeNote = getRequiredChangeNote(shouldArchive ? 'archiving' : 'restoring');
+            const changeNote = await getRequiredChangeNote(shouldArchive ? 'archiving' : 'restoring');
             if (!changeNote) return;
             if (!isConnected || !useM365) {
                 // Local mode: update in memory
@@ -5917,6 +6144,7 @@
                     p.lastChangeNote = changeNote;
                     p.lastChangeNoteAt = new Date().toISOString();
                     p.lastChangeNoteBy = auditUser;
+                    p.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(p), changeNote, auditUser, shouldArchive ? 'archive' : 'restore');
                     renderUI();
                     showToast(shouldArchive ? "Archived" : "Restored");
                 }
@@ -5933,6 +6161,7 @@
                         patient.lastChangeNote = changeNote;
                         patient.lastChangeNoteAt = new Date().toISOString();
                         patient.lastChangeNoteBy = auditUser;
+                        patient.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(patient), changeNote, auditUser, shouldArchive ? 'archive' : 'restore');
                         await globalThis.m365SavePatient(patient);
                         showToast(shouldArchive ? "Archived" : "Restored");
                     }
@@ -5943,7 +6172,7 @@
         };
 
         globalThis.updateStatusQuick = async (id, newStatus) => {
-            const changeNote = getRequiredChangeNote('status update');
+            const changeNote = await getRequiredChangeNote('status update');
             if (!changeNote) return;
             if (!isConnected || !useM365) {
                 // Local mode: update in memory
@@ -5956,6 +6185,7 @@
                     p.lastChangeNote = changeNote;
                     p.lastChangeNoteAt = new Date().toISOString();
                     p.lastChangeNoteBy = auditUser;
+                    p.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(p), changeNote, auditUser, 'status update');
                     renderUI();
                 }
                 return;
@@ -5971,6 +6201,7 @@
                         patient.lastChangeNote = changeNote;
                         patient.lastChangeNoteAt = new Date().toISOString();
                         patient.lastChangeNoteBy = auditUser;
+                        patient.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(patient), changeNote, auditUser, 'status update');
                         await globalThis.m365SavePatient(patient);
                     }
                 }
@@ -5981,7 +6212,7 @@
 
         globalThis.deletePatient = async (id) => {
             if (!confirm("Delete this patient record? This cannot be undone.")) return;
-            const changeNote = getRequiredChangeNote('deleting');
+            const changeNote = await getRequiredChangeNote('deleting');
             if (!changeNote) return;
             
             if (!isConnected || !useM365) {
@@ -6436,6 +6667,7 @@
                                 <div class="section">
                                     <h3>Plan</h3>
                                     <div class="row"><span class="label">Plan:</span> <span class="value">${p.plan || ''}</span></div>
+                                    <div class="row"><span class="label">Progress Notes:</span> <span class="value">${p.progressNotes || ''}</span></div>
                                     <div class="row"><span class="label">Pending:</span> <span class="value">${p.pending || ''}</span></div>
                                     <div class="row"><span class="label">Follow Up:</span> <span class="value">${p.followUp || ''}</span></div>
                                 </div>
@@ -7021,17 +7253,6 @@
             });
             updateSelectedCodes();
 
-            // Add Print Selected button to header once DOM is ready
-            const tableHeader = document.getElementById('main-table-header') || document.querySelector('.main-table-header');
-            if (tableHeader && !document.getElementById('print-selected-btn')) {
-                const btn = document.createElement('button');
-                btn.id = 'print-selected-btn';
-                btn.textContent = '🖨️ Print Selected';
-                btn.className = 'ml-2 px-4 py-2 bg-slate-700 text-white text-xs font-bold rounded hover:bg-slate-800 transition-colors';
-                btn.onclick = globalThis.printSelectedPatientRecords;
-                tableHeader.appendChild(btn);
-            }
-            
             // Ensure setTab is defined before calling it
             if (typeof globalThis.setTab === 'function') {
                 globalThis.setTab('active');
@@ -7361,6 +7582,7 @@
             <!-- Batch Operations Bar -->
             <div id="batch-operations" class="batch-operations">
                 <div class="batch-count" id="batch-count">0 selected</div>
+                <button id="batch-print-selected" onclick="globalThis.printSelectedPatientRecords()" class="px-3 py-1 bg-slate-700 text-white text-xs font-bold rounded hover:bg-slate-800" disabled>🖨️ Print Selected</button>
                 <button onclick="globalThis.batchChangeStatus()" class="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Change Status</button>
                 <button onclick="globalThis.batchArchiveSelected()" class="px-3 py-1 bg-amber-600 text-white text-xs font-bold rounded hover:bg-amber-700">Archive</button>
                 <button onclick="globalThis.batchDeleteSelected()" class="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700">Delete</button>
@@ -7673,6 +7895,47 @@
         </div>
     </div>
 
+    <div id="change-reason-modal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-end md:items-center justify-center p-4">
+        <div class="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-xl shadow-2xl flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center flex-shrink-0">
+                <h2 id="change-reason-title" class="font-bold">Reason Required</h2>
+                <button id="change-reason-close" type="button" class="text-2xl">×</button>
+            </div>
+            <div class="p-4 space-y-3">
+                <p class="text-xs text-slate-500">Enter the clinical reason for this action. This will be stored in the patient change-note history with your name and timestamp.</p>
+                <textarea id="change-reason-input" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="4" placeholder="Required reason"></textarea>
+                <div class="text-[11px] text-slate-400">Tip: Ctrl+Enter saves, Esc cancels.</div>
+            </div>
+            <div class="p-4 border-t flex gap-2 flex-shrink-0">
+                <button id="change-reason-cancel" type="button" class="flex-1 p-3 bg-slate-200 text-slate-700 font-bold rounded-lg">Cancel</button>
+                <button id="change-reason-confirm" type="button" class="flex-1 p-3 bg-blue-600 text-white font-bold rounded-lg">Save Reason</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="batch-status-modal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-end md:items-center justify-center p-4">
+        <div class="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-lg shadow-2xl flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center flex-shrink-0">
+                <h2 class="font-bold">Select New Status</h2>
+                <button id="batch-status-close" type="button" class="text-2xl">×</button>
+            </div>
+            <div class="p-4 space-y-3">
+                <p class="text-xs text-slate-500">Choose the new status for all selected records.</p>
+                <select id="batch-status-select" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm">
+                    <option value="">Select status</option>
+                    <option value="To-Do">To-Do</option>
+                    <option value="In-Progress">In-Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Post-Op">Post-Op</option>
+                </select>
+            </div>
+            <div class="p-4 border-t flex gap-2 flex-shrink-0">
+                <button id="batch-status-cancel" type="button" class="flex-1 p-3 bg-slate-200 text-slate-700 font-bold rounded-lg">Cancel</button>
+                <button id="batch-status-confirm" type="button" class="flex-1 p-3 bg-blue-600 text-white font-bold rounded-lg">Continue</button>
+            </div>
+        </div>
+    </div>
+
     <div id="patient-modal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-end md:items-center justify-center p-0 md:p-4">
         <div class="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-3xl shadow-2xl max-h-[92vh] md:h-auto md:max-h-[90vh] flex flex-col">
             <div class="p-4 border-b flex justify-between items-center flex-shrink-0 bg-white z-10">
@@ -7730,6 +7993,7 @@
                 <div>
                     <label for="f-change-note" class="text-xs font-bold text-slate-600">🗒️ Change Note</label>
                     <textarea id="f-change-note" placeholder="Required when updating an existing record" aria-label="Change Note" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200" rows="2"></textarea>
+                    <div class="mt-1 text-[11px] text-slate-400">Change Note = why this record changed</div>
                 </div>
 
                 <div>
@@ -8057,6 +8321,11 @@
 
                 <textarea id="f-plan" placeholder="Plan" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
 
+                <div>
+                    <textarea id="f-progress-notes" placeholder="Progress Notes" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>
+                    <div class="mt-1 text-[11px] text-slate-400">Progress Notes = ongoing clinical narrative</div>
+                </div>
+
                 <!-- Billing -->
                 <div class="bg-amber-50 p-4 rounded-lg border border-amber-200 space-y-2">
                     <h3 class="text-xs font-bold text-amber-900">💰 Billing</h3>
@@ -8080,6 +8349,16 @@
                     </div>
                     <div id="patient-files-list" class="space-y-2 text-xs text-slate-600">
                         <div class="text-slate-400">No files uploaded.</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-700">📝 Change Notes</h3>
+                        <span class="text-[10px] text-slate-400">Append-only history</span>
+                    </div>
+                    <div id="patient-change-history" class="space-y-2 text-xs text-slate-600">
+                        <div class="text-slate-400">No change notes recorded yet.</div>
                     </div>
                 </div>
                 </div>
