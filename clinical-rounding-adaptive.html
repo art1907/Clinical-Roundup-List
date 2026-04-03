@@ -814,6 +814,10 @@
             padding: 1rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            min-height: 360px;
+            max-height: 420px;
         }
         
         body.dark-mode .patient-card {
@@ -896,7 +900,41 @@
         .card-actions {
             display: flex;
             gap: 0.5rem;
-            margin-top: 0.75rem;
+            margin-top: auto;
+            padding-top: 0.75rem;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        body.dark-mode .card-actions {
+            border-top-color: #444;
+        }
+
+        .card-meta-strip {
+            display: flex;
+            gap: 0.4rem;
+            margin-bottom: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .card-chip {
+            display: inline-block;
+            padding: 0.2rem 0.45rem;
+            border-radius: 0.35rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        body.dark-mode .card-chip {
+            background: #374151;
+            color: #e5e7eb;
+        }
+
+        .card-scroll-body {
+            overflow-y: auto;
+            padding-right: 0.2rem;
+            margin-bottom: 0.4rem;
         }
         
         .card-action-btn {
@@ -2066,7 +2104,11 @@
                 const eventConfig = eventTypes[eventType] || { verbosity: 'minimal' };
                 
                 if (verbosity === 'detailed') return true;
-                if (verbosity === 'minimal' && eventConfig.severity === 'critical') return true;
+                if (verbosity === 'minimal') {
+                    // Keep write/audit-relevant events visible even in relaxed mode.
+                    return ['data_change', 'auth', 'export', 'error', 'unauthorized_access'].includes(eventType)
+                        || eventConfig.severity === 'critical';
+                }
                 return false;
             };
 
@@ -2672,7 +2714,7 @@
                     showToast('🔴 STAT Only');
                     break;
                 case 'procedures':
-                    filtered = active.filter(p => PROC_KEYWORDS.test(p.plan || ''));
+                    filtered = active.filter(p => isSurgicalCase(p));
                     showToast('🔵 Procedures Only');
                     break;
                 case 'inprogress':
@@ -3224,7 +3266,7 @@
         const originalGetFilteredData = globalThis.getFilteredData || function() {
             let f = [];
             if (currentTab === 'active') f = patients.filter(p => !p.archived);
-            else if (currentTab === 'procedures') f = patients.filter(p => !p.archived && PROC_KEYWORDS.test(p.plan || ''));
+            else if (currentTab === 'procedures') f = patients.filter(p => !p.archived && isSurgicalCase(p));
             else if (currentTab === 'archive') f = patients.filter(p => p.archived);
             return f;
         };
@@ -3416,7 +3458,7 @@
                 : 0;
             
             const statCount = filtered.filter(p => p.stat === true || p.stat === 'true').length;
-            const procedureCount = filtered.filter(p => PROC_KEYWORDS.test(p.plan || '')).length;
+            const procedureCount = filtered.filter(p => isSurgicalCase(p)).length;
             const ageAvg = filtered.some(p => p.dob) 
                 ? Math.round(filtered.filter(p => p.dob).reduce((sum, p) => sum + (globalThis.calculateAge(p.dob) || 0), 0) / filtered.filter(p => p.dob).length)
                 : '-';
@@ -3449,7 +3491,7 @@
 
         function getAnalyticsDataset() {
             const activePatients = patients.filter(p => !p.archived);
-            const procedurePatients = activePatients.filter(p => PROC_KEYWORDS.test(p.plan || ''));
+            const procedurePatients = activePatients.filter(p => isSurgicalCase(p));
             const statPatients = activePatients.filter(p => p.stat === true || p.stat === 'true');
             const pendingPatients = activePatients.filter(p => p.pending && String(p.pending).trim().length > 0);
             const inProgressPatients = procedurePatients.filter(p => (p.procedureStatus || 'To-Do') === 'In-Progress');
@@ -3862,6 +3904,14 @@
                             </div>
                             <span class="card-badge ${statusObj.bg} ${statusObj.text}">${status}</span>
                         </div>
+
+                        <div class="card-meta-strip">
+                            <span class="card-chip" title="Patient unique record ID">ID: ${p.id || 'N/A'}</span>
+                            <span class="card-chip" title="Room/bed assignment">Room: ${p.room || 'N/A'}</span>
+                            <span class="card-chip" title="Medical record number">MRN: ${p.mrn || 'N/A'}</span>
+                        </div>
+
+                        <div class="card-scroll-body" title="Scroll for more clinical details">
                         
                         <div class="card-field">
                             <div class="card-field-label">🏥 Hospital</div>
@@ -3897,6 +3947,17 @@
                             <div class="card-field-label">⏳ Pending</div>
                             <div class="card-field-value">${p.pending}</div>
                         </div>` : ''}
+
+                        ${p.followUp ? `<div class="card-field">
+                            <div class="card-field-label">📌 Follow-up</div>
+                            <div class="card-field-value">${p.followUp}</div>
+                        </div>` : ''}
+
+                        ${p.supervisingMd ? `<div class="card-field">
+                            <div class="card-field-label">👨‍⚕️ Supervising</div>
+                            <div class="card-field-value">${p.supervisingMd}</div>
+                        </div>` : ''}
+                        </div>
                         
                         <div class="card-actions">
                             <button class="card-action-btn card-edit" onclick="globalThis.openModal('${p.id}')">Edit</button>
@@ -4537,7 +4598,17 @@
 
         globalThis.getCurrentPatients = () => patients;
 
-        const PROC_KEYWORDS = /(cysto|stent|turbt|litho|laser|surgery|bx|biopsy|procedure|or|scheduled|urology|pcn|urs|nephrectomy|robotic)/i;
+        const PROC_KEYWORDS = /\b(cysto(?:scopy)?|stent|turbt|litho(?:tripsy)?|laser|surgery|bx|biopsy|procedure|scheduled|urology|pcn|urs|nephrectomy|robotic)\b/i;
+        const SURGICAL_STATUSES = new Set(['In-Progress', 'Completed', 'Post-Op', 'Scheduled', 'Pre-Op']);
+
+        function isSurgicalCase(patient) {
+            if (!patient || patient.archived) return false;
+            const status = String(patient.procedureStatus || 'To-Do');
+            const explicitFlag = patient.isProcedure === true || patient.surgical === true;
+            const plan = String(patient.plan || '');
+            const findings = String(patient.findingsText || '');
+            return explicitFlag || SURGICAL_STATUSES.has(status) || PROC_KEYWORDS.test(plan) || PROC_KEYWORDS.test(findings);
+        }
         const STATUS_COLORS = {
             'To-Do': { bg: 'bg-gray-50 border border-gray-300', text: 'text-gray-700', badge: '⬜', bgHeavy: 'bg-gray-200' },
             'In-Progress': { bg: 'bg-blue-50 border border-blue-300', text: 'text-blue-700', badge: '🔵', bgHeavy: 'bg-blue-200' },
@@ -5157,6 +5228,9 @@
                     clearDraft(); // Clear draft on successful save
                     showToast("✓ Saved (Local)");
                     setTimeout(() => globalThis.closeModal(), 100); // Slight delay to let toast show
+                    if (currentTab === 'audit' && typeof globalThis.loadAuditLogs === 'function') {
+                        await globalThis.loadAuditLogs();
+                    }
                 } else {
                     console.log('☁️ Using M365 MODE (SharePoint)');
                     // M365 mode: use Graph API via m365-integration.js
@@ -5195,6 +5269,9 @@
                             if (typeof globalThis.m365FetchPatients === 'function') {
                                 console.log('🔄 Refetching patients...');
                                 await globalThis.m365FetchPatients();
+                            }
+                            if (currentTab === 'audit' && typeof globalThis.loadAuditLogs === 'function') {
+                                await globalThis.loadAuditLogs();
                             }
                         } catch (m365Err) {
                             console.error('❌ m365SavePatient threw error:', m365Err.message);
@@ -5463,8 +5540,8 @@
                 const shift = onCallSchedule.find(s => s.date === dateStr);
                 const dayPatients = patients.filter(p => p.date === dateStr && !p.archived);
                 const statPts = dayPatients.filter(p => p.stat === true || p.stat === 'true');
-                const procPts = dayPatients.filter(p => PROC_KEYWORDS.test(p.plan || '') && p.stat !== true && p.stat !== 'true');
-                const otherCount = dayPatients.filter(p => !PROC_KEYWORDS.test(p.plan || '') && p.stat !== true && p.stat !== 'true').length;
+                const procPts = dayPatients.filter(p => isSurgicalCase(p) && p.stat !== true && p.stat !== 'true');
+                const otherCount = dayPatients.filter(p => !isSurgicalCase(p) && p.stat !== true && p.stat !== 'true').length;
 
                 const isHoliday = holidays.length > 0;
                 const dow = new Date(year, month, d).getDay();
@@ -5538,7 +5615,7 @@
             const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
             
             container.innerHTML = filtered.map(p => {
-                const isProc = PROC_KEYWORDS.test(p.plan || '');
+                const isProc = isSurgicalCase(p);
                 const status = p.procedureStatus || 'To-Do';
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS['To-Do'];
                 const findingsDisplay = p.findingsCodes?.length ? p.findingsCodes.join(', ') : (p.findingsText || '-');
@@ -5612,7 +5689,7 @@
                 const el = document.getElementById(`count-${stat}`);
                 if (!el) return;
                 if (stat === 'total') el.innerText = active.length;
-                else if (stat === 'procedures') el.innerText = active.filter(p => PROC_KEYWORDS.test(p.plan || '')).length;
+                else if (stat === 'procedures') el.innerText = active.filter(p => isSurgicalCase(p)).length;
                 else if (stat === 'archived') el.innerText = patients.filter(p => p.archived).length;
             });
         }
@@ -5629,7 +5706,7 @@
         function getFilteredData() {
             let f = [];
             if (currentTab === 'active') f = patients.filter(p => !p.archived);
-            else if (currentTab === 'procedures') f = patients.filter(p => !p.archived && PROC_KEYWORDS.test(p.plan || ''));
+            else if (currentTab === 'procedures') f = patients.filter(p => !p.archived && isSurgicalCase(p));
             else if (currentTab === 'archive') f = patients.filter(p => p.archived);
             
             // Apply user filters
@@ -6652,7 +6729,7 @@
         <!-- Tabs -->
         <nav class="px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" role="tablist" aria-label="Main Navigation">
             <button id="tab-active-btn" onclick="globalThis.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="active-panel">Census</button>
-            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedures-panel">Surgical</button>
+            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedures-panel" title="Shows records tagged as surgical by keyword match in Plan/Findings or by surgical status.">Surgical</button>
             <button id="tab-calendar-btn" onclick="globalThis.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-panel">Calendar</button>
             <button id="tab-oncall-btn" onclick="globalThis.setTab('oncall')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="oncall-panel">Staffing</button>
             <button id="tab-archive-btn" onclick="globalThis.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="archive-panel">Archive</button>
@@ -6694,10 +6771,12 @@
 
                 <!-- View Toggle Buttons -->
                 <div class="view-toggle">
-                    <button class="view-btn active" onclick="globalThis.setViewMode('table')">📊 Table View</button>
-                    <button class="view-btn" onclick="globalThis.setViewMode('card')">🃏 Card View</button>
+                    <button class="view-btn active" onclick="globalThis.setViewMode('table')" title="Standard row-based census table.">📊 Table View</button>
+                    <button class="view-btn" onclick="globalThis.setViewMode('card')" title="Identity fields stay pinned at the top; scroll inside card for full details.">🃏 Card View</button>
                     <button class="view-btn" onclick="globalThis.setViewMode('grouped')">🏥 By Hospital</button>
                 </div>
+
+                <div class="text-[11px] text-slate-500 mb-2">Surgical logic: keyword match in Plan/Findings OR status in In-Progress/Completed/Post-Op.</div>
 
                 <!-- Filter Controls -->
                 <div id="main-table-header" class="flex gap-2 mb-2 p-3 bg-slate-50 border-b border-slate-200 flex-wrap items-center">
@@ -6910,6 +6989,7 @@
             <div id="audit-section" class="hidden h-full p-4 overflow-y-auto">
                 <div>
                     <div class="text-2xl font-bold mb-4">🔐 Audit Logs</div>
+                    <div class="mb-2 text-xs text-slate-500">Tip: create, update, delete, export, and auth events are captured. Apply filters and click Load Logs.</div>
                     <div class="mb-4">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 flex-shrink-0">
                             <select id="audit-filter-action" class="p-2 text-xs border rounded">
@@ -6922,7 +7002,7 @@
                             </select>
                             <input type="date" id="audit-filter-from" placeholder="From" class="p-2 text-xs border rounded" />
                             <input type="date" id="audit-filter-to" placeholder="To" class="p-2 text-xs border rounded" />
-                            <button onclick="globalThis.loadAuditLogs()" class="p-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Load Logs</button>
+                            <button onclick="globalThis.loadAuditLogs()" class="p-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700" title="Reloads logs from memory and M365 audit list.">Load Logs</button>
                         </div>
                     </div>
                     <div id="audit-content" class="overflow-x-auto">
