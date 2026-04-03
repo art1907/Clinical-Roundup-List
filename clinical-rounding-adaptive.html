@@ -3877,7 +3877,12 @@
                     remoteLogs = await globalThis.m365GetAuditLogs({ fromDate, toDate });
                 }
 
-                let logs = [...localLogs, ...remoteLogs].map((entry) => ({
+                // In connected M365 mode, show remote logs only to avoid duplicate rows
+                // (the same event exists both locally and in SharePoint).
+                const useRemoteOnly = Boolean(isConnected && useM365 && remoteLogs.length);
+                const sourceLogs = useRemoteOnly ? remoteLogs : [...localLogs, ...remoteLogs];
+
+                let logs = sourceLogs.map((entry) => ({
                     ...entry,
                     normalizedAction: normalizeAction(entry),
                     normalizedTimestamp: entry.timestamp || entry.createdDateTime || ''
@@ -4706,8 +4711,6 @@
             const deleteBtn = document.getElementById('modal-delete-btn');
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
-            const changeNoteInput = document.getElementById('f-change-note');
-            if (changeNoteInput) changeNoteInput.value = '';
             renderPatientChangeHistory(null);
 
             const setEditMode = (isEditing) => {
@@ -5948,9 +5951,6 @@
                 notesHistory: []
             };
 
-            const changeNoteInput = document.getElementById('f-change-note');
-            const changeNote = changeNoteInput ? changeNoteInput.value.trim() : '';
-
             if (!data.visitTime) {
                 data.visitTime = new Date().toISOString();
             }
@@ -5960,10 +5960,9 @@
             
             try {
                 const editId = document.getElementById('edit-id').value;
-                if (editId && !changeNote) {
-                    showToast('⚠️ Change note is required for updates');
-                    return false;
-                }
+                const changeActionLabel = editId ? 'update' : 'create';
+                const changeNote = await getRequiredChangeNote(changeActionLabel);
+                if (!changeNote) return false;
                 const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                 const getPreviousPatient = () => {
                     if (!editId) return null;
@@ -5972,9 +5971,10 @@
                 };
                 const previousPatient = getPreviousPatient();
                 data.notesHistory = normalizePatientChangeHistory(previousPatient);
-                if (editId && changeNote) {
-                    data.notesHistory = appendPatientChangeNote(data.notesHistory, changeNote, auditUser, 'edit');
-                }
+                data.notesHistory = appendPatientChangeNote(data.notesHistory, changeNote, auditUser, changeActionLabel);
+                data.lastChangeNote = changeNote;
+                data.lastChangeNoteAt = new Date().toISOString();
+                data.lastChangeNoteBy = auditUser;
 
                 // Normalize a field value to a stable string for comparison.
                 // null, undefined, "" and empty collections all become "".
@@ -6029,12 +6029,7 @@
                         if (index !== -1) {
                             const previous = patients[index];
                             patients[index] = { ...data, id: editId, lastUpdated: new Date().toISOString() };
-                            if (changeNote) {
-                                patients[index].lastChangeNote = changeNote;
-                                patients[index].lastChangeNoteAt = new Date().toISOString();
-                                patients[index].lastChangeNoteBy = auditUser;
-                                patients[index].notesHistory = data.notesHistory;
-                            }
+                            patients[index].notesHistory = data.notesHistory;
                             diffAndLog(previous, patients[index], editId);
                         }
                     } else {
@@ -6060,11 +6055,6 @@
                         console.log('📦 Data being sent:', { mrn: data.mrn, name: data.name, date: data.date, hospital: data.hospital });
                         if (editId) {
                             data.id = editId;
-                            if (changeNote) {
-                                data.lastChangeNote = changeNote;
-                                data.lastChangeNoteAt = new Date().toISOString();
-                                data.lastChangeNoteBy = auditUser;
-                            }
                         }
                         console.log('📤 About to call globalThis.m365SavePatient...');
                         try {
@@ -7990,13 +7980,6 @@
                 <div>
                     <label for="f-created-by" class="text-xs font-bold text-slate-400">📝 Created By</label>
                     <input type="text" id="f-created-by" placeholder="Auto-filled from login" aria-label="Created By, auto-filled from login" class="w-full mt-2 p-3 bg-slate-100 rounded-lg border border-slate-200 text-slate-600" readonly>
-                </div>
-
-                <!-- Change Note (required for edits) -->
-                <div>
-                    <label for="f-change-note" class="text-xs font-bold text-slate-600">🗒️ Change Note</label>
-                    <textarea id="f-change-note" placeholder="Required when updating an existing record" aria-label="Change Note" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200" rows="2"></textarea>
-                    <div class="mt-1 text-[11px] text-slate-400">Change Note = why this record changed</div>
                 </div>
 
                 <div>
