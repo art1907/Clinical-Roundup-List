@@ -6497,33 +6497,39 @@
                 const findingsDisplay = p.findingsCodes?.length ? p.findingsCodes.join(', ') : (p.findingsText || '-');
                 const visitTimeDisplay = p.visitTime ? new Date(p.visitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                 
-                const statClass = (p.stat === true || p.stat === 'true') ? 'bg-red-600 text-white border-4 border-red-800 shadow-lg shadow-red-500/50' : 'bg-white border-b border-slate-100';
+                const isStat = (p.stat === true || p.stat === 'true');
+                const statClass = isStat ? 'bg-red-600 text-white border-4 border-red-800 shadow-lg shadow-red-500/50 hover:bg-red-700' : 'bg-white border-b border-slate-100 hover:bg-slate-50';
+
+                const textPrimary = isStat ? 'text-white' : 'text-slate-900';
+                const textSecondary = isStat ? 'text-red-100' : 'text-slate-700';
+                const textMuted = isStat ? 'text-red-200' : 'text-slate-500';
+                const textDark = isStat ? 'text-white' : 'text-slate-800';
                 
                 return `
-                <tr class="hover:bg-slate-50 transition-colors ${statClass}" oncontextmenu="globalThis.openContextMenu(event, '${p.id}')">
+                <tr class="transition-colors ${statClass}" oncontextmenu="globalThis.openContextMenu(event, '${p.id}')">
                     <td class="p-3"><input type="checkbox" data-patient-checkbox value="${p.id}" onchange="updateBatchOpCount()" class="w-5 h-5 rounded cursor-pointer" ${selectedPatientIds.has(p.id)?'checked':''}></td>
-                    ${visibleCols.includes('room') ? `<td class="p-3"><div class="font-bold text-sm text-slate-900">${p.room}</div></td>` : ''}
-                    ${visibleCols.includes('hospital') ? `<td class="p-3"><div class="text-xs font-semibold text-slate-700">${p.hospital || 'N/A'}</div></td>` : ''}
+                    ${visibleCols.includes('room') ? `<td class="p-3"><div class="font-bold text-sm ${textPrimary}">${p.room}</div></td>` : ''}
+                    ${visibleCols.includes('hospital') ? `<td class="p-3"><div class="text-xs font-semibold ${textSecondary}">${p.hospital || 'N/A'}</div></td>` : ''}
                     <td class="p-3">
-                        <div class="text-sm font-bold text-slate-900">${p.name || 'Anon'}</div>
-                        <div class="text-xs text-slate-500 mt-0.5">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
+                        <div class="text-sm font-bold ${textPrimary}">${p.name || 'Anon'}</div>
+                        <div class="text-xs ${textMuted} mt-0.5">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
                     </td>
-                    ${visibleCols.includes('findings') ? `<td class="p-3"><div class="text-xs text-slate-600 line-clamp-2">${findingsDisplay}</div></td>` : ''}
-                    ${visibleCols.includes('plan') ? `<td class="p-3"><div class="text-xs font-bold text-slate-800 mb-1">${p.plan || '-'}</div></td>` : ''}
+                    ${visibleCols.includes('findings') ? `<td class="p-3"><div class="text-xs ${textSecondary} line-clamp-2">${findingsDisplay}</div></td>` : ''}
+                    ${visibleCols.includes('plan') ? `<td class="p-3"><div class="text-xs font-bold ${textDark} mb-1">${p.plan || '-'}</div></td>` : ''}
                     <td class="p-3">
                         ${isProc ? `<div class="flex items-center gap-2">
-                            <select onchange="globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[8px] rounded px-1.5 py-1 ${statusObj.bg} border font-bold flex-1">
-                                <option value="To-Do" ${status === 'To-Do' ? 'selected' : ''}>To-Do ⬜</option>
-                                <option value="In-Progress" ${status === 'In-Progress' ? 'selected' : ''}>In-Prog 🔵</option>
-                                <option value="Completed" ${status === 'Completed' ? 'selected' : ''}>Done ✅</option>
-                                <option value="Post-Op" ${status === 'Post-Op' ? 'selected' : ''}>Post-Op ⭐</option>
+                            <select onchange="globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[8px] rounded px-1.5 py-1 ${statusObj.bg} ${statusObj.text} border font-bold flex-1">
+                                <option value="To-Do" class="text-gray-700" ${status === 'To-Do' ? 'selected' : ''}>To-Do ⬜</option>
+                                <option value="In-Progress" class="text-blue-700" ${status === 'In-Progress' ? 'selected' : ''}>In-Prog 🔵</option>
+                                <option value="Completed" class="text-emerald-700" ${status === 'Completed' ? 'selected' : ''}>Done ✅</option>
+                                <option value="Post-Op" class="text-amber-700" ${status === 'Post-Op' ? 'selected' : ''}>Post-Op ⭐</option>
                             </select>
                             <span class="inline-block ${statusObj.bg} ${statusObj.text} px-2 py-1 rounded whitespace-nowrap font-bold text-[9px]">${statusObj.badge}</span>
                         </div>` : ''}
                     </td>
                     <td class="p-3 flex gap-1 flex-col">
-                        <button onclick="globalThis.openModal('${p.id}')" class="text-[9px] font-bold bg-blue-600 text-white px-2 py-1.5 rounded hover:bg-blue-700 transition-colors">Edit</button>
-                        <button onclick="globalThis.printPatientRecord('${p.id}')" class="text-[9px] font-bold bg-slate-700 text-white px-2 py-1.5 rounded hover:bg-slate-800 transition-colors">Print</button>
+                        <button onclick="globalThis.openModal('${p.id}')" class="text-[9px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1.5 rounded transition-colors">Edit</button>
+                        <button onclick="globalThis.printPatientRecord('${p.id}')" class="text-[9px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1.5 rounded transition-colors">Print</button>
                     </td>
                 </tr>`;
             }).join('');
