@@ -2863,7 +2863,6 @@
                 if (!p) continue;
                 const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                 AuditLogger.logDataChange(auditUser, id, 'procedureStatus', p.procedureStatus, newStatus);
-                AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                 p.procedureStatus = newStatus;
                 p.lastChangeNote = changeNote;
                 p.lastChangeNoteAt = new Date().toISOString();
@@ -2899,7 +2898,6 @@
                 if (!p) continue;
                 const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                 AuditLogger.logDataChange(auditUser, id, 'archived', p.archived, true);
-                AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                 p.archived = true;
                 p.lastChangeNote = changeNote;
                 p.lastChangeNoteAt = new Date().toISOString();
@@ -2934,7 +2932,6 @@
             if (useCloud) {
                 for (const id of ids) {
                     AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
-                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                     try { await globalThis.m365DeletePatient(id); deleted++; }
                     catch (err) { console.error('Batch delete error for', id, err); failed++; }
                 }
@@ -2945,7 +2942,6 @@
             } else {
                 ids.forEach(id => {
                     AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
-                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                 });
                 patients = patients.filter(p => !selectedPatientIds.has(p.id));
                 deleted = ids.length;
@@ -5916,6 +5912,13 @@
             const findingsValues = valuesInput.value ? JSON.parse(valuesInput.value) : {};
             const datesInput = document.getElementById('f-findings-dates');
             const findingsDates = datesInput.value ? JSON.parse(datesInput.value) : {};
+            const parseSecondaryCodes = (raw) => {
+                if (Array.isArray(raw)) return raw.map(v => String(v || '').trim()).filter(Boolean);
+                return String(raw || '')
+                    .split(',')
+                    .map(v => v.trim())
+                    .filter(Boolean);
+            };
             
             const data = {
                 room: document.getElementById('f-room').value, 
@@ -5939,7 +5942,7 @@
                 stat: document.getElementById('f-priority')?.checked || false,
                 cptPrimary: document.getElementById('f-cpt-primary').value,
                 icdPrimary: document.getElementById('f-icd-primary').value,
-                chargeCodesSecondary: document.getElementById('f-charge-codes-secondary').value,
+                chargeCodesSecondary: parseSecondaryCodes(document.getElementById('f-charge-codes-secondary').value),
                 createdBy: document.getElementById('f-created-by').value || currentUser || 'Unknown',
                 archived: document.getElementById('f-archived')?.value === 'true',
                 notesHistory: []
@@ -6033,9 +6036,6 @@
                                 patients[index].notesHistory = data.notesHistory;
                             }
                             diffAndLog(previous, patients[index], editId);
-                            if (changeNote) {
-                                AuditLogger.logDataChange(auditUser, editId, 'changeNote', null, changeNote);
-                            }
                         }
                     } else {
                         const newId = 'local-' + Date.now();
@@ -6080,9 +6080,6 @@
                             // Success - result should be an ID (string/number)
                             const recordId = editId || result;
                             diffAndLog(previousPatient, data, recordId);
-                            if (editId && changeNote) {
-                                AuditLogger.logDataChange(auditUser, recordId, 'changeNote', null, changeNote);
-                            }
                             clearDraft(); // Clear draft on successful save
                             showToast("✓ Saved");
                             setTimeout(() => globalThis.closeModal(), 100); // Slight delay to let toast show
@@ -6135,7 +6132,6 @@
                 if (p) {
                     const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                     AuditLogger.logDataChange(auditUser, id, 'archived', p.archived, shouldArchive);
-                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                     p.archived = shouldArchive;
                     p.lastChangeNote = changeNote;
                     p.lastChangeNoteAt = new Date().toISOString();
@@ -6152,7 +6148,6 @@
                     if (patient) {
                         const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                         AuditLogger.logDataChange(auditUser, id, 'archived', patient.archived, shouldArchive);
-                        AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                         patient.archived = shouldArchive;
                         patient.lastChangeNote = changeNote;
                         patient.lastChangeNoteAt = new Date().toISOString();
@@ -6176,7 +6171,6 @@
                 if (p) {
                     const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                     AuditLogger.logDataChange(auditUser, id, 'procedureStatus', p.procedureStatus, newStatus);
-                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                     p.procedureStatus = newStatus;
                     p.lastChangeNote = changeNote;
                     p.lastChangeNoteAt = new Date().toISOString();
@@ -6192,7 +6186,6 @@
                     if (patient) {
                         const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                         AuditLogger.logDataChange(auditUser, id, 'procedureStatus', patient.procedureStatus, newStatus);
-                        AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                         patient.procedureStatus = newStatus;
                         patient.lastChangeNote = changeNote;
                         patient.lastChangeNoteAt = new Date().toISOString();
@@ -6217,7 +6210,6 @@
                 if (index !== -1) {
                     const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                     AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
-                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                     patients.splice(index, 1);
                     renderUI();
                     showToast("✓ Deleted");
@@ -6228,7 +6220,6 @@
                 if (typeof globalThis.m365DeletePatient === 'function') {
                     const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                     AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
-                    AuditLogger.logDataChange(auditUser, id, 'changeNote', null, changeNote);
                     await globalThis.m365DeletePatient(id);
                     showToast("✓ Deleted");
                     // Refetch to update UI
