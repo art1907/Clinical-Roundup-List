@@ -2184,6 +2184,27 @@
                     appendImmutable(logEntry);
                 },
 
+                // Consolidated multi-field change — logs ONE entry for an entire save operation
+                logDataChanges: (userId, patientId, changedFields, previous, next) => {
+                    if (!shouldLog('data_change')) return;
+                    const detailsSummary = changedFields.map(f => {
+                        const oldV = previous[f];
+                        const newV = next[f];
+                        if ((oldV == null || oldV === '') && newV != null && newV !== '') return `${f} added`;
+                        if (oldV != null && oldV !== '' && (newV == null || newV === '')) return `${f} cleared`;
+                        return `${f} changed`;
+                    }).join('; ');
+                    const logEntry = createLogEntry('data_change', {
+                        userId,
+                        patientId,
+                        fieldChanged: changedFields.join(', '),
+                        detailsSummary,
+                        action: 'update',
+                        timestamp: new Date().toISOString()
+                    });
+                    appendImmutable(logEntry);
+                },
+
                 logExport: (userId, exportType, patientCount, destination) => {
                     if (!shouldLog('export')) return;
                     const logEntry = createLogEntry('export', {
@@ -3858,12 +3879,17 @@
                     const action = entry.normalizedAction;
                     const recordId = entry.recordId || entry.patientId || '-';
                     const details = summarizeDetails(entry);
+                    // Build clickable patient link if recordId matches a known patient
+                    const matchedPatient = recordId !== '-' ? patients.find(p => p.id === recordId) : null;
+                    const recordCell = matchedPatient
+                        ? `<button class="text-blue-700 font-semibold hover:underline text-xs text-left" onclick="globalThis.openModal('${safeText(matchedPatient.id)}')" title="Open: ${safeText(matchedPatient.name)}">${safeText(matchedPatient.name || recordId)}</button>`
+                        : `<span class="text-slate-500 text-xs">${safeText(recordId)}</span>`;
                     return `
                         <tr>
                             <td>${safeText(when)}</td>
                             <td>${safeText(user)}</td>
                             <td><span class="${actionClass(action)}">${safeText(action)}</span></td>
-                            <td>${safeText(recordId)}</td>
+                            <td>${recordCell}</td>
                             <td>${safeText(details)}</td>
                         </tr>
                     `;
@@ -3871,6 +3897,559 @@
             } catch (err) {
                 console.error('Audit log load failed:', err);
                 tableBody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-red-600">Failed to load audit logs: ${safeText(err.message || err)}</td></tr>`;
+            }
+        };
+
+        // ============================================================================
+        // PROCEDURE LOG: Table view — populated from patient records, linked to modal
+        // ============================================================================
+
+        const PROC_TYPE_RULES = [
+            { key: 'cysto',      regex: /\bcysto(?:scopy)?\b/i,           label: 'Cysto',       color: 'bg-sky-100 text-sky-700' },
+            { key: 'stent',      regex: /\bstent\b/i,                     label: 'Stent',       color: 'bg-amber-100 text-amber-700' },
+            { key: 'turbt',      regex: /\bturbt\b/i,                     label: 'TURBT',       color: 'bg-purple-100 text-purple-700' },
+            { key: 'robotic',    regex: /\brobotic\b/i,                   label: 'Robotic',     color: 'bg-indigo-100 text-indigo-700' },
+            { key: 'laser',      regex: /\blaser\b|\blitho(?:tripsy)?\b/i,label: 'Laser',       color: 'bg-orange-100 text-orange-700' },
+            { key: 'urs',        regex: /\burs\b|\bureteroscopy\b/i,      label: 'URS',         color: 'bg-teal-100 text-teal-700' },
+            { key: 'nephrectomy',regex: /\bnephrectomy\b/i,               label: 'Nephrectomy', color: 'bg-red-100 text-red-700' },
+            { key: 'pcn',        regex: /\bpcn\b/i,                       label: 'PCN',         color: 'bg-lime-100 text-lime-700' },
+            { key: 'biopsy',     regex: /\bbx\b|\bbiopsy\b/i,            label: 'Biopsy',      color: 'bg-pink-100 text-pink-700' },
+        ];
+
+        function detectProcTypes(patient) {
+            const text = `${patient.plan || ''} ${patient.findingsText || ''}`;
+            const matches = PROC_TYPE_RULES.filter(r => r.regex.test(text));
+            return matches.length > 0 ? matches : [{ key: 'other', label: 'Surgical', color: 'bg-blue-100 text-blue-700' }];
+        }
+
+        let activeProcTypeFilter = 'all';
+
+        globalThis.filterProcedures = (type) => {
+            activeProcTypeFilter = type || 'all';
+            document.querySelectorAll('.procedure-type-filter').forEach(btn => {
+                const btnKey = btn.dataset.procKey || '';
+                const isActive = btnKey === activeProcTypeFilter;
+                btn.className = `procedure-type-filter px-3 py-2 rounded text-xs font-bold ${isActive ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`;
+            });
+            globalThis.renderProcedureLog();
+        };
+
+        globalThis.renderProcedureLog = () => {
+            const container = document.getElementById('procedure-log-content');
+            if (!container) return;
+
+            let procs = patients.filter(p => !p.archived && isSurgicalCase(p));
+            procs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+            if (activeProcTypeFilter && activeProcTypeFilter !== 'all') {
+                const rule = PROC_TYPE_RULES.find(r => r.key === activeProcTypeFilter);
+                if (rule) procs = procs.filter(p => rule.regex.test(`${p.plan || ''} ${p.findingsText || ''}`));
+            }
+
+            if (!procs.length) {
+                container.innerHTML = `<div class="text-center text-slate-400 py-12 text-sm">No procedures found.<br><span class="text-xs">Detected when plan/findings contain keywords (cysto, stent, TURBT…) or status is In-Progress/Completed/Post-Op.</span></div>`;
+                return;
+            }
+
+            const statusBadgeClass = { 'In-Progress': 'bg-blue-100 text-blue-700', 'Completed': 'bg-green-100 text-green-700', 'Post-Op': 'bg-teal-100 text-teal-700', 'Scheduled': 'bg-amber-100 text-amber-700', 'Pre-Op': 'bg-orange-100 text-orange-700', 'To-Do': 'bg-slate-100 text-slate-600' };
+            const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+            const rows = procs.map(p => {
+                const typeBadges = detectProcTypes(p).map(t =>
+                    `<span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${t.color} mr-0.5">${t.label}</span>`
+                ).join('');
+                const st = p.procedureStatus || 'To-Do';
+                const stClass = statusBadgeClass[st] || 'bg-slate-100 text-slate-600';
+                const statFlag = (p.stat === true || p.stat === 'true') ? '<span class="text-red-600 font-bold mr-1">🔴</span>' : '';
+                return `
+                    <tr class="hover:bg-blue-50 cursor-pointer border-b border-slate-100" onclick="globalThis.openModal('${esc(p.id)}')" title="Open patient record">
+                        <td class="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">${esc(p.date || '')}</td>
+                        <td class="px-3 py-2 text-xs font-bold text-blue-700 whitespace-nowrap">${statFlag}<span class="hover:underline">${esc(p.name || '—')}</span></td>
+                        <td class="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">${esc(p.room || '')}</td>
+                        <td class="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">${esc(p.mrn || '')}</td>
+                        <td class="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">${esc(p.hospital || '')}</td>
+                        <td class="px-3 py-2 text-xs">${typeBadges}</td>
+                        <td class="px-3 py-2 text-xs"><span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${stClass}">${esc(st)}</span></td>
+                        <td class="px-3 py-2 text-xs text-slate-600 max-w-xs truncate" title="${esc(p.plan || '')}">${esc(p.plan || '')}</td>
+                        <td class="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">${esc(p.supervisingMd || p.md || '')}</td>
+                    </tr>`;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="text-xs text-slate-500 mb-2">${procs.length} procedure${procs.length !== 1 ? 's' : ''} — click any row to open patient record</div>
+                <div class="overflow-x-auto rounded border border-slate-200">
+                    <table class="w-full border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-600 text-left text-xs">
+                                <th class="px-3 py-2 font-bold">Date</th>
+                                <th class="px-3 py-2 font-bold">Patient</th>
+                                <th class="px-3 py-2 font-bold">Room</th>
+                                <th class="px-3 py-2 font-bold">MRN</th>
+                                <th class="px-3 py-2 font-bold">Hospital</th>
+                                <th class="px-3 py-2 font-bold">Type</th>
+                                <th class="px-3 py-2 font-bold">Status</th>
+                                <th class="px-3 py-2 font-bold">Plan</th>
+                                <th class="px-3 py-2 font-bold">MD</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        };
+
+        // ============================================================================
+        // SHIFT HANDOFF REPORT
+        // ============================================================================
+        globalThis.generateShiftReport = () => {
+            const container = document.getElementById('shift-report-content');
+            if (!container) return;
+
+            const dateVal   = document.getElementById('shift-report-date')?.value || '';
+            const startTime = document.getElementById('shift-start-time')?.value || '';
+            const endTime   = document.getElementById('shift-end-time')?.value || '';
+
+            if (!dateVal) {
+                container.innerHTML = '<div class="text-red-600 text-sm p-4">Please select a report date.</div>';
+                return;
+            }
+
+            const dayPts = patients.filter(p => p.date === dateVal && !p.archived);
+            if (!dayPts.length) {
+                container.innerHTML = `<div class="text-slate-500 text-sm p-4">No patient visits recorded for ${dateVal}.</div>`;
+                return;
+            }
+
+            const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const onCall = onCallSchedule.find(s => s.date === dateVal);
+            const shiftLabel = (startTime || endTime)
+                ? `${startTime || '?'} – ${endTime || '?'}`
+                : 'Full Day';
+
+            // Group by hospital
+            const groups = {};
+            dayPts.forEach(p => {
+                const h = p.hospital || 'Unassigned';
+                if (!groups[h]) groups[h] = [];
+                groups[h].push(p);
+            });
+
+            const statusBadge = { 'In-Progress': '#3b82f6', 'Completed': '#16a34a', 'Post-Op': '#0d9488', 'Scheduled': '#d97706', 'Pre-Op': '#ea580c', 'To-Do': '#94a3b8' };
+
+            let html = `
+            <div class="shift-report print:shadow-none">
+                <div class="flex justify-between items-start mb-4 flex-wrap gap-2">
+                    <div>
+                        <div class="text-xl font-bold text-slate-800">📋 Shift Handoff Report</div>
+                        <div class="text-sm text-slate-500 mt-0.5">${esc(dateVal)} &nbsp;·&nbsp; ${esc(shiftLabel)}</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="window.print()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded">🖨 Print</button>
+                        <button onclick="globalThis.copyShiftReport()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">📋 Copy Text</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="bg-slate-50 rounded p-3 text-center border border-slate-200">
+                        <div class="text-2xl font-bold text-slate-800">${dayPts.length}</div>
+                        <div class="text-xs text-slate-500">Total Patients</div>
+                    </div>
+                    <div class="bg-blue-50 rounded p-3 text-center border border-blue-200">
+                        <div class="text-2xl font-bold text-blue-700">${dayPts.filter(p => isSurgicalCase(p)).length}</div>
+                        <div class="text-xs text-blue-600">Procedures</div>
+                    </div>
+                    <div class="bg-red-50 rounded p-3 text-center border border-red-200">
+                        <div class="text-2xl font-bold text-red-700">${dayPts.filter(p => p.stat===true||p.stat==='true').length}</div>
+                        <div class="text-xs text-red-600">STAT</div>
+                    </div>
+                </div>
+
+                ${onCall ? `<div class="mb-4 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded text-sm text-indigo-800">📞 On-Call: <strong>${esc(onCall.provider)}</strong>${onCall.hospitals ? ' · ' + esc(onCall.hospitals) : ''}</div>` : ''}
+            `;
+
+            // STAT patients first
+            const statPts = dayPts.filter(p => p.stat===true||p.stat==='true');
+            if (statPts.length) {
+                html += `<div class="mb-4"><div class="font-bold text-red-700 text-sm mb-2">🔴 STAT Patients</div>`;
+                statPts.forEach(p => {
+                    html += buildPatientRow(p, esc, statusBadge);
+                });
+                html += `</div>`;
+            }
+
+            // Then grouped by hospital
+            Object.keys(groups).sort().forEach(hosp => {
+                html += `<div class="mb-4">
+                    <div class="font-bold text-slate-700 text-sm mb-2 pb-1 border-b border-slate-200">${esc(hosp)} <span class="text-slate-400 font-normal">(${groups[hosp].length})</span></div>`;
+                groups[hosp].forEach(p => {
+                    html += buildPatientRow(p, esc, statusBadge);
+                });
+                html += `</div>`;
+            });
+
+            html += `</div>`;
+            container.innerHTML = html;
+
+            // Store plain-text version for copy
+            globalThis._shiftReportText = buildShiftReportText(dateVal, shiftLabel, onCall, dayPts, groups);
+        };
+
+        function buildPatientRow(p, esc, statusBadge) {
+            const isStat = p.stat===true||p.stat==='true';
+            const isSurg = isSurgicalCase(p);
+            const st = p.procedureStatus || 'To-Do';
+            const stColor = statusBadge[st] || '#94a3b8';
+            const bg = isStat ? 'bg-red-50 border-red-200' : isSurg ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200';
+            const procBadge = isSurg
+                ? `<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 mr-1">PROC</span>`
+                : '';
+            return `
+            <div class="border rounded p-3 mb-2 ${bg} cursor-pointer hover:opacity-90" onclick="globalThis.openModal('${esc(p.id)}')" title="Open patient record">
+                <div class="flex justify-between items-start gap-2 flex-wrap">
+                    <div class="font-bold text-sm text-slate-800">${isStat ? '🔴 ' : ''}${esc(p.name || '—')} <span class="font-normal text-slate-500 text-xs">Rm ${esc(p.room || '?')} · MRN ${esc(p.mrn || '?')}</span></div>
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                        ${procBadge}
+                        <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold text-white" style="background:${stColor}">${esc(st)}</span>
+                        ${p.supervisingMd ? `<span class="text-[10px] text-slate-500">· ${esc(p.supervisingMd)}</span>` : ''}
+                    </div>
+                </div>
+                ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
+                ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
+                ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
+            </div>`;
+        }
+
+        function buildShiftReportText(dateVal, shiftLabel, onCall, dayPts, groups) {
+            const lines = [
+                `SHIFT HANDOFF REPORT — ${dateVal} (${shiftLabel})`,
+                '='.repeat(50),
+                `Total Patients: ${dayPts.length}  |  Procedures: ${dayPts.filter(p => isSurgicalCase(p)).length}  |  STAT: ${dayPts.filter(p => p.stat===true||p.stat==='true').length}`,
+                onCall ? `On-Call: ${onCall.provider}${onCall.hospitals ? ' (' + onCall.hospitals + ')' : ''}` : '',
+                ''
+            ];
+            const statPts = dayPts.filter(p => p.stat===true||p.stat==='true');
+            if (statPts.length) {
+                lines.push('--- STAT PATIENTS ---');
+                statPts.forEach(p => {
+                    lines.push(`  [STAT] ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${p.procedureStatus||'To-Do'}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
+                    if (p.plan) lines.push(`    Plan: ${p.plan}`);
+                    if (p.pending) lines.push(`    Pending: ${p.pending}`);
+                    if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
+                });
+                lines.push('');
+            }
+            Object.keys(groups).sort().forEach(hosp => {
+                lines.push(`--- ${hosp} (${groups[hosp].length}) ---`);
+                groups[hosp].forEach(p => {
+                    lines.push(`  ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${p.procedureStatus||'Not-Set'}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
+                    if (p.plan) lines.push(`    Plan: ${p.plan}`);
+                    if (p.pending) lines.push(`    Pending: ${p.pending}`);
+                    if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
+                });
+                lines.push('');
+            });
+            return lines.filter(l => l !== null).join('\n');
+        }
+
+        globalThis.copyShiftReport = async () => {
+            const text = globalThis._shiftReportText || '';
+            if (!text) { showToast('Generate a report first'); return; }
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('✓ Report copied to clipboard');
+            } catch {
+                showToast('Copy failed — use Print instead');
+            }
+        };
+
+        // ============================================================================
+        // PATIENT TIMELINE
+        // ============================================================================
+        globalThis.updateTimelineMRNList = () => {
+            const dl = document.getElementById('timeline-mrn-list');
+            if (!dl) return;
+            const input = (document.getElementById('timeline-filter-mrn')?.value || '').toLowerCase();
+            if (input.length < 1) { dl.innerHTML = ''; return; }
+            const seen = new Set();
+            const opts = [];
+            patients.forEach(p => {
+                const nameKey = p.name || '';
+                const mrnKey  = p.mrn  || '';
+                if (nameKey && !seen.has(nameKey) && nameKey.toLowerCase().includes(input)) {
+                    seen.add(nameKey);
+                    opts.push(`<option value="${nameKey.replace(/"/g, '&quot;')}">`);
+                }
+                if (mrnKey && !seen.has(mrnKey) && mrnKey.toLowerCase().includes(input)) {
+                    seen.add(mrnKey);
+                    opts.push(`<option value="${mrnKey.replace(/"/g, '&quot;')}">`);
+                }
+            });
+            dl.innerHTML = opts.slice(0, 20).join('');
+        };
+
+        globalThis.loadPatientTimeline = () => {
+            const container = document.getElementById('timeline-content');
+            if (!container) return;
+
+            const mrnRaw = (document.getElementById('timeline-filter-mrn')?.value || '').trim();
+            const fromDate = document.getElementById('timeline-filter-from')?.value || '';
+            const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+            const statusColors = {
+                'In-Progress': { bg: '#dbeafe', text: '#1d4ed8', label: '🔵 In-Progress' },
+                'Completed':   { bg: '#dcfce7', text: '#15803d', label: '✅ Completed'   },
+                'Post-Op':     { bg: '#ccfbf1', text: '#0f766e', label: '⭐ Post-Op'      },
+                'Scheduled':   { bg: '#fef9c3', text: '#a16207', label: '📅 Scheduled'   },
+                'Pre-Op':      { bg: '#fed7aa', text: '#c2410c', label: '⚠️ Pre-Op'       },
+                'To-Do':       { bg: '#f1f5f9', text: '#475569', label: '⬜ To-Do'        },
+            };
+
+            // Collect matching visit records
+            let visits = patients.slice(); // include archived so the full history is visible
+            if (mrnRaw) {
+                const mrnLower = mrnRaw.toLowerCase();
+                visits = visits.filter(p =>
+                    (p.mrn || '').toLowerCase().includes(mrnLower) ||
+                    (p.name || '').toLowerCase().includes(mrnLower)
+                );
+            }
+            if (fromDate) {
+                visits = visits.filter(p => (p.date || '') >= fromDate);
+            }
+            visits.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+            // ---- Landing state: show guidance + recent activity grouped by patient ----
+            if (!mrnRaw && !fromDate) {
+                // Show last 30 days by default
+                const cutoff = new Date();
+                cutoff.setDate(cutoff.getDate() - 30);
+                const cutoffStr = cutoff.toISOString().slice(0, 10);
+                const recent = visits.filter(p => (p.date || '') >= cutoffStr);
+
+                // Group by patient (mrn or name fallback)
+                const byParent = {};
+                recent.forEach(p => {
+                    const key = p.mrn || p.name || p.id;
+                    if (!byParent[key]) byParent[key] = { label: `${p.name || '?'} (MRN: ${p.mrn || '?'})`, visits: [] };
+                    byParent[key].visits.push(p);
+                });
+
+                const patientCount = Object.keys(byParent).length;
+
+                let html = `
+                <div class="mb-5 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="font-bold text-blue-800 text-sm mb-1">💡 How to use Patient Timeline</div>
+                    <ul class="text-xs text-blue-700 space-y-1 list-disc ml-4">
+                        <li>Type a <strong>patient name or MRN</strong> in the filter box and click Load to see that patient's full visit history</li>
+                        <li>Use the <strong>From</strong> date to narrow to a specific date range</li>
+                        <li>Each event shows date, status, plan, pending items, and follow-up</li>
+                        <li>Click any event card to open and edit that visit</li>
+                        <li>Archived visits are shown in grey — full history is always visible</li>
+                    </ul>
+                    <div class="mt-2 text-xs text-blue-600"><strong>Example:</strong> Type "Smith" or "12345" in the MRN box → click Load Timeline → see all visits for that patient in date order</div>
+                </div>
+                <div class="mb-3 text-sm font-bold text-slate-700">Recent Activity — Last 30 Days (${patientCount} patient${patientCount !== 1 ? 's' : ''}, ${recent.length} visit${recent.length !== 1 ? 's' : ''})</div>`;
+
+                if (!patientCount) {
+                    html += `<div class="text-slate-400 text-sm text-center py-8">No visits in the last 30 days.<br><span class="text-xs">Import patient data or enter records to see the timeline.</span></div>`;
+                } else {
+                    Object.values(byParent).forEach(group => {
+                        html += `<div class="mb-6">
+                            <div class="text-sm font-bold text-slate-700 mb-2 pb-1 border-b border-slate-200">${esc(group.label)}</div>
+                            <div class="timeline-events">`;
+                        group.visits.forEach(p => { html += buildTimelineEvent(p, esc, statusColors); });
+                        html += `</div></div>`;
+                    });
+                }
+                container.innerHTML = html;
+                return;
+            }
+
+            // ---- Filtered state: all matching visits in chronological order ----
+            if (!visits.length) {
+                container.innerHTML = `<div class="text-slate-400 text-sm text-center py-10">No visits found for "${esc(mrnRaw || fromDate || '')}".<br><span class="text-xs">Check spelling, or try a partial name or MRN.</span></div>`;
+                return;
+            }
+
+            // Group by patient
+            const byParent = {};
+            visits.forEach(p => {
+                const key = p.mrn || p.name || p.id;
+                if (!byParent[key]) byParent[key] = { label: `${p.name || '?'} (MRN: ${p.mrn || '?'})`, visits: [] };
+                byParent[key].visits.push(p);
+            });
+
+            const patientCount = Object.keys(byParent).length;
+            let html = `<div class="mb-3 text-sm font-bold text-slate-700">${visits.length} visit${visits.length !== 1 ? 's' : ''} across ${patientCount} patient${patientCount !== 1 ? 's' : ''}</div>`;
+
+            Object.values(byParent).forEach(group => {
+                html += `<div class="mb-6">
+                    <div class="text-sm font-bold text-slate-700 mb-2 pb-1 border-b border-slate-200">${esc(group.label)}</div>
+                    <div class="timeline-events">`;
+                group.visits.forEach(p => { html += buildTimelineEvent(p, esc, statusColors); });
+                html += `</div></div>`;
+            });
+            container.innerHTML = html;
+        };
+
+        function buildTimelineEvent(p, esc, statusColors) {
+            const isArchived = p.archived === true || p.archived === 'true';
+            const st = p.procedureStatus || 'To-Do';
+            const stStyle = statusColors[st] || statusColors['To-Do'];
+            const isStat = p.stat === true || p.stat === 'true';
+            const isSurg = isSurgicalCase(p);
+            const dotColor = isArchived ? '#94a3b8' : isStat ? '#dc2626' : isSurg ? '#2563eb' : '#3b82f6';
+            return `
+            <div class="timeline-event" style="--dot-color:${dotColor}">
+                <div class="cursor-pointer hover:bg-slate-50 rounded p-2 -ml-2 border border-transparent hover:border-slate-200 transition-colors"
+                     onclick="globalThis.openModal('${esc(p.id)}')" title="Click to open this visit">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="timeline-date">${esc(p.date || '—')}</span>
+                        ${isStat ? '<span class="text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">🔴 STAT</span>' : ''}
+                        ${isArchived ? '<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">archived</span>' : ''}
+                        <span class="inline-block px-2 py-0.5 rounded text-[11px] font-bold" style="background:${stStyle.bg};color:${stStyle.text}">${stStyle.label}</span>
+                        ${p.hospital ? `<span class="text-[10px] text-slate-500">${esc(p.hospital)}</span>` : ''}
+                        ${p.room ? `<span class="text-[10px] text-slate-500">Rm ${esc(p.room)}</span>` : ''}
+                        ${p.supervisingMd ? `<span class="text-[10px] text-slate-500">· ${esc(p.supervisingMd)}</span>` : ''}
+                    </div>
+                    ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
+                    ${p.findingsText ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Findings:</strong> ${esc(p.findingsText)}</div>` : ''}
+                    ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
+                    ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
+                </div>
+            </div>`;
+        }
+
+        // Fix timeline-event dot color from CSS variable (applied at render time)
+        (function addTimelineDotStyle() {
+            const s = document.createElement('style');
+            s.textContent = '.timeline-event::before { background: var(--dot-color, #3b82f6) !important; box-shadow: 0 0 0 2px var(--dot-color, #3b82f6) !important; }';
+            document.head.appendChild(s);
+        })();
+
+        // ============================================================================
+        // PDF REPORTS — uses jsPDF + jsPDF-autotable (already loaded in <head>)
+        // ============================================================================
+        globalThis.generatePDFReport = () => {
+            const reportType = document.getElementById('report-type')?.value || 'daily';
+            const reportDate = document.getElementById('report-date')?.value || '';
+            const reportHosp = document.getElementById('report-hospital')?.value || '';
+            const preview    = document.getElementById('pdf-preview');
+
+            // Determine data set
+            let data = patients.filter(p => !p.archived);
+            if (reportDate) data = data.filter(p => p.date === reportDate);
+            if (reportHosp) data = data.filter(p => p.hospital === reportHosp);
+            if (reportType === 'surgical') data = data.filter(p => isSurgicalCase(p));
+
+            if (!data.length) {
+                if (preview) preview.innerHTML = `<div class="text-center text-slate-500 py-8">No matching records for the selected filters.<br><span class="text-xs">Try changing the date, hospital, or report type.</span></div>`;
+                showToast('No records match — adjust filters');
+                return;
+            }
+
+            // Show print preview in the page
+            if (preview) {
+                const title = { daily: 'Daily Rounding', surgical: 'Surgical Procedures', 'patient-summary': 'Patient Summary', 'hospital-census': 'Hospital Census', 'shift-handoff': 'Shift Handoff' }[reportType] || 'Report';
+                const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const rows = data.map(p => `
+                    <tr>
+                        <td>${esc(p.date||'')}</td>
+                        <td><button class="text-blue-700 hover:underline text-xs font-semibold" onclick="globalThis.openModal('${esc(p.id)}')">${esc(p.name||'—')}</button></td>
+                        <td>${esc(p.room||'')}</td>
+                        <td>${esc(p.mrn||'')}</td>
+                        <td>${esc(p.hospital||'')}</td>
+                        <td>${esc(p.procedureStatus||'')}</td>
+                        <td>${esc(p.plan||'')}</td>
+                        <td>${esc(p.pending||'')}</td>
+                        <td>${esc(p.supervisingMd||p.md||'')}</td>
+                    </tr>`).join('');
+                preview.innerHTML = `
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="font-bold text-slate-700">${esc(title)} — ${data.length} record${data.length !== 1 ? 's' : ''}${reportDate ? ' · ' + reportDate : ''}${reportHosp ? ' · ' + reportHosp : ''}</div>
+                        <div class="flex gap-2">
+                            <button onclick="window.print()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded">🖨 Print</button>
+                            <button onclick="globalThis._downloadPDF()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">⬇ Download PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse text-xs">
+                            <thead><tr class="bg-slate-100 text-slate-600">
+                                <th class="px-2 py-2 text-left">Date</th><th class="px-2 py-2 text-left">Patient</th><th class="px-2 py-2 text-left">Room</th>
+                                <th class="px-2 py-2 text-left">MRN</th><th class="px-2 py-2 text-left">Hospital</th><th class="px-2 py-2 text-left">Status</th>
+                                <th class="px-2 py-2 text-left">Plan</th><th class="px-2 py-2 text-left">Pending</th><th class="px-2 py-2 text-left">MD</th>
+                            </tr></thead>
+                            <tbody class="divide-y divide-slate-100">${rows}</tbody>
+                        </table>
+                    </div>`;
+            }
+
+            // Store for PDF download
+            globalThis._pdfPayload = { reportType, reportDate, reportHosp, data };
+            showToast(`✓ Preview ready — click Download PDF to save`);
+        };
+
+        globalThis._downloadPDF = () => {
+            const payload = globalThis._pdfPayload;
+            if (!payload) { showToast('Generate a report first'); return; }
+
+            try {
+                const jsPDF = window.jspdf?.jsPDF || window.jsPDF;
+                if (!jsPDF) { showToast('PDF library not loaded — use Print instead'); window.print(); return; }
+
+                const { reportType, reportDate, reportHosp, data } = payload;
+                const title = { daily: 'Daily Rounding', surgical: 'Surgical Procedures', 'patient-summary': 'Patient Summary', 'hospital-census': 'Hospital Census', 'shift-handoff': 'Shift Handoff' }[reportType] || 'Report';
+
+                const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+                // Header
+                doc.setFontSize(16);
+                doc.setTextColor(30, 41, 59);
+                doc.text(`Clinical Rounding — ${title}`, 14, 16);
+                doc.setFontSize(9);
+                doc.setTextColor(100, 116, 139);
+                const subLine = [
+                    reportDate ? `Date: ${reportDate}` : 'All Dates',
+                    reportHosp ? `Hospital: ${reportHosp}` : 'All Hospitals',
+                    `Generated: ${new Date().toLocaleString()}`,
+                    `Records: ${data.length}`
+                ].join('   |   ');
+                doc.text(subLine, 14, 22);
+
+                // Table
+                const cols = ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Pending', 'MD'];
+                const rows = data.map(p => [
+                    p.date || '', p.name || '—', p.room || '', p.mrn || '',
+                    p.hospital || '', p.procedureStatus || 'To-Do',
+                    (p.plan || '').slice(0, 60), (p.pending || '').slice(0, 40),
+                    p.supervisingMd || p.md || ''
+                ]);
+
+                doc.autoTable({
+                    head: [cols],
+                    body: rows,
+                    startY: 27,
+                    theme: 'striped',
+                    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+                    bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+                    columnStyles: {
+                        6: { cellWidth: 55 }, // Plan
+                        7: { cellWidth: 40 }, // Pending
+                    },
+                    margin: { left: 14, right: 14 },
+                    didDrawPage: (hookData) => {
+                        doc.setFontSize(7);
+                        doc.setTextColor(150);
+                        doc.text(`Page ${hookData.pageNumber}`, doc.internal.pageSize.width - 20, doc.internal.pageSize.height - 8);
+                    }
+                });
+
+                const filename = `rounding-${reportType}${reportDate ? '-' + reportDate : ''}.pdf`;
+                doc.save(filename);
+                showToast(`✓ ${filename} downloaded`);
+            } catch (err) {
+                console.error('PDF generation error:', err);
+                showToast('PDF failed — using print dialog');
+                window.print();
             }
         };
 
@@ -5171,27 +5750,32 @@
                     const existing = patients.find(p => p.id === editId);
                     return existing || null;
                 };
+
+                // Normalize a field value to a stable string for comparison.
+                // null, undefined, "" and empty collections all become "".
+                const toComparable = (v) => {
+                    if (v == null || v === '' || v === 'undefined' || v === 'null') return '';
+                    if (Array.isArray(v)) return v.length === 0 ? '' : JSON.stringify(v);
+                    if (typeof v === 'object') { const s = JSON.stringify(v); return (s === '{}' || s === '[]') ? '' : s; }
+                    return String(v).trim();
+                };
+
+                // User-visible fields only — excludes system/meta fields that change on every save.
+                const USER_DIFF_FIELDS = [
+                    'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
+                    'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
+                    'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues',
+                    'findingsDates', 'stat', 'priority'
+                ];
+
                 const diffAndLog = (previous, next, recordId) => {
                     if (!previous) {
                         AuditLogger.logDataChange(auditUser, recordId, 'record', null, 'created');
                         return;
                     }
-                    const fields = [
-                        'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
-                        'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
-                        'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues',
-                        'findingsDates', 'visitTime', 'visitKey', 'createdBy', 'archived',
-                        'lastChangeNote', 'lastChangeNoteAt', 'lastChangeNoteBy'
-                    ];
-                    fields.forEach((field) => {
-                        const prevVal = previous[field];
-                        const nextVal = next[field];
-                        const prevStr = typeof prevVal === 'object' ? JSON.stringify(prevVal) : String(prevVal ?? '');
-                        const nextStr = typeof nextVal === 'object' ? JSON.stringify(nextVal) : String(nextVal ?? '');
-                        if (prevStr !== nextStr) {
-                            AuditLogger.logDataChange(auditUser, recordId, field, prevVal, nextVal);
-                        }
-                    });
+                    const changed = USER_DIFF_FIELDS.filter(f => toComparable(previous[f]) !== toComparable(next[f]));
+                    if (!changed.length) return;
+                    AuditLogger.logDataChanges(auditUser, recordId, changed, previous, next);
                 };
                 
                 console.log('🔍 Save decision:', { 
@@ -5200,6 +5784,17 @@
                     willUseLocalMode: !isConnected || !useM365,
                     editId: editId || 'none (new record)'
                 });
+
+                // Pre-save diff preview: show what's actually changing before writing.
+                if (editId) {
+                    const previewPrev = patients.find(p => p.id === editId);
+                    if (previewPrev) {
+                        const previewChanged = USER_DIFF_FIELDS.filter(f => toComparable(previewPrev[f]) !== toComparable(data[f]));
+                        if (previewChanged.length) {
+                            showToast(`Saving: ${previewChanged.join(', ')} changed`);
+                        }
+                    }
+                }
                 
                 if (!isConnected || !useM365) {
                     console.log('📂 Using LOCAL MODE (in-memory storage)');
@@ -5230,6 +5825,9 @@
                     setTimeout(() => globalThis.closeModal(), 100); // Slight delay to let toast show
                     if (currentTab === 'audit' && typeof globalThis.loadAuditLogs === 'function') {
                         await globalThis.loadAuditLogs();
+                    }
+                    if (currentTab === 'procedure-log' && typeof globalThis.renderProcedureLog === 'function') {
+                        globalThis.renderProcedureLog();
                     }
                 } else {
                     console.log('☁️ Using M365 MODE (SharePoint)');
@@ -5272,6 +5870,9 @@
                             }
                             if (currentTab === 'audit' && typeof globalThis.loadAuditLogs === 'function') {
                                 await globalThis.loadAuditLogs();
+                            }
+                            if (currentTab === 'procedure-log' && typeof globalThis.renderProcedureLog === 'function') {
+                                globalThis.renderProcedureLog();
                             }
                         } catch (m365Err) {
                             console.error('❌ m365SavePatient threw error:', m365Err.message);
@@ -5483,6 +6084,7 @@
                 }
             } else if (tab === 'timeline') {
                 document.getElementById('timeline-section')?.classList.remove('hidden');
+                globalThis.loadPatientTimeline();
             } else if (tab === 'analytics') {
                 document.getElementById('analytics-section')?.classList.remove('hidden');
                 globalThis.loadAnalyticsDashboard();
@@ -6735,10 +7337,10 @@
             <button id="tab-archive-btn" onclick="globalThis.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="archive-panel">Archive</button>
             <button id="tab-timeline-btn" onclick="globalThis.setTab('timeline')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="timeline-panel">Timeline</button>
             <button id="tab-analytics-btn" onclick="globalThis.setTab('analytics')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="analytics-panel">Analytics</button>
-            <button id="tab-reports-btn" onclick="globalThis.setTab('reports')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="reports-panel">Reports</button>
             <button id="tab-audit-btn" onclick="globalThis.setTab('audit')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="audit-panel">Audit</button>
             <button id="tab-procedure-log-btn" onclick="globalThis.setTab('procedure-log')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedure-log-panel">Procedures</button>
             <button id="tab-shift-report-btn" onclick="globalThis.setTab('shift-report')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="shift-report-panel">Shifts</button>
+            <button id="tab-reports-btn" onclick="globalThis.setTab('reports')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="reports-panel">Reports</button>
         </nav>
 
         <!-- Content Area -->
@@ -6913,11 +7515,13 @@
             <div id="timeline-section" class="hidden h-full p-4 overflow-y-auto">
                 <div class="timeline-view">
                     <div class="timeline-header">📅 Patient Timeline</div>
-                    <div class="grid grid-cols-3 gap-2 mb-4 flex-shrink-0">
-                        <input type="text" id="timeline-filter-mrn" placeholder="Filter by MRN" class="p-2 text-xs border rounded focus:ring-2 focus:ring-blue-500" />
-                        <input type="date" id="timeline-filter-from" placeholder="From" class="p-2 text-xs border rounded focus:ring-2 focus:ring-blue-500" />
+                    <div class="grid grid-cols-3 gap-2 mb-1 flex-shrink-0">
+                        <input type="text" id="timeline-filter-mrn" placeholder="Name or MRN (leave blank for recent)" list="timeline-mrn-list" class="p-2 text-xs border rounded focus:ring-2 focus:ring-blue-500" oninput="globalThis.updateTimelineMRNList()" />
+                        <datalist id="timeline-mrn-list"></datalist>
+                        <input type="date" id="timeline-filter-from" placeholder="From date" class="p-2 text-xs border rounded focus:ring-2 focus:ring-blue-500" />
                         <button onclick="globalThis.loadPatientTimeline()" class="p-2 px-4 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Load Timeline</button>
                     </div>
+                    <div class="text-[10px] text-slate-400 mb-3">Leave both blank to see recent 30-day activity across all patients.</div>
                     <div id="timeline-content" class="timeline-events"></div>
                 </div>
             </div>
@@ -6967,7 +7571,6 @@
                                 <option value="surgical">Surgical Procedures</option>
                                 <option value="patient-summary">Patient Summary</option>
                                 <option value="hospital-census">Hospital Census</option>
-                                <option value="shift-handoff">Shift Handoff</option>
                             </select>
                             <input type="date" id="report-date" class="p-2 text-xs border rounded" />
                             <select id="report-hospital" class="p-2 text-xs border rounded">
@@ -7028,12 +7631,14 @@
                     <div class="text-2xl font-bold mb-4">✂️ Surgical Procedures</div>
                     <div class="procedure-log">
                         <div class="procedure-log-filter mb-4 flex-shrink-0">
-                            <button onclick="globalThis.filterProcedures('all')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-blue-600 text-white">All</button>
-                            <button onclick="globalThis.filterProcedures('cysto')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Cysto</button>
-                            <button onclick="globalThis.filterProcedures('stent')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Stent</button>
-                            <button onclick="globalThis.filterProcedures('turbt')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">TURBT</button>
-                            <button onclick="globalThis.filterProcedures('robotic')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Robotic</button>
-                            <button onclick="globalThis.filterProcedures('laser')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Laser</button>
+                            <button data-proc-key="all" onclick="globalThis.filterProcedures('all')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-blue-600 text-white">All</button>
+                            <button data-proc-key="cysto" onclick="globalThis.filterProcedures('cysto')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Cysto</button>
+                            <button data-proc-key="stent" onclick="globalThis.filterProcedures('stent')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Stent</button>
+                            <button data-proc-key="turbt" onclick="globalThis.filterProcedures('turbt')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">TURBT</button>
+                            <button data-proc-key="robotic" onclick="globalThis.filterProcedures('robotic')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Robotic</button>
+                            <button data-proc-key="laser" onclick="globalThis.filterProcedures('laser')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Laser</button>
+                            <button data-proc-key="urs" onclick="globalThis.filterProcedures('urs')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">URS</button>
+                            <button data-proc-key="biopsy" onclick="globalThis.filterProcedures('biopsy')" class="procedure-type-filter px-3 py-2 rounded text-xs font-bold bg-slate-200 text-slate-700">Biopsy</button>
                         </div>
                         <div id="procedure-log-content"></div>
                     </div>
