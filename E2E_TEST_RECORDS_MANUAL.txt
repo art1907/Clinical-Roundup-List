@@ -1,0 +1,383 @@
+Clinical Rounding App - 20 Manual Test Records
+Date Created: 2026-04-03
+How to use: Open Add card, enter each record exactly as listed, and Save.
+
+Record 01
+Room: 101A
+Date: 2026-04-03
+Hospital: WGMC
+Provider/MD: Dr. A. Rivera
+Status: To-Do
+STAT Priority: No
+Patient Name: Mason Cole
+DOB: 2002-06-14
+MRN: 900001
+Findings Text: Flank pain and dysuria for 2 days.
+Plan: UA, urine culture, hydration, pain control.
+Progress Notes: Stable vitals, mild tenderness.
+CPT Primary: 99232
+ICD Primary: N39.0
+Secondary Codes: R10.9
+Follow-Up: 2026-04-06 clinic
+Pending Tests: UA and culture
+
+Record 02
+Room: 102B
+Date: 2026-04-03
+Hospital: AWC
+Provider/MD: Dr. L. Turner
+Status: In-Progress
+STAT Priority: No
+Patient Name: Olivia Park
+DOB: 1998-11-02
+MRN: 900002
+Findings Text: Hematuria after stent placement.
+Plan: CBC, monitor urine output, urology review.
+Progress Notes: Improving discomfort.
+CPT Primary: 52332
+ICD Primary: R31.9
+Secondary Codes: Z96.0
+Follow-Up: 2026-04-07 telehealth
+Pending Tests: CBC
+
+Record 03
+Room: 103C
+Date: 2026-04-03
+Hospital: BTMC
+Provider/MD: Dr. J. Singh
+Status: Post-Op
+STAT Priority: No
+Patient Name: Ethan Brooks
+DOB: 1977-03-19
+MRN: 900003
+Findings Text: POD1 after TURBT, mild bladder spasms.
+Plan: Continue Foley, antispasmodic PRN, ambulate.
+Progress Notes: Tolerating diet.
+CPT Primary: 52235
+ICD Primary: C67.9
+Secondary Codes: R39.89
+Follow-Up: 2026-04-10 postop check
+Pending Tests: Pathology report
+
+Record 04
+Room: 104A
+Date: 2026-04-03
+Hospital: Westgate
+Provider/MD: Dr. N. Young
+Status: Completed
+STAT Priority: No
+Patient Name: Ava Mitchell
+DOB: 1985-12-28
+MRN: 900004
+Findings Text: Resolved urinary retention.
+Plan: Remove Foley, discharge education.
+Progress Notes: Voiding trial passed.
+CPT Primary: 51798
+ICD Primary: R33.9
+Secondary Codes: Z46.6
+Follow-Up: 2026-04-08 clinic
+Pending Tests: None
+
+Record 05
+Room: 105D
+Date: 2026-04-03
+Hospital: CRMC
+Provider/MD: Dr. R. Patel
+Status: To-Do
+STAT Priority: Yes
+Patient Name: Noah Bennett
+DOB: 1991-01-08
+MRN: 900005
+Findings Text: Fever, severe CVA tenderness, concern for pyelo.
+Plan: Blood cultures, IV antibiotics, CT abdomen/pelvis.
+Progress Notes: Escalated for urgent imaging.
+CPT Primary: 74176
+ICD Primary: N12
+Secondary Codes: R50.9
+Follow-Up: 2026-04-05 inpatient
+Pending Tests: CT and blood cultures
+
+Record 06
+Room: 106B
+Date: 2026-04-02
+Hospital: AHD
+Provider/MD: Dr. M. Chen
+Status: In-Progress
+STAT Priority: No
+Patient Name: Sofia Ramirez
+DOB: 2000-09-17
+MRN: 900006
+Findings Text: Recurrent stone pain, nausea.
+Plan: IV fluids, pain protocol, trial medical expulsion.
+Progress Notes: Pain now 4/10.
+CPT Primary: 99233
+ICD Primary: N20.0
+Secondary Codes: R11.0
+Follow-Up: 2026-04-06 clinic
+Pending Tests: KUB
+
+Record 07
+Room: 107A
+Date: 2026-04-02
+Hospital: BEMC
+Provider/MD: Dr. K. Flores
+Status: To-Do
+STAT Priority: No
+Patient Name: Liam Carter
+DOB: 1993-05-29
+MRN: 900007
+Findings Text: LUTS with frequency and urgency.
+Plan: Start alpha blocker, bladder diary.
+Progress Notes: Needs med counseling.
+CPT Primary: 51741
+ICD Primary: R39.15
+Secondary Codes: N40.1
+Follow-Up: 2026-04-12 office
+Pending Tests: PVR
+
+Record 08
+Room: 108C
+Date: 2026-04-02
+Hospital: WGMC
+Provider/MD: Dr. A. Rivera
+Status: Completed
+STAT Priority: No
+Patient Name: Harper Scott
+DOB: 1972-02-10
+MRN: 900008
+Findings Text: Completed cystoscopy; no acute findings.
+Plan: Continue outpatient surveillance.
+Progress Notes: Stable for discharge.
+CPT Primary: 52000
+ICD Primary: Z87.448
+Secondary Codes: R39.9
+Follow-Up: 2026-05-02 clinic
+Pending Tests: None
+
+Record 09
+Room: 109D
+Date: 2026-04-02
+Hospital: BTMC
+Provider/MD: Dr. J. Singh
+Status: Post-Op
+STAT Priority: No
+Patient Name: Chloe Adams
+DOB: 1989-08-21
+MRN: 900009
+Findings Text: POD2 ureteroscopy; mild hematuria expected.
+Plan: Hydration, stent discomfort management.
+Progress Notes: Ambulating without assistance.
+CPT Primary: 52356
+ICD Primary: N20.1
+Secondary Codes: Z96.0
+Follow-Up: 2026-04-09 stent removal
+Pending Tests: None
+
+Record 10
+Room: 110A
+Date: 2026-04-02
+Hospital: AWC
+Provider/MD: Dr. L. Turner
+Status: In-Progress
+STAT Priority: No
+Patient Name: James Foster
+DOB: 1968-07-04
+MRN: 900010
+Findings Text: Elevated creatinine with obstructive pattern.
+Plan: Renal ultrasound, nephrology consult.
+Progress Notes: Urine output improved overnight.
+CPT Primary: 76770
+ICD Primary: N13.30
+Secondary Codes: R79.89
+Follow-Up: 2026-04-05 inpatient
+Pending Tests: Renal ultrasound
+
+Record 11
+Room: 111B
+Date: 2026-04-01
+Hospital: Westgate
+Provider/MD: Dr. N. Young
+Status: To-Do
+STAT Priority: No
+Patient Name: Emily Reed
+DOB: 1995-10-13
+MRN: 900011
+Findings Text: Stress incontinence symptoms worsening.
+Plan: Pelvic floor therapy referral.
+Progress Notes: Discussed conservative options.
+CPT Primary: 51726
+ICD Primary: N39.3
+Secondary Codes: R32
+Follow-Up: 2026-04-15 clinic
+Pending Tests: None
+
+Record 12
+Room: 112C
+Date: 2026-04-01
+Hospital: CRMC
+Provider/MD: Dr. R. Patel
+Status: In-Progress
+STAT Priority: Yes
+Patient Name: Benjamin Price
+DOB: 1979-04-25
+MRN: 900012
+Findings Text: Suspected obstructive uropathy with AKI.
+Plan: Urgent decompression consult, labs q6h.
+Progress Notes: STAT care pathway triggered.
+CPT Primary: 50432
+ICD Primary: N13.9
+Secondary Codes: N17.9
+Follow-Up: 2026-04-04 inpatient
+Pending Tests: BMP trend
+
+Record 13
+Room: 113D
+Date: 2026-04-01
+Hospital: AHD
+Provider/MD: Dr. M. Chen
+Status: Completed
+STAT Priority: No
+Patient Name: Grace Howard
+DOB: 1983-01-31
+MRN: 900013
+Findings Text: Foley discomfort resolved after repositioning.
+Plan: Continue routine catheter care.
+Progress Notes: Comfortable and stable.
+CPT Primary: 99231
+ICD Primary: T83.9XXA
+Secondary Codes: Z46.6
+Follow-Up: 2026-04-08 nurse visit
+Pending Tests: None
+
+Record 14
+Room: 114A
+Date: 2026-04-01
+Hospital: BEMC
+Provider/MD: Dr. K. Flores
+Status: Post-Op
+STAT Priority: No
+Patient Name: Daniel Ward
+DOB: 1990-03-07
+MRN: 900014
+Findings Text: POD1 nephrostomy tube check.
+Plan: Tube patency monitoring, pain control.
+Progress Notes: Output adequate.
+CPT Primary: 50435
+ICD Primary: N13.5
+Secondary Codes: Z43.6
+Follow-Up: 2026-04-11 clinic
+Pending Tests: Tube study
+
+Record 15
+Room: 115B
+Date: 2026-03-31
+Hospital: WGMC
+Provider/MD: Dr. A. Rivera
+Status: To-Do
+STAT Priority: No
+Patient Name: Mia Turner
+DOB: 2001-12-09
+MRN: 900015
+Findings Text: New urinary urgency and nocturia.
+Plan: Behavioral therapy + medication trial.
+Progress Notes: Symptoms affecting sleep.
+CPT Primary: 99232
+ICD Primary: R35.1
+Secondary Codes: R39.15
+Follow-Up: 2026-04-14 clinic
+Pending Tests: Urinalysis
+
+Record 16
+Room: 116C
+Date: 2026-03-31
+Hospital: AWC
+Provider/MD: Dr. L. Turner
+Status: In-Progress
+STAT Priority: No
+Patient Name: Lucas Hayes
+DOB: 1975-09-03
+MRN: 900016
+Findings Text: Post-stent pain and mild dysuria.
+Plan: Symptom control and hydration.
+Progress Notes: No fever, no chills.
+CPT Primary: 52310
+ICD Primary: Z46.6
+Secondary Codes: R30.0
+Follow-Up: 2026-04-07 clinic
+Pending Tests: None
+
+Record 17
+Room: 117D
+Date: 2026-03-31
+Hospital: BTMC
+Provider/MD: Dr. J. Singh
+Status: Completed
+STAT Priority: No
+Patient Name: Zoe Cooper
+DOB: 1987-06-22
+MRN: 900017
+Findings Text: Cystitis symptoms resolved.
+Plan: Complete oral antibiotics.
+Progress Notes: Discharge ready.
+CPT Primary: 99231
+ICD Primary: N30.90
+Secondary Codes: R39.89
+Follow-Up: 2026-04-09 PCP
+Pending Tests: None
+
+Record 18
+Room: 118A
+Date: 2026-03-31
+Hospital: Westgate
+Provider/MD: Dr. N. Young
+Status: To-Do
+STAT Priority: Yes
+Patient Name: Henry Diaz
+DOB: 1965-11-18
+MRN: 900018
+Findings Text: Gross hematuria with clot retention.
+Plan: Continuous bladder irrigation, urgent scope eval.
+Progress Notes: High-risk bleed protocol.
+CPT Primary: 52214
+ICD Primary: R31.0
+Secondary Codes: R33.8
+Follow-Up: 2026-04-02 inpatient
+Pending Tests: Hgb trend
+
+Record 19
+Room: 119B
+Date: 2026-03-30
+Hospital: CRMC
+Provider/MD: Dr. R. Patel
+Status: Post-Op
+STAT Priority: No
+Patient Name: Isabella Gray
+DOB: 1992-04-12
+MRN: 900019
+Findings Text: POD3 robotic pyeloplasty recovery.
+Plan: Continue ambulation and incentive spirometry.
+Progress Notes: Incision sites clean and dry.
+CPT Primary: 50544
+ICD Primary: N13.5
+Secondary Codes: Z98.890
+Follow-Up: 2026-04-13 postop clinic
+Pending Tests: None
+
+Record 20
+Room: 120C
+Date: 2026-03-30
+Hospital: AHD
+Provider/MD: Dr. M. Chen
+Status: In-Progress
+STAT Priority: No
+Patient Name: Alexander King
+DOB: 1980-02-27
+MRN: 900020
+Findings Text: BPH with weak stream and hesitancy.
+Plan: Start tamsulosin, monitor symptom score.
+Progress Notes: Shared medication counseling.
+CPT Primary: 51798
+ICD Primary: N40.1
+Secondary Codes: R39.12
+Follow-Up: 2026-04-16 clinic
+Pending Tests: PVR and IPSS

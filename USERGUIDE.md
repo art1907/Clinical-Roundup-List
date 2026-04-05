@@ -4,14 +4,76 @@ Welcome to the Clinical Rounding Platform! This guide walks you through using th
 
 ## Table of Contents
 
-1. [Getting Started](#getting-started)
-2. [Dashboard Overview](#dashboard-overview)
-3. [Managing Patients](#managing-patients)
-4. [Tabs & Views](#tabs--views)
-5. [CSV Import & Excel Export](#csv-import--excel-export)
-6. [On-Call Scheduling](#on-call-scheduling)
-7. [Tips & Keyboard Shortcuts](#tips--keyboard-shortcuts)
-8. [Troubleshooting](#troubleshooting)
+1. [Infographics & Workflows](#infographics--workflows)
+2. [Getting Started](#getting-started)
+3. [Dashboard Overview](#dashboard-overview)
+4. [Managing Patients](#managing-patients)
+5. [Tabs & Views](#tabs--views)
+6. [CSV Import & Excel Export](#csv-import--excel-export)
+7. [On-Call Scheduling](#on-call-scheduling)
+8. [Tips & Keyboard Shortcuts](#tips--keyboard-shortcuts)
+9. [Troubleshooting](#troubleshooting)
+
+---
+
+## Infographics & Workflows
+
+### 🔄 Daily Rounding Workflow
+```mermaid
+flowchart TD
+    A([Start Shift]) --> B{Sign In}
+    B --> C[Review Census Tab]
+    C --> D{New Patient?}
+    D -- Yes --> E[Click + Add Patient]
+    D -- No --> F[Select Existing Patient]
+    E --> G[Enter Details & Save]
+    F --> H[Update Status & Findings]
+    G --> I{Rounds Complete?}
+    H --> I
+    I -- No --> C
+    I -- Yes --> J[Generate Handoff]
+    J --> K([End Shift])
+
+    style A fill:#4CAF50,stroke:#388E3C,color:#fff
+    style K fill:#F44336,stroke:#D32F2F,color:#fff
+    style B fill:#2196F3,stroke:#1976D2,color:#fff
+    style J fill:#FF9800,stroke:#F57C00,color:#fff
+```
+
+### 📥 Bulk Import Process
+```mermaid
+flowchart LR
+    A[Export Excel from EHR] --> B[Click Import CSV/Excel]
+    B --> C[Select Files]
+    C --> D[System Analyzes Data]
+    D --> E{Duplicates Found?}
+    E -- Yes --> F[Review Preview Modal]
+    F --> G[Choose: Import All vs New Only]
+    E -- No --> H[Import Proceeds]
+    G --> H
+    H --> I([Records Added to Census])
+
+    style A fill:#9C27B0,stroke:#7B1FA2,color:#fff
+    style F fill:#FFC107,stroke:#FFA000,color:#000
+    style I fill:#4CAF50,stroke:#388E3C,color:#fff
+```
+
+### 🧠 Same-Patient Visit Logic
+```mermaid
+flowchart TD
+    A[Add/Edit Patient] --> B{Same MRN & Date?}
+    B -- Yes --> C[Update Existing Record]
+    B -- No --> D{Same MRN, New Date?}
+    D -- Yes --> E[Prompt: Copy Previous Visit]
+    E --> F[Auto-fill Demographics & Plan]
+    F --> G[Leave Findings Blank]
+    G --> H[Create New Record]
+    D -- No --> I[Create Brand New Patient]
+
+    style C fill:#2196F3,stroke:#1976D2,color:#fff
+    style H fill:#4CAF50,stroke:#388E3C,color:#fff
+    style I fill:#9C27B0,stroke:#7B1FA2,color:#fff
+```
 
 ---
 

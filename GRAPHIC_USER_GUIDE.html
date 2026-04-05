@@ -579,6 +579,7 @@
     <!-- STICKY NAVIGATION -->
     <nav class="sticky-nav">
         <ul>
+            <li><a href="#infographics">🖼️ Infographics</a></li>
             <li><a href="#getting-started">🚀 Start</a></li>
             <li><a href="#dashboard">📊 Dashboard</a></li>
             <li><a href="#patients">👥 Patients</a></li>
@@ -590,6 +591,80 @@
     </nav>
 
     <div class="container">
+        <!-- INFOGRAPHICS & WORKFLOWS -->
+        <section id="infographics">
+            <h2>🖼️ Infographics & Workflows</h2>
+            <p>Visual guides to help you understand the core processes of the platform.</p>
+
+            <h3>🔄 Daily Rounding Workflow</h3>
+            <div class="card" style="text-align: center; padding: 40px 20px; background: #f8fafc;">
+                <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div style="background: var(--success); color: white; padding: 15px 25px; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Start Shift</div>
+                    <div style="font-size: 24px; color: #94a3b8; font-weight: bold;">&rarr;</div>
+                    <div style="background: white; border: 2px solid var(--border); padding: 15px 25px; border-radius: 8px; color: var(--dark); font-weight: 500;">Review Census Tab</div>
+                    <div style="font-size: 24px; color: #94a3b8; font-weight: bold;">&rarr;</div>
+                    <div style="background: white; border: 2px solid var(--border); padding: 15px 25px; border-radius: 8px; color: var(--dark); font-weight: 500;">Add / Edit Patient</div>
+                    <div style="font-size: 24px; color: #94a3b8; font-weight: bold;">&rarr;</div>
+                    <div style="background: var(--warning); color: white; padding: 15px 25px; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Generate Handoff</div>
+                    <div style="font-size: 24px; color: #94a3b8; font-weight: bold;">&rarr;</div>
+                    <div style="background: var(--danger); color: white; padding: 15px 25px; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">End Shift</div>
+                </div>
+            </div>
+
+            <h3>📥 Bulk Import Process</h3>
+            <div class="card" style="padding: 30px; background: #faf5ff; border-left: 5px solid #a855f7;">
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <div style="background: #a855f7; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">1</div>
+                        <div>
+                            <h4 style="margin: 0; color: #7e22ce;">Export & Upload</h4>
+                            <p style="margin: 5px 0 0 0; font-size: 0.95em; color: #6b7280;">Export Excel from your EHR and upload it to the platform.</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <div style="background: #eab308; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">2</div>
+                        <div>
+                            <h4 style="margin: 0; color: #ca8a04;">System Analysis & Duplicate Detection</h4>
+                            <p style="margin: 5px 0 0 0; font-size: 0.95em; color: #6b7280;">The system scans for exact matches (MRN + Date) and shows a preview modal.</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <div style="background: var(--success); color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">3</div>
+                        <div>
+                            <h4 style="margin: 0; color: #15803d;">User Action</h4>
+                            <p style="margin: 5px 0 0 0; font-size: 0.95em; color: #6b7280;">Choose to "Import All" or "Import New Only" and the records are safely added to the Census.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3>🧠 Same-Patient Visit Logic</h3>
+            <div class="card">
+                <p style="margin-bottom: 20px;">How the system handles unique patient visits across different dates vs the same date.</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Scenario</th>
+                            <th>Logic Check</th>
+                            <th>System Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Update John Doe today</td>
+                            <td>Same MRN + <strong>Same Date</strong></td>
+                            <td style="background: #eff6ff; font-weight: 500; color: #1d4ed8;">Updates existing record<br><small style="font-weight: normal; color: #64748b;">(No duplicate created)</small></td>
+                        </tr>
+                        <tr>
+                            <td>See John Doe again tomorrow</td>
+                            <td>Same MRN + <strong>New Date</strong></td>
+                            <td style="background: #f0fdf4; font-weight: 500; color: #15803d;">Creates new record<br><small style="font-weight: normal; color: #64748b;">(Auto-prompts to copy vitals & plan)</small></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- GETTING STARTED -->
         <section id="getting-started">
             <h2>🚀 Getting Started</h2>

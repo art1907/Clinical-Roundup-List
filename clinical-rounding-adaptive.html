@@ -2719,61 +2719,33 @@
                 return;
             }
             
-            const q = query.toLowerCase();
-            const filtered = patients.filter(p => {
-                const searchFields = [
-                    p.name, p.mrn, p.room, p.hospital, p.plan, 
-                    p.findingsText, p.pending, p.followUp, p.supervisingMd
-                ].map(f => (f || '').toLowerCase()).join(' ');
-                return searchFields.includes(q);
-            });
-            
-            // Temporarily override getFilteredData
-            globalThis._searchOverride = filtered;
+            globalThis._searchQueryText = query.toLowerCase();
             // Force refresh on search
             globalThis.forceRefresh();
         };
 
         // Quick Filter Buttons
         globalThis.setQuickFilter = (type) => {
-            let filtered = [];
-            const active = patients.filter(p => !p.archived);
-            
+            globalThis._quickFilterType = type;
+            let toastMsg = '';
             switch(type) {
-                case 'stat':
-                    filtered = active.filter(p => p.stat === true || p.stat === 'true');
-                    showToast('🔴 STAT Only');
-                    break;
-                case 'procedures':
-                    filtered = active.filter(p => isSurgicalCase(p));
-                    showToast('🔵 Procedures Only');
-                    break;
-                case 'inprogress':
-                    filtered = active.filter(p => p.procedureStatus === 'In-Progress');
-                    showToast('⚡ In-Progress Only');
-                    break;
-                case 'pending':
-                    filtered = active.filter(p => p.pending && p.pending.length > 0);
-                    showToast('📋 Pending Tests Only');
-                    break;
+                case 'stat': toastMsg = '🔴 STAT Only'; break;
+                case 'procedures': toastMsg = '🔵 Procedures Only'; break;
+                case 'inprogress': toastMsg = '⚡ In-Progress Only'; break;
+                case 'pending': toastMsg = '📋 Pending Tests Only'; break;
             }
+            if (toastMsg) showToast(toastMsg);
             
-            globalThis._searchOverride = filtered;
             // Force refresh on quick filter
             globalThis.forceRefresh();
         };
 
         // Clear Search
         globalThis.clearSearch = () => {
-            document.getElementById('search-box').value = '';
-            globalThis._searchOverride = null;
-            // Force refresh on clear
-            globalThis.forceRefresh();
-            showToast('🔍 Search cleared');
-        };
-
-        // ============================================================================= 
-        // KEYBOARD SHORTCUTS
+            const searchBox = document.getElementById('search-box');
+            if (searchBox) searchBox.value = '';
+            globalThis._searchQueryText = null;
+            globalThis._quickFilterType = null;
         // ============================================================================= 
 
         // Initialize keyboard shortcuts
@@ -3329,16 +3301,40 @@
         };
 
         globalThis.getFilteredData = function() {
-            let filtered = originalGetFilteredData();
-            
-            // Apply search override
-            if (globalThis._searchOverride) return globalThis._searchOverride;
-            
-            // Apply advanced filters
+            let filtered = originalGetFilteredData(); // Uses base user filters & tab rules
+
+            // 1. Apply Quick filter
+            if (globalThis._quickFilterType) {
+                const type = globalThis._quickFilterType;
+                if (type === 'stat') {
+                    filtered = filtered.filter(p => p.stat === true || p.stat === 'true');
+                } else if (type === 'procedures') {
+                    filtered = filtered.filter(p => isSurgicalCase(p));
+                } else if (type === 'inprogress') {
+                    filtered = filtered.filter(p => p.procedureStatus === 'In-Progress');
+                } else if (type === 'pending') {
+                    filtered = filtered.filter(p => p.pending && String(p.pending).trim().length > 0);
+                } else if (type === 'date' && globalThis._quickFilterDate) {
+                    filtered = filtered.filter(p => p.date === globalThis._quickFilterDate);
+                }
+            }
+
+            // 2. Apply Text Search override
+            if (globalThis._searchQueryText) {
+                const q = globalThis._searchQueryText;
+                filtered = filtered.filter(p => {
+                    const searchFields = [
+                        p.name, p.mrn, p.room, p.hospital, p.plan,
+                        p.findingsText, p.pending, p.followUp, p.supervisingMd
+                    ].map(f => (f || '').toLowerCase()).join(' ');
+                    return searchFields.includes(q);
+                });
+            }
+
+            // 3. Apply advanced filters (from filter panel)
             filtered = applyActiveFilters(filtered);
-            
-            // Apply sorting
-            filtered = sortPatients(filtered);
+
+            // 4. Apply sorting
             
             return filtered;
         };
@@ -3433,7 +3429,7 @@
 
         // Render Status Distribution Pie Chart
         globalThis.renderStatusChart = () => {
-            const filtered = globalThis._searchOverride || getFilteredData();
+            const filtered = getFilteredData();
             const statuses = ['To-Do', 'In-Progress', 'Completed', 'Post-Op'];
             const counts = statuses.map(s => filtered.filter(p => (p.procedureStatus || 'To-Do') === s).length);
             const colors = ['#d1d5db', '#3b82f6', '#10b981', '#f59e0b'];
@@ -3488,7 +3484,7 @@
 
         // Render Quick Stats
         globalThis.renderQuickStats = () => {
-            const filtered = globalThis._searchOverride || getFilteredData();
+            const filtered = getFilteredData();
             const stats = {
                 'Total Patients': filtered.length,
                 'STAT Priority': filtered.filter(p => p.stat === true || p.stat === 'true').length,
@@ -3508,7 +3504,7 @@
 
         // Render Patient Summary Statistics
         globalThis.renderPatientSummary = () => {
-            const filtered = globalThis._searchOverride || getFilteredData();
+            const filtered = getFilteredData();
             
             const lostmean = filtered.length > 0 
                 ? Math.round(filtered.reduce((sum, p) => sum + (globalThis.calculateLOS(p.date) || 0), 0) / filtered.length)
@@ -4566,7 +4562,7 @@
 
         // Render Card View
         globalThis.renderCardView = () => {
-            const filtered = globalThis._searchOverride || getFilteredData();
+            const filtered = getFilteredData();
             const container = document.getElementById('card-view-container');
             const groupedContainer = document.getElementById('grouped-view-container');
 
@@ -4662,7 +4658,7 @@
 
         // Render Grouped View (By Hospital)
         globalThis.renderGroupedView = () => {
-            const filtered = globalThis._searchOverride || getFilteredData();
+            const filtered = getFilteredData();
             const container = document.getElementById('grouped-view-container');
             const cardContainer = document.getElementById('card-view-container');
 
@@ -4711,25 +4707,12 @@
             container.innerHTML = html;
         };
 
-        // Update charts and stats when data changes
-        const originalRenderUI = globalThis.renderUI;
-        globalThis.renderUI = function() {
-            originalRenderUI.call(this);
-            
-            // Render visualizations
-            setTimeout(() => {
-                globalThis.renderPatientSummary();
-                globalThis.updateTabButtonStyles?.(currentTab);
-                
-                if (currentViewMode === 'card') {
-                    globalThis.renderCardView();
-                } else if (currentViewMode === 'grouped') {
-                    globalThis.renderGroupedView();
-                }
-                
-                globalThis.initSortableHeaders();
-            }, 50);
-        };
+// Note: original monkey patch removed, logic absorbed into renderUI directly
+
+        function isFindingsModalEditable() {
+            const modal = document.getElementById('patient-modal');
+            return modal?.dataset.findingsEditable !== 'false';
+        }
 
         function lockBackfilledFields(locked) {
             const lockedIds = [
@@ -4779,6 +4762,7 @@
             renderPatientChangeHistory(null);
 
             const setEditMode = (isEditing) => {
+                modal.dataset.findingsEditable = isEditing ? 'true' : 'false';
                 lockBackfilledFields(!isEditing);
                 if (saveBtn) {
                     saveBtn.disabled = !isEditing;
@@ -4950,7 +4934,7 @@
                             }
                         });
                         if (typeof globalThis.syncFindingsUI === 'function') {
-                            globalThis.syncFindingsUI();
+                            globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
                         }
                     }
                 } else {
@@ -4969,7 +4953,7 @@
                 }
             }
             if (typeof globalThis.syncFindingsUI === 'function') {
-                globalThis.syncFindingsUI();
+                globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
             }
             modal.classList.remove('hidden');
             setTimeout(() => modal.querySelector('.modal-container')?.scrollTo(0, 0), 100);
@@ -4980,8 +4964,10 @@
         };
 
         globalThis.enableModalEdit = () => {
+            const modal = document.getElementById('patient-modal');
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
+            if (modal) modal.dataset.findingsEditable = 'true';
             lockBackfilledFields(false);
             if (saveBtn) {
                 saveBtn.disabled = false;
@@ -6209,6 +6195,7 @@
                         patient.lastChangeNoteBy = auditUser;
                         patient.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(patient), changeNote, auditUser, shouldArchive ? 'archive' : 'restore');
                         await globalThis.m365SavePatient(patient);
+                        renderUI();
                         showToast(shouldArchive ? "Archived" : "Restored");
                     }
                 }
@@ -6307,12 +6294,7 @@
             // Clear any stale data cache
             globalThis._lastRenderTime = null;
             globalThis._cachedFilteredData = null;
-            
-            // Clear search override if it exists
-            if (globalThis._searchOverride) {
-                globalThis._searchOverride = null;
-            }
-            
+
             // Trigger full re-render on next renderUI call
             renderUI();
         };
@@ -6462,25 +6444,35 @@
         }
 
         globalThis.filterToDate = (dateStr) => {
-            globalThis._searchOverride = patients.filter(p => p.date === dateStr && !p.archived);
+            globalThis._quickFilterType = 'date';
+            globalThis._quickFilterDate = dateStr;
             globalThis.setTab('active');
             showToast(`📅 ${dateStr}`);
         };
 
         function renderUI() {
-            if (currentTab === 'calendar') renderCalendar();
-            else renderMainTable();
+            if (currentTab === 'calendar') {
+                renderCalendar();
+            } else {
+                renderMainTable();
+                if (typeof currentViewMode !== 'undefined') {
+                    if (currentViewMode === 'card') globalThis.renderCardView?.();
+                    else if (currentViewMode === 'grouped') globalThis.renderGroupedView?.();
+                }
+            }
             updateStats();
             globalThis.updateTabButtonStyles?.(currentTab);
-            
-            // Initialize Phase 2 sortable headers
-            setTimeout(() => globalThis.initSortableHeaders(), 50);
-        }
 
+            setTimeout(() => {
+                globalThis.renderPatientSummary?.();
+                globalThis.initSortableHeaders?.();
+            }, 50);
+        }
+        globalThis.renderUI = renderUI;
         function renderMainTable() {
             const container = document.getElementById('table-body');
             if (!container) return;
-            const filtered = globalThis._searchOverride || getFilteredData();
+            const filtered = getFilteredData();
             
             if (filtered.length === 0) {
                 container.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 text-sm">No entries</td></tr>`;
@@ -7197,7 +7189,8 @@
             const valuesInput = document.getElementById('f-findings-values');
             const datesInput = document.getElementById('f-findings-dates');
             
-            function updateSelectedCodes() {
+            function updateSelectedCodes(options = {}) {
+                const editable = options.editable ?? isFindingsModalEditable();
                 const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
                 codesInput.value = selected.join(', ');
                 const values = {};
@@ -7211,7 +7204,7 @@
                     const customPanel = document.querySelector(`.findings-custom-panel[data-code="${code}"]`);
 
                     if (dateInput) {
-                        dateInput.disabled = !checked;
+                        dateInput.disabled = !checked || !editable;
                         dateInput.style.display = checked ? 'inline-block' : 'none';
                         if (checked && dateInput.value) dates[code] = dateInput.value;
                     }
@@ -7224,6 +7217,7 @@
                         }
                         document.querySelectorAll(`.findings-custom-input[data-code="${code}"]`).forEach(input => {
                             input.disabled = !checked;
+                            input.readOnly = !editable;
                             const val = input.value.trim();
                             if (val) {
                                 customValues[input.dataset.field] = val;
@@ -7242,6 +7236,7 @@
 
                     if (valueInput) {
                         valueInput.disabled = !checked;
+                        valueInput.readOnly = !editable;
                         valueInput.style.display = checked ? 'block' : 'none';
                         if (checked && valueInput.value) values[code] = valueInput.value;
                     }
