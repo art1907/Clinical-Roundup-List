@@ -806,17 +806,23 @@
             gap: 1rem;
             padding: 1rem;
         }
-            if (mode === 'table') {
-                tableView?.classList.add('active');
-            } else if (mode === 'card') {
-                cardView?.classList.add('active');
-            } else if (mode === 'grouped') {
-                groupedView?.classList.add('active');
-            }
 
-            if (tableContainer) tableContainer.style.display = mode === 'table' ? '' : 'none';
-            if (cardContainer) cardContainer.classList.toggle('active', mode === 'card');
-            if (groupedContainer) groupedContainer.style.display = mode === 'grouped' ? '' : 'none';
+        .card-view.active {
+            display: grid;
+        }
+
+        .patient-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            min-height: 280px;
+        }
+
         body.dark-mode .patient-card {
             background: #2a2a2a;
             border-color: #444;
