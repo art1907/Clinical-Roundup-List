@@ -6712,9 +6712,17 @@
                 if (groupedContainer) groupedContainer.style.display = currentViewMode === 'grouped' ? '' : 'none';
 
                 renderMainTable();
+                // Ensure card view and grouped view are properly re-rendered whenever renderUI is called
+                // This fixes the issue where switching tabs doesn't update the card/grouped view content
                 if (typeof currentViewMode !== 'undefined') {
-                    if (currentViewMode === 'card') globalThis.renderCardView?.();
-                    else if (currentViewMode === 'grouped') globalThis.renderGroupedView?.();
+                    if (currentViewMode === 'card') {
+                        // Clear container before rendering to ensure fresh content
+                        if (cardContainer) cardContainer.innerHTML = '';
+                        globalThis.renderCardView?.();
+                    } else if (currentViewMode === 'grouped') {
+                        if (groupedContainer) groupedContainer.innerHTML = '';
+                        globalThis.renderGroupedView?.();
+                    }
                 }
             }
             updateStats();
