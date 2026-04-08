@@ -357,6 +357,10 @@ async function fetchOnCallSchedule() {
     }
 }
 
+function isSharePointListItemId(value) {
+    return /^\d+$/.test(String(value || '').trim());
+}
+
 async function saveOnCallShift(shiftData) {
     const listId = M365_CONFIG.sharepoint.lists.onCallSchedule;
     const siteId = M365_CONFIG.sharepoint.siteId;
@@ -367,18 +371,26 @@ async function saveOnCallShift(shiftData) {
         Hospitals: shiftData.hospitals || ''
     };
     
-    if (shiftData.id) {
-        // Update
+    if (isSharePointListItemId(shiftData.id)) {
         const endpoint = `/sites/${siteId}/lists/${listId}/items/${shiftData.id}/fields`;
         await graphRequest(endpoint, 'PATCH', fields);
-    } else {
-        // Create
-        const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-        await graphRequest(endpoint, 'POST', { fields: fields });
+        return { ...shiftData, id: String(shiftData.id) };
     }
+
+    const endpoint = `/sites/${siteId}/lists/${listId}/items`;
+    const createdItem = await graphRequest(endpoint, 'POST', { fields: fields });
+    return {
+        ...shiftData,
+        id: createdItem?.id ? String(createdItem.id) : String(shiftData.id || '')
+    };
 }
 
 async function deleteOnCallShift(shiftId) {
+    if (!isSharePointListItemId(shiftId)) {
+        console.warn('Skipping M365 delete for non-SharePoint on-call shift id:', shiftId);
+        return;
+    }
+
     const listId = M365_CONFIG.sharepoint.lists.onCallSchedule;
     const siteId = M365_CONFIG.sharepoint.siteId;
     const endpoint = `/sites/${siteId}/lists/${listId}/items/${shiftId}`;

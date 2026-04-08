@@ -1104,16 +1104,6 @@
             flex: 1;
         }
         
-        .timeline-date {
-            font-size: 0.75rem;
-            color: #6b7280;
-            font-weight: bold;
-        }
-        
-        body.dark-mode .timeline-date {
-            color: #999;
-        }
-        
         .timeline-text {
             font-size: 0.875rem;
             margin-top: 0.25rem;
@@ -1853,6 +1843,17 @@
     </style>
     
     <script>
+        var patients = [];
+        var onCallSchedule = [];
+        var selectedPatientIds = new Set();
+        var currentUser = null;
+        var globalSettings = { onCall: "", hospitals: "" };
+        var currentTab = 'active';
+        var rawImportData = null;
+        var calDate = new Date();
+        var isConnected = false;
+        var isAuthenticated = false;
+
         // Device Detection & Adaptation
         const Device = (() => {
             const ua = navigator.userAgent.toLowerCase();
@@ -2923,7 +2924,11 @@
                 }
                 // Refetch to sync list after M365 deletes
                 if (typeof globalThis.m365FetchPatients === 'function') {
-                    try { await globalThis.m365FetchPatients(); } catch (_) {}
+                    try {
+                        await globalThis.m365FetchPatients();
+                    } catch (err) {
+                        console.warn('Batch delete refresh failed:', err);
+                    }
                 }
             } else {
                 ids.forEach(id => {
@@ -3958,7 +3963,10 @@
                     const action = entry.normalizedAction;
                     const recordId = entry.recordId || entry.patientId || '-';
                     const details = summarizeDetails(entry);
-                    const matchedPatient = recordId !== '-' ? patients.find(p => p.id === recordId) : null;
+                    let matchedPatient = null;
+                    if (recordId !== '-') {
+                        matchedPatient = patients.find(p => p.id === recordId) || null;
+                    }
                     const patientLabel = matchedPatient ? safeText(matchedPatient.name || recordId) : safeText(recordId);
                     const recordCell = matchedPatient
                         ? `<button class="text-blue-700 font-semibold hover:underline text-xs text-left" onclick="event.stopPropagation();globalThis.openModal('${safeText(matchedPatient.id)}')" title="Open: ${safeText(matchedPatient.name)}">${patientLabel}</button>`
@@ -4078,7 +4086,7 @@
             }).join('');
 
             container.innerHTML = `
-                <div class="text-xs text-slate-500 mb-2">${procs.length} procedure${procs.length !== 1 ? 's' : ''} — click any row to open patient record</div>
+                <div class="text-xs text-slate-500 mb-2">${procs.length} procedure${pluralSuffix(procs.length)} — click any row to open patient record</div>
                 <div class="overflow-x-auto rounded border border-slate-200">
                     <table class="w-full border-collapse text-xs">
                         <thead>
@@ -4145,7 +4153,7 @@
                         <div class="text-sm text-slate-500 mt-0.5">${esc(dateVal)} &nbsp;·&nbsp; ${esc(shiftLabel)}</div>
                     </div>
                     <div class="flex gap-2">
-                        <button onclick="window.print()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded">🖨 Print</button>
+                        <button onclick="globalThis.print()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded">🖨 Print</button>
                         <button onclick="globalThis.copyShiftReport()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">📋 Copy Text</button>
                     </div>
                 </div>
@@ -4165,7 +4173,7 @@
                     </div>
                 </div>
 
-                ${onCall ? `<div class="mb-4 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded text-sm text-indigo-800">📞 On-Call: <strong>${esc(onCall.provider)}</strong>${onCall.hospitals ? ' · ' + esc(onCall.hospitals) : ''}</div>` : ''}
+                ${renderOnCallBanner(onCall, esc)}
             `;
 
             // STAT patients first
@@ -4200,7 +4208,12 @@
             const isSurg = isSurgicalCase(p);
             const st = p.procedureStatus || 'To-Do';
             const stColor = statusBadge[st] || '#94a3b8';
-            const bg = isStat ? 'bg-red-50 border-red-200' : isSurg ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200';
+            let bg = 'bg-white border-slate-200';
+            if (isStat) {
+                bg = 'bg-red-50 border-red-200';
+            } else if (isSurg) {
+                bg = 'bg-blue-50 border-blue-200';
+            }
             const procBadge = isSurg
                 ? `<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 mr-1">PROC</span>`
                 : '';
@@ -4226,7 +4239,7 @@
                 `SHIFT HANDOFF REPORT — ${dateVal} (${shiftLabel})`,
                 '='.repeat(50),
                 `Total Patients: ${dayPts.length}  |  Procedures: ${dayPts.filter(p => isSurgicalCase(p)).length}  |  STAT: ${dayPts.filter(p => p.stat===true||p.stat==='true').length}`,
-                onCall ? `On-Call: ${onCall.provider}${onCall.hospitals ? ' (' + onCall.hospitals + ')' : ''}` : '',
+                formatOnCallText(onCall),
                 ''
             ];
             const statPts = dayPts.filter(p => p.stat===true||p.stat==='true');
@@ -4253,6 +4266,22 @@
                 lines.push('');
             });
             return lines.filter(l => l !== null).join('\n');
+        }
+
+        function formatOnCallText(onCall) {
+            if (!onCall) return '';
+            const hospitalsText = onCall.hospitals ? ` (${onCall.hospitals})` : '';
+            return `On-Call: ${onCall.provider}${hospitalsText}`;
+        }
+
+        function renderOnCallBanner(onCall, esc) {
+            if (!onCall) return '';
+            const hospitalsText = onCall.hospitals ? ` · ${esc(onCall.hospitals)}` : '';
+            return `<div class="mb-4 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded text-sm text-indigo-800">📞 On-Call: <strong>${esc(onCall.provider)}</strong>${hospitalsText}</div>`;
+        }
+
+        function pluralSuffix(count) {
+            return count === 1 ? '' : 's';
         }
 
         globalThis.copyShiftReport = async () => {
@@ -4352,9 +4381,9 @@
                     </ul>
                     <div class="mt-2 text-xs text-blue-600"><strong>Example:</strong> Type "Smith" or "12345" in the MRN box → click Load Timeline → see all visits for that patient in date order</div>
                 </div>
-                <div class="mb-3 text-sm font-bold text-slate-700">Recent Activity — Last 30 Days (${patientCount} patient${patientCount !== 1 ? 's' : ''}, ${recent.length} visit${recent.length !== 1 ? 's' : ''})</div>`;
+                <div class="mb-3 text-sm font-bold text-slate-700">Recent Activity — Last 30 Days (${patientCount} patient${pluralSuffix(patientCount)}, ${recent.length} visit${pluralSuffix(recent.length)})</div>`;
 
-                if (!patientCount) {
+                if (patientCount === 0) {
                     html += `<div class="text-slate-400 text-sm text-center py-8">No visits in the last 30 days.<br><span class="text-xs">Import patient data or enter records to see the timeline.</span></div>`;
                 } else {
                     Object.values(byParent).forEach(group => {
@@ -4384,7 +4413,7 @@
             });
 
             const patientCount = Object.keys(byParent).length;
-            let html = `<div class="mb-3 text-sm font-bold text-slate-700">${visits.length} visit${visits.length !== 1 ? 's' : ''} across ${patientCount} patient${patientCount !== 1 ? 's' : ''}</div>`;
+            let html = `<div class="mb-3 text-sm font-bold text-slate-700">${visits.length} visit${pluralSuffix(visits.length)} across ${patientCount} patient${pluralSuffix(patientCount)}</div>`;
 
             Object.values(byParent).forEach(group => {
                 html += `<div class="mb-6">
@@ -4402,7 +4431,14 @@
             const stStyle = statusColors[st] || statusColors['To-Do'];
             const isStat = p.stat === true || p.stat === 'true';
             const isSurg = isSurgicalCase(p);
-            const dotColor = isArchived ? '#94a3b8' : isStat ? '#dc2626' : isSurg ? '#2563eb' : '#3b82f6';
+            let dotColor = '#3b82f6';
+            if (isArchived) {
+                dotColor = '#94a3b8';
+            } else if (isStat) {
+                dotColor = '#dc2626';
+            } else if (isSurg) {
+                dotColor = '#2563eb';
+            }
             return `
             <div class="timeline-event" style="--dot-color:${dotColor}">
                 <div class="cursor-pointer hover:bg-slate-50 rounded p-2 -ml-2 border border-transparent hover:border-slate-200 transition-colors"
@@ -4472,9 +4508,9 @@
                     </tr>`).join('');
                 preview.innerHTML = `
                     <div class="flex justify-between items-center mb-3">
-                        <div class="font-bold text-slate-700">${esc(title)} — ${data.length} record${data.length !== 1 ? 's' : ''}${reportDate ? ' · ' + reportDate : ''}${reportHosp ? ' · ' + reportHosp : ''}</div>
+                        <div class="font-bold text-slate-700">${esc(title)} — ${data.length} record${pluralSuffix(data.length)}${reportDate ? ' · ' + reportDate : ''}${reportHosp ? ' · ' + reportHosp : ''}</div>
                         <div class="flex gap-2">
-                            <button onclick="window.print()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded">🖨 Print</button>
+                            <button onclick="globalThis.print()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded">🖨 Print</button>
                             <button onclick="globalThis._downloadPDF()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">⬇ Download PDF</button>
                         </div>
                     </div>
@@ -4500,8 +4536,8 @@
             if (!payload) { showToast('Generate a report first'); return; }
 
             try {
-                const jsPDF = window.jspdf?.jsPDF || window.jsPDF;
-                if (!jsPDF) { showToast('PDF library not loaded — use Print instead'); window.print(); return; }
+                const jsPDF = globalThis.jspdf?.jsPDF || globalThis.jsPDF;
+                if (!jsPDF) { showToast('PDF library not loaded — use Print instead'); globalThis.print(); return; }
 
                 const { reportType, reportDate, reportHosp, data } = payload;
                 const title = { daily: 'Daily Rounding', surgical: 'Surgical Procedures', 'patient-summary': 'Patient Summary', 'hospital-census': 'Hospital Census', 'shift-handoff': 'Shift Handoff' }[reportType] || 'Report';
@@ -4557,7 +4593,7 @@
             } catch (err) {
                 console.error('PDF generation error:', err);
                 showToast('PDF failed — using print dialog');
-                window.print();
+                globalThis.print();
             }
         };
 
@@ -5269,16 +5305,7 @@
         // Global state for the application
         // Note: These will be updated by M365 polling or local mode
 
-        let patients = [];
-        let onCallSchedule = [];
-        let selectedPatientIds = new Set();
-        let currentUser = null;
-        let globalSettings = { onCall: "", hospitals: "" };
-        let currentTab = 'active'; 
-        let rawImportData = null; 
-        let calDate = new Date();
-        let isConnected = false;
-        let isAuthenticated = false;  // Track authentication state
+        // Shared state is initialized in the earlier script block.
 
         globalThis.getCurrentPatients = () => patients;
 
@@ -5545,7 +5572,7 @@
                         isAuthenticated = false;
                         showLoginPrompt();
                     }
-                } else if (!useM365) {
+                } else {
                     // Local mode
                     isConnected = false;
                     useM365 = false;
@@ -5896,7 +5923,8 @@
             }
             container.innerHTML = history.map((entry) => {
                 const when = formatClinicalTimestamp(entry.timestamp);
-                const line = `${when} - ${entry.author || 'unknown'}${entry.action ? ` - ${entry.action}` : ''} - ${entry.note || ''}`;
+                const actionText = entry.action ? ' - ' + entry.action : '';
+                const line = `${when} - ${entry.author || 'unknown'}${actionText} - ${entry.note || ''}`;
                 return `
                     <div class="border border-slate-200 rounded-lg p-3 bg-white">
                         <div class="text-xs text-slate-700 whitespace-pre-wrap leading-5">${esc(line)}</div>
@@ -6254,6 +6282,8 @@
                         patient.lastChangeNoteBy = auditUser;
                         patient.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(patient), changeNote, auditUser, 'status update');
                         await globalThis.m365SavePatient(patient);
+                        renderUI();
+                        showToast('Status updated');
                     }
                 }
             } catch (err) {
@@ -6425,11 +6455,12 @@
                 const dow = new Date(year, month, d).getDay();
                 const isWeekend = dow === 0 || dow === 6;
 
-                const dayClass = isHoliday
-                    ? 'bg-red-50 p-2 min-h-20 border-2 border-red-400 rounded text-xs'
-                    : isWeekend
-                        ? 'bg-slate-50 p-2 min-h-20 border border-slate-100 rounded text-xs'
-                        : 'bg-white p-2 min-h-20 border border-slate-200 rounded text-xs';
+                let dayClass = 'bg-white p-2 min-h-20 border border-slate-200 rounded text-xs';
+                if (isHoliday) {
+                    dayClass = 'bg-red-50 p-2 min-h-20 border-2 border-red-400 rounded text-xs';
+                } else if (isWeekend) {
+                    dayClass = 'bg-slate-50 p-2 min-h-20 border border-slate-100 rounded text-xs';
+                }
 
                 const holidaysHtml = holidays.map(h =>
                     `<div class="text-red-700 font-bold text-[9px] leading-tight">${h.emoji} ${h.name}</div>`
@@ -6449,9 +6480,10 @@
                     `<div class="font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-blue-200 truncate" onclick="globalThis.openModal('${p.id}')" title="${p.hospital || ''}: ${p.plan || ''}">${p.name}</div>`
                 ).join('');
 
-                const othersHtml = otherCount > 0
-                    ? `<div class="bg-slate-100 text-slate-600 px-1 py-0.5 rounded text-[8px] font-semibold cursor-pointer hover:bg-slate-200" onclick="globalThis.filterToDate('${dateStr}')">👥 ${otherCount} visit${otherCount !== 1 ? 's' : ''}</div>`
-                    : '';
+                let othersHtml = '';
+                if (otherCount > 0) {
+                    othersHtml = `<div class="bg-slate-100 text-slate-600 px-1 py-0.5 rounded text-[8px] font-semibold cursor-pointer hover:bg-slate-200" onclick="globalThis.filterToDate('${dateStr}')">👥 ${otherCount} visit${pluralSuffix(otherCount)}</div>`;
+                }
 
                 html += `<div class="${dayClass}">
                     <div class="font-bold text-slate-500 mb-0.5">${d}</div>
@@ -6820,14 +6852,16 @@
                     existing.provider3 = provider3;
                     existing.hospitals = hospitals;
                     if (isConnected && typeof globalThis.m365SaveOnCallShift === 'function') {
-                        await globalThis.m365SaveOnCallShift(existing);
+                        const savedShift = await globalThis.m365SaveOnCallShift(existing);
+                        if (savedShift?.id) existing.id = savedShift.id;
                     }
                 } else {
                     // Create new
                     const newShift = { id: Date.now().toString(), date, provider, provider2, provider3, hospitals };
                     onCallSchedule.push(newShift);
                     if (isConnected && typeof globalThis.m365SaveOnCallShift === 'function') {
-                        await globalThis.m365SaveOnCallShift(newShift);
+                        const savedShift = await globalThis.m365SaveOnCallShift(newShift);
+                        if (savedShift?.id) newShift.id = savedShift.id;
                     }
                 }
                 renderOnCallSchedule();
@@ -7391,7 +7425,7 @@
             <div class="settings-content">
                 <!-- Theme -->
                 <div class="settings-group">
-                    <label class="settings-label">🎨 Theme</label>
+                    <div class="settings-label">🎨 Theme</div>
                     <label class="flex items-center gap-2 cursor-pointer mb-2">
                         <input type="radio" name="theme" value="light" checked onchange="globalThis.setTheme('light')"> Light
                     </label>
@@ -7402,7 +7436,7 @@
                 
                 <!-- Text Size -->
                 <div class="settings-group">
-                    <label class="settings-label">📝 Text Size</label>
+                    <div class="settings-label">📝 Text Size</div>
                     <input type="range" min="1" max="4" value="1" onchange="globalThis.setTextSize(this.value)" class="w-full">
                     <div class="flex justify-between text-xs text-slate-500 mt-1">
                         <span>Small</span>
@@ -7419,7 +7453,7 @@
                 
                 <!-- Column Visibility -->
                 <div class="settings-group">
-                    <label class="settings-label">👁️ Visible Columns</label>
+                    <div class="settings-label">👁️ Visible Columns</div>
                     <div class="column-toggle">
                         <label><input type="checkbox" class="column-vis" value="room" checked onchange="globalThis.updateColumnVisibility()"> Room</label>
                         <label><input type="checkbox" class="column-vis" value="hospital" checked onchange="globalThis.updateColumnVisibility()"> Hospital</label>
@@ -7430,7 +7464,7 @@
                 
                 <!-- Auto-save Interval -->
                 <div class="settings-group">
-                    <label class="settings-label">⏱️ Auto-Save Interval</label>
+                    <div class="settings-label">⏱️ Auto-Save Interval</div>
                     <select onchange="globalThis.setAutoSaveInterval(this.value)" class="w-full p-2 border border-slate-300 rounded text-sm">
                         <option value="5">5 seconds</option>
                         <option value="10" selected>10 seconds</option>
@@ -7441,7 +7475,7 @@
                 
                 <!-- Data Management -->
                 <div class="settings-group">
-                    <label class="settings-label">💾 Data</label>
+                    <div class="settings-label">💾 Data</div>
                     <button onclick="globalThis.exportLocalData()" class="w-full p-2 text-left text-sm bg-blue-50 border border-blue-300 rounded hover:bg-blue-100 text-blue-700">📥 Export Local Data</button>
                     <button onclick="globalThis.importLocalData()" class="w-full p-2 text-left text-sm bg-green-50 border border-green-300 rounded hover:bg-green-100 text-green-700 mt-2">📤 Import Local Data</button>
                     <button onclick="if(confirm('Clear all local data? This cannot be undone.')) globalThis.clearAllData()" class="w-full p-2 text-left text-sm bg-red-50 border border-red-300 rounded hover:bg-red-100 text-red-700 mt-2">🗑️ Clear All Data</button>
@@ -7521,7 +7555,7 @@
             <div class="filter-content">
                 <!-- Filter Presets -->
                 <div class="filter-group">
-                    <label class="filter-label">⭐ Quick Presets</label>
+                    <div class="filter-label">⭐ Quick Presets</div>
                     <div class="filter-presets">
                         <button onclick="globalThis.loadFilterPreset('morning')" class="filter-preset-btn">🌅 Morning Rounds</button>
                         <button onclick="globalThis.loadFilterPreset('postop')" class="filter-preset-btn">⭐ Post-Op Check</button>
@@ -7532,7 +7566,7 @@
 
                 <!-- Procedure Categories -->
                 <div class="filter-group">
-                    <label class="filter-label">🏥 Procedure Categories</label>
+                    <div class="filter-label">🏥 Procedure Categories</div>
                     <div class="procedure-category-buttons">
                         <button onclick="globalThis.filterByProcedure('cysto')" class="procedure-btn">Cysto</button>
                         <button onclick="globalThis.filterByProcedure('stent')" class="procedure-btn">Stent</button>
@@ -7546,7 +7580,7 @@
 
                 <!-- Status Filter -->
                 <div class="filter-group">
-                    <label class="filter-label">📊 Status</label>
+                    <div class="filter-label">📊 Status</div>
                     <div class="filter-checkbox-group">
                         <label><input type="checkbox" class="filter-status" value="To-Do"> To-Do ⬜</label>
                         <label><input type="checkbox" class="filter-status" value="In-Progress"> In-Progress 🔵</label>
@@ -7557,7 +7591,7 @@
 
                 <!-- Priority Filter -->
                 <div class="filter-group">
-                    <label class="filter-label">🎯 Priority</label>
+                    <div class="filter-label">🎯 Priority</div>
                     <div class="filter-checkbox-group">
                         <label><input type="checkbox" class="filter-priority" value="stat"> STAT Priority 🔴</label>
                         <label><input type="checkbox" class="filter-priority" value="normal"> Normal 🟢</label>
@@ -7566,7 +7600,7 @@
 
                 <!-- Hospital Filter -->
                 <div class="filter-group">
-                    <label class="filter-label">🏥 Hospitals</label>
+                    <div class="filter-label">🏥 Hospitals</div>
                     <div class="filter-checkbox-group">
                         <label><input type="checkbox" class="filter-hospital-cb" value="WGMC"> WGMC</label>
                         <label><input type="checkbox" class="filter-hospital-cb" value="AWC"> AWC</label>
@@ -7578,27 +7612,27 @@
 
                 <!-- Date Range Filter -->
                 <div class="filter-group">
-                    <label class="filter-label">📅 Date Range</label>
+                    <div class="filter-label">📅 Date Range</div>
                     <div>
-                        <label class="text-xs my-2 block">From:</label>
+                        <label for="filter-date-from" class="text-xs my-2 block">From:</label>
                         <input type="date" id="filter-date-from" class="w-full p-2 border border-slate-300 rounded text-sm">
                     </div>
                     <div class="mt-2">
-                        <label class="text-xs my-2 block">To:</label>
+                        <label for="filter-date-to" class="text-xs my-2 block">To:</label>
                         <input type="date" id="filter-date-to" class="w-full p-2 border border-slate-300 rounded text-sm">
                     </div>
                 </div>
 
                 <!-- Length of Stay Filter -->
                 <div class="filter-group">
-                    <label class="filter-label">⏳ Length of Stay (days)</label>
+                    <label for="filter-los" class="filter-label">⏳ Length of Stay (days)</label>
                     <input type="range" id="filter-los" min="0" max="30" value="30" class="filter-slider">
                     <div class="text-xs text-slate-500 mt-1">≤ <span id="filter-los-display">30</span> days admitted</div>
                 </div>
 
                 <!-- Archived Filter -->
                 <div class="filter-group">
-                    <label class="filter-label">📦 Status</label>
+                    <div class="filter-label">📦 Status</div>
                     <div class="filter-checkbox-group">
                         <label><input type="checkbox" id="filter-show-archived" value="archived"> Show Archived Records</label>
                     </div>
@@ -7638,7 +7672,7 @@
         <div class="swipe-hint">👆 Swipe left/right to navigate tabs on mobile</div>
 
         <!-- Tabs -->
-        <nav class="px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" role="tablist" aria-label="Main Navigation">
+        <nav class="px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" aria-label="Main Navigation">
             <button id="tab-active-btn" onclick="globalThis.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="active-panel">Census</button>
             <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedures-panel" title="Shows records tagged as surgical by keyword match in Plan/Findings or by surgical status.">Surgical</button>
             <button id="tab-calendar-btn" onclick="globalThis.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-panel">Calendar</button>
@@ -7656,7 +7690,7 @@
         <div class="content-area">
             <!-- Advanced Search Panel -->
             <div id="advanced-search" class="advanced-search">
-                <label class="text-xs font-bold text-slate-600 block mb-1">🔍 Search</label>
+                <label for="search-box" class="text-xs font-bold text-slate-600 block mb-1">🔍 Search</label>
                 <input type="text" id="search-box" class="search-box" placeholder="Search by name, MRN, room, hospital, or findings..." onkeyup="globalThis.performSearch(this.value)">
                 <div class="flex gap-2 mt-2 flex-wrap">
                     <button onclick="globalThis.setQuickFilter('stat')" class="px-2 py-1 bg-red-100 border border-red-300 text-red-700 text-xs rounded hover:bg-red-200">STAT Only 🔴</button>
@@ -7693,11 +7727,11 @@
                 <!-- Filter Controls -->
                 <div id="main-table-header" class="flex gap-2 mb-2 p-3 bg-slate-50 border-b border-slate-200 flex-wrap items-center">
                     <div class="flex flex-col">
-                        <label class="text-[9px] font-bold text-slate-600 mb-1">Date</label>
+                        <label for="filter-date" class="text-[9px] font-bold text-slate-600 mb-1">Date</label>
                         <input type="date" id="filter-date" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[9px] font-bold text-slate-600 mb-1">Hospital</label>
+                        <label for="filter-hospital" class="text-[9px] font-bold text-slate-600 mb-1">Hospital</label>
                         <select id="filter-hospital" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500">
                             <option value="">All Hospitals</option>
                             <option value="WGMC">WGMC</option>
@@ -7711,11 +7745,11 @@
                         </select>
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[9px] font-bold text-slate-600 mb-1">Room</label>
+                        <label for="filter-room" class="text-[9px] font-bold text-slate-600 mb-1">Room</label>
                         <input type="text" id="filter-room" placeholder="Room #" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 w-24" />
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[9px] font-bold text-slate-600 mb-1">Patient</label>
+                        <label for="filter-patient" class="text-[9px] font-bold text-slate-600 mb-1">Patient</label>
                         <input type="text" id="filter-patient" placeholder="Name or MRN" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div class="flex gap-2 items-end">
@@ -7765,24 +7799,24 @@
                         <h3 class="text-sm font-bold mb-3">Coverage Assignment</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                             <div>
-                                <label class="text-xs font-bold text-slate-600 block mb-1">Date</label>
+                                <label for="oc-date" class="text-xs font-bold text-slate-600 block mb-1">Date</label>
                                 <input type="date" id="oc-date" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-slate-600 block mb-1">Primary Provider</label>
+                                <label for="oc-provider" class="text-xs font-bold text-slate-600 block mb-1">Primary Provider</label>
                                 <input type="text" id="oc-provider" placeholder="Dr. Name" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-slate-600 block mb-1">Additional Provider 1</label>
+                                <label for="oc-provider-2" class="text-xs font-bold text-slate-600 block mb-1">Additional Provider 1</label>
                                 <input type="text" id="oc-provider-2" placeholder="Dr. Name" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-slate-600 block mb-1">Additional Provider 2</label>
+                                <label for="oc-provider-3" class="text-xs font-bold text-slate-600 block mb-1">Additional Provider 2</label>
                                 <input type="text" id="oc-provider-3" placeholder="Dr. Name" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label class="text-xs font-bold text-slate-600 block mb-2">Hospitals (Select multiple)</label>
+                            <div class="text-xs font-bold text-slate-600 block mb-2">Hospitals (Select multiple)</div>
                             <div id="oc-hospitals-container" class="bg-slate-50 rounded-lg border border-slate-200 p-3 space-y-2 max-h-[160px] overflow-y-auto">
                                 <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
                                     <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="WGMC">
@@ -7843,7 +7877,7 @@
                     <div class="bg-white border border-slate-200 rounded p-3 mb-4">
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
                             <div>
-                                <label class="block text-xs font-bold text-slate-600 mb-1">Preset Analysis</label>
+                                <label for="analytics-preset-select" class="block text-xs font-bold text-slate-600 mb-1">Preset Analysis</label>
                                 <select id="analytics-preset-select" class="w-full p-2 text-xs border border-slate-300 rounded">
                                     <option value="overview">Census Overview</option>
                                     <option value="procedures">Procedure Pipeline</option>
@@ -7855,7 +7889,7 @@
                                 <button onclick="globalThis.runAnalyticsPreset()" class="w-full p-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Run Preset</button>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-slate-600 mb-1">Custom Query (validated)</label>
+                                <label for="analytics-custom-input" class="block text-xs font-bold text-slate-600 mb-1">Custom Query (validated)</label>
                                 <input id="analytics-custom-input" type="text" placeholder="key:value (hospital:WGMC)" class="w-full p-2 text-xs border border-slate-300 rounded" />
                             </div>
                         </div>

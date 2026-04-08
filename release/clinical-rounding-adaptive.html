@@ -1615,14 +1615,16 @@
                     existing.provider = provider;
                     existing.hospitals = hospitals;
                     if (isConnected && typeof window.m365SaveOnCallShift === 'function') {
-                        await window.m365SaveOnCallShift(existing);
+                        const savedShift = await window.m365SaveOnCallShift(existing);
+                        if (savedShift?.id) existing.id = savedShift.id;
                     }
                 } else {
                     // Create new
                     const newShift = { id: Date.now().toString(), date, provider, hospitals };
                     onCallSchedule.push(newShift);
                     if (isConnected && typeof window.m365SaveOnCallShift === 'function') {
-                        await window.m365SaveOnCallShift(newShift);
+                        const savedShift = await window.m365SaveOnCallShift(newShift);
+                        if (savedShift?.id) newShift.id = savedShift.id;
                     }
                 }
                 renderOnCallSchedule();
