@@ -3632,6 +3632,220 @@
                     .slice(0, 25)
                     .map((p) => `${p.name || 'Unknown'} | MRN ${p.mrn || '-'} | ${p.hospital || 'Unassigned'} | ${p.date || ''}`);
                 renderAnalyticsDetails('High-Attention Patients (STAT and/or Pending)', riskRows);
+                return;
+            }
+
+            if (preset === 'provider') {
+                const providerCounts = {};
+                const providerStats = {};
+                data.activePatients.forEach((p) => {
+                    const md = p.supervisingMd || 'Unassigned';
+                    if (!providerStats[md]) {
+                        providerStats[md] = { count: 0, stat: 0, pending: 0, procedures: 0 };
+                    }
+                    providerStats[md].count++;
+                    if (p.stat === true || p.stat === 'true') providerStats[md].stat++;
+                    if (p.pending && String(p.pending).trim().length > 0) providerStats[md].pending++;
+                    if (isSurgicalCase(p)) providerStats[md].procedures++;
+                });
+
+                const md_sorted = Object.entries(providerStats).sort((a, b) => b[1].count - a[1].count);
+                const topMd = md_sorted[0];
+
+                renderAnalyticsCards([
+                    { title: 'Providers', value: md_sorted.length, subtitle: 'Supervising physicians' },
+                    { title: 'Top Provider', value: topMd?.[0] || 'N/A', subtitle: `${topMd?.[1]?.count || 0} patients` },
+                    { title: 'Avg Patients/MD', value: Math.round(data.activePatients.length / (md_sorted.length || 1)), subtitle: 'Average workload' },
+                    { title: 'Total Procedures', value: data.procedurePatients.length, subtitle: 'Across all providers' }
+                ]);
+
+                const midRows = md_sorted.map(([md, stats]) => `${md}: ${stats.count} patients | ${stats.procedures} procedures | ${stats.stat} STAT | ${stats.pending} pending`);
+                renderAnalyticsDetails('Provider Workload Summary', midRows);
+                return;
+            }
+
+            if (preset === 'billing') {
+                const cptCodes = {};
+                const icdCodes = {};
+                const chargeCodes = {};
+                data.activePatients.forEach((p) => {
+                    if (p.cptPrimary) {
+                        const code = String(p.cptPrimary).trim();
+                        cptCodes[code] = (cptCodes[code] || 0) + 1;
+                    }
+                    if (p.icdPrimary) {
+                        const code = String(p.icdPrimary).trim();
+                        icdCodes[code] = (icdCodes[code] || 0) + 1;
+                    }
+                    if (p.chargeCodesSecondary) {
+                        try {
+                            const codes = Array.isArray(p.chargeCodesSecondary) ? p.chargeCodesSecondary : 
+                                         (typeof p.chargeCodesSecondary === 'string' ? JSON.parse(p.chargeCodesSecondary) : []);
+                            codes.forEach(c => {
+                                const code = String(c).trim();
+                                chargeCodes[code] = (chargeCodes[code] || 0) + 1;
+                            });
+                        } catch (e) {}
+                    }
+                });
+
+                const cptSorted = Object.entries(cptCodes).sort((a, b) => b[1] - a[1]);
+                const icdSorted = Object.entries(icdCodes).sort((a, b) => b[1] - a[1]);
+
+                renderAnalyticsCards([
+                    { title: 'Unique CPT Codes', value: cptSorted.length, subtitle: 'Procedure codes' },
+                    { title: 'Top CPT Code', value: cptSorted[0]?.[0] || 'N/A', subtitle: `${cptSorted[0]?.[1] || 0} cases` },
+                    { title: 'Unique ICD Codes', value: icdSorted.length, subtitle: 'Diagnosis codes' },
+                    { title: 'Top ICD Code', value: icdSorted[0]?.[0] || 'N/A', subtitle: `${icdSorted[0]?.[1] || 0} cases` }
+                ]);
+
+                const billingRows = [
+                    '=== Top CPT Codes ===',
+                    ...cptSorted.slice(0, 10).map(([code, count]) => `CPT ${code}: ${count} cases`),
+                    '',
+                    '=== Top ICD Codes ===',
+                    ...icdSorted.slice(0, 10).map(([code, count]) => `ICD ${code}: ${count} cases`)
+                ];
+                renderAnalyticsDetails('Billing Code Distribution', billingRows);
+                return;
+            }
+
+            if (preset === 'los') {
+                const losValues = data.activePatients
+                    .map(p => globalThis.calculateLOS(p.date) || 0)
+                    .filter(los => los > 0)
+                    .sort((a, b) => a - b);
+
+                const minLos = losValues.length ? losValues[0] : 0;
+                const maxLos = losValues.length ? losValues[losValues.length - 1] : 0;
+                const medianLos = losValues.length ? losValues[Math.floor(losValues.length / 2)] : 0;
+                const outliers = losValues.filter(los => los > data.avgLos * 1.5);
+
+                renderAnalyticsCards([
+                    { title: 'Average LOS', value: `${data.avgLos}d`, subtitle: 'Mean length of stay' },
+                    { title: 'Median LOS', value: `${medianLos}d`, subtitle: 'Middle value' },
+                    { title: 'LOS Range', value: `${minLos}-${maxLos}d`, subtitle: 'Min to max' },
+                    { title: 'Extended Stays', value: outliers.length, subtitle: `> ${Math.round(data.avgLos * 1.5)}d` }
+                ]);
+
+                const losPatients = data.activePatients
+                    .filter(p => (globalThis.calculateLOS(p.date) || 0) > data.avgLos * 1.5)
+                    .slice(0, 25)
+                    .map(p => `${p.name || 'Unknown'} | ${globalThis.calculateLOS(p.date)}d | ${p.hospital || '-'} | ${p.date || ''}`);
+                renderAnalyticsDetails('Extended Stay Patients (>1.5x Average)', losPatients);
+                return;
+            }
+
+            if (preset === 'followup') {
+                const withFollowup = data.activePatients.filter(p => p.followUp && String(p.followUp).trim().length > 0);
+                const withPending = data.activePatients.filter(p => p.pending && String(p.pending).trim().length > 0);
+                const withBoth = data.activePatients.filter(p => 
+                    (p.followUp && String(p.followUp).trim().length > 0) &&
+                    (p.pending && String(p.pending).trim().length > 0)
+                );
+
+                renderAnalyticsCards([
+                    { title: 'Follow-up Items', value: withFollowup.length, subtitle: 'Patients with scheduled follow-ups' },
+                    { title: 'Pending Tests', value: withPending.length, subtitle: 'Awaiting test results' },
+                    { title: 'Both Pending & Follow-up', value: withBoth.length, subtitle: 'Highest coordination need' },
+                    { title: 'Coverage %', value: `${data.activePatients.length ? Math.round(((withFollowup.length + withPending.length) / data.activePatients.length) * 100) : 0}%`, subtitle: 'Patients with action items' }
+                ]);
+
+                const followupRows = withBoth.length > 0 ? [
+                    '=== Patients with Both Pending & Follow-up ===',
+                    ...withBoth.slice(0, 15).map(p => `${p.name || 'Unknown'} | ${p.hospital || '-'} | Pending: ${(p.pending || '').substring(0, 20)}... | Follow-up: ${(p.followUp || '').substring(0, 20)}...`)
+                ] : ['No patients require both pending tests and follow-up coordination'];
+                renderAnalyticsDetails('Follow-up Coordination Tracker', followupRows);
+                return;
+            }
+
+            if (preset === 'complexity') {
+                const complexityFlags = {};
+                data.activePatients.forEach((p) => {
+                    let complexity = 0;
+                    let flags = [];
+                    
+                    if (p.stat === true || p.stat === 'true') { complexity++; flags.push('STAT'); }
+                    if (p.pending && String(p.pending).trim().length > 0) { complexity++; flags.push('Pending'); }
+                    if (isSurgicalCase(p)) { complexity++; flags.push('Procedure'); }
+                    if (p.followUp && String(p.followUp).trim().length > 0) { complexity++; flags.push('Follow-up'); }
+                    if (globalThis.calculateAge(p.dob) >= 70) { complexity++; flags.push('Age70+'); }
+                    
+                    const key = flags.length > 0 ? complexity : 0;
+                    if (!complexityFlags[key]) complexityFlags[key] = { count: 0, patients: [] };
+                    complexityFlags[key].count++;
+                    if (complexity > 0) complexityFlags[key].patients.push({ ...p, flags: flags.join(', ') });
+                });
+
+                const high = complexityFlags[5]?.count || 0;
+                const medium = (complexityFlags[3]?.count || 0) + (complexityFlags[4]?.count || 0);
+                const low = (complexityFlags[1]?.count || 0) + (complexityFlags[2]?.count || 0);
+                const none = complexityFlags[0]?.count || 0;
+
+                renderAnalyticsCards([
+                    { title: 'High Complexity', value: high, subtitle: '4+ risk flags' },
+                    { title: 'Medium Complexity', value: medium, subtitle: '2-3 risk flags' },
+                    { title: 'Low Complexity', value: low, subtitle: '1 risk flag' },
+                    { title: 'Simple Cases', value: none, subtitle: 'No risk flags' }
+                ]);
+
+                const complexityRows = data.activePatients
+                    .filter(p => {
+                        let count = 0;
+                        if (p.stat === true || p.stat === 'true') count++;
+                        if (p.pending && String(p.pending).trim().length > 0) count++;
+                        if (isSurgicalCase(p)) count++;
+                        if (p.followUp && String(p.followUp).trim().length > 0) count++;
+                        if (globalThis.calculateAge(p.dob) >= 70) count++;
+                        return count >= 3;
+                    })
+                    .slice(0, 20)
+                    .map(p => {
+                        let flags = [];
+                        if (p.stat === true || p.stat === 'true') flags.push('STAT');
+                        if (p.pending && String(p.pending).trim().length > 0) flags.push('Pending');
+                        if (isSurgicalCase(p)) flags.push('Procedure');
+                        if (p.followUp && String(p.followUp).trim().length > 0) flags.push('Follow-up');
+                        if (globalThis.calculateAge(p.dob) >= 70) flags.push('Age70+');
+                        return `${p.name || 'Unknown'} | [${flags.join(', ')}] | ${p.hospital || '-'}`;
+                    });
+                renderAnalyticsDetails('High-Complexity Patients (3+ Flags)', complexityRows);
+                return;
+            }
+
+            if (preset === 'performance') {
+                const hospitalPerformance = {};
+                hospitalsSorted.forEach(([hospital, count]) => {
+                    const hospitalPatients = data.activePatients.filter(p => (p.hospital || 'Unassigned') === hospital);
+                    const procPatients = hospitalPatients.filter(p => isSurgicalCase(p));
+                    const completed = procPatients.filter(p => (p.procedureStatus || 'To-Do') === 'Completed');
+                    const inProgress = procPatients.filter(p => (p.procedureStatus || 'To-Do') === 'In-Progress');
+                    const completionRate = procPatients.length > 0 ? Math.round((completed.length / procPatients.length) * 100) : 0;
+                    
+                    hospitalPerformance[hospital] = {
+                        totalPatients: count,
+                        totalProcedures: procPatients.length,
+                        completedProcedures: completed.length,
+                        inProgressProcedures: inProgress.length,
+                        completionRate
+                    };
+                });
+
+                const perfSorted = Object.entries(hospitalPerformance).sort((a, b) => b[1].completionRate - a[1].completionRate);
+                const topHosp = perfSorted[0];
+
+                renderAnalyticsCards([
+                    { title: 'Hospitals Tracked', value: perfSorted.length, subtitle: 'Active facilities' },
+                    { title: 'Best Completion Rate', value: `${topHosp?.[1]?.completionRate || 0}%`, subtitle: `${topHosp?.[0] || 'N/A'}` },
+                    { title: 'Total Procedures', value: data.procedurePatients.length, subtitle: 'Across all hospitals' },
+                    { title: 'Completion Rate Overall', value: `${data.procedurePatients.length > 0 ? Math.round((data.statusCounts['Completed'] / data.procedurePatients.length) * 100) : 0}%`, subtitle: 'System wide' }
+                ]);
+
+                const perfRows = perfSorted.map(([hosp, perf]) => 
+                    `${hosp}: ${perf.totalPatients} patients | ${perf.totalProcedures} procedures | ${perf.completedProcedures} completed (${perf.completionRate}%) | ${perf.inProgressProcedures} in-progress`
+                );
+                renderAnalyticsDetails('Hospital Performance Summary', perfRows);
+                return;
             }
         }
 
@@ -7858,10 +8072,16 @@
                             <div>
                                 <label for="analytics-preset-select" class="block text-xs font-bold text-slate-600 mb-1">Preset Analysis</label>
                                 <select id="analytics-preset-select" class="w-full p-2 text-xs border border-slate-300 rounded">
-                                    <option value="overview">Census Overview</option>
-                                    <option value="procedures">Procedure Pipeline</option>
-                                    <option value="hospitals">Hospital Workload</option>
-                                    <option value="risk">Risk and Pending Focus</option>
+                                    <option value="overview">📋 Census Overview</option>
+                                    <option value="procedures">🏥 Procedure Pipeline</option>
+                                    <option value="hospitals">🏢 Hospital Workload</option>
+                                    <option value="risk">⚠️ Risk and Pending Focus</option>
+                                    <option value="provider">👨‍⚕️ Provider Performance</option>
+                                    <option value="billing">💰 Billing & Codes Summary</option>
+                                    <option value="los">📅 Length of Stay Analysis</option>
+                                    <option value="followup">📌 Follow-up Workload</option>
+                                    <option value="complexity">🔴 Patient Complexity</option>
+                                    <option value="performance">📊 Hospital Performance</option>
                                 </select>
                             </div>
                             <div>
