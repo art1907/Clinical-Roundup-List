@@ -1509,7 +1509,12 @@
             }
         };
 
-        window.setTab = (tab) => {
+        window.setTab = (tab, options = {}) => {
+            if (!options.bypassSelectionLock && selectedPatientIds.size > 0 && tab !== 'active') {
+                showToast('Selection mode is locked to Census');
+                return;
+            }
+
             currentTab = tab;
             ['table-section', 'calendar-section', 'oncall-section'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
             if (tab === 'calendar') {
@@ -1782,21 +1787,33 @@
             renderUI();
         };
 
+        function setSelectionDisabledState(control, isLocked) {
+            if (isLocked) {
+                control.dataset.selectionLockDisabled = control.disabled ? 'true' : 'false';
+                control.disabled = true;
+                return;
+            }
+
+            const wasDisabled = control.dataset.selectionLockDisabled === 'true';
+            control.disabled = wasDisabled;
+            delete control.dataset.selectionLockDisabled;
+        }
+
         function setSelectionUnderlayLocked(isLocked) {
             document.querySelectorAll('.selection-underlay-target').forEach((node) => {
                 node.toggleAttribute('inert', isLocked);
                 node.setAttribute('aria-disabled', isLocked ? 'true' : 'false');
 
                 node.querySelectorAll('button, input, select, textarea').forEach((control) => {
-                    if (isLocked) {
-                        control.dataset.selectionLockDisabled = control.disabled ? 'true' : 'false';
-                        control.disabled = true;
-                    } else {
-                        const wasDisabled = control.dataset.selectionLockDisabled === 'true';
-                        control.disabled = wasDisabled;
-                        delete control.dataset.selectionLockDisabled;
-                    }
+                    setSelectionDisabledState(control, isLocked);
                 });
+            });
+
+            document.querySelectorAll('#table-section button, #table-section select, #table-section input, #table-section textarea').forEach((control) => {
+                if (control.closest('#batch-operations')) return;
+                if (control.matches('input[data-patient-checkbox], input[data-select-all-checkbox]')) return;
+                if (control.closest('.selection-underlay-target')) return;
+                setSelectionDisabledState(control, isLocked);
             });
         }
 
@@ -1837,6 +1854,9 @@
         window.togglePatientSelection = (id) => { 
             if(selectedPatientIds.has(id)) selectedPatientIds.delete(id); 
             else selectedPatientIds.add(id); 
+            if (selectedPatientIds.size > 0 && currentTab !== 'active') {
+                window.setTab('active', { bypassSelectionLock: true });
+            }
             updateHandoffButton(); 
             renderUI();
         };
@@ -1845,6 +1865,9 @@
             const filtered = getFilteredData(); 
             if(e.target.checked) filtered.forEach(p=>selectedPatientIds.add(p.id)); 
             else filtered.forEach(p=>selectedPatientIds.delete(p.id)); 
+            if (selectedPatientIds.size > 0 && currentTab !== 'active') {
+                window.setTab('active', { bypassSelectionLock: true });
+            }
             renderUI(); 
             updateHandoffButton(); 
         };
@@ -2431,7 +2454,7 @@
         </div>
 
         <!-- Content Area -->
-        <div class="content-area selection-underlay-target">
+        <div class="content-area">
             <div id="table-section" class="h-full">
                 <!-- Filter Controls -->
                 <div class="selection-underlay-target flex gap-2 mb-2 p-3 bg-slate-50 border-b border-slate-200 flex-wrap items-center">

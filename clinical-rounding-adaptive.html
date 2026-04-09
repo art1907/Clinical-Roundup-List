@@ -3179,22 +3179,44 @@
         // ============================================================================= 
 
         // Update Batch Operation Count
+        function setSelectionDisabledState(control, isLocked) {
+            if (isLocked) {
+                control.dataset.selectionLockDisabled = control.disabled ? 'true' : 'false';
+                control.disabled = true;
+                return;
+            }
+
+            const wasDisabled = control.dataset.selectionLockDisabled === 'true';
+            control.disabled = wasDisabled;
+            delete control.dataset.selectionLockDisabled;
+        }
+
         function setSelectionUnderlayLocked(isLocked) {
             document.querySelectorAll('.selection-underlay-target').forEach((node) => {
                 node.toggleAttribute('inert', isLocked);
                 node.setAttribute('aria-disabled', isLocked ? 'true' : 'false');
 
                 node.querySelectorAll('button, input, select, textarea').forEach((control) => {
-                    if (isLocked) {
-                        control.dataset.selectionLockDisabled = control.disabled ? 'true' : 'false';
-                        control.disabled = true;
-                    } else {
-                        const wasDisabled = control.dataset.selectionLockDisabled === 'true';
-                        control.disabled = wasDisabled;
-                        delete control.dataset.selectionLockDisabled;
-                    }
+                    setSelectionDisabledState(control, isLocked);
                 });
             });
+
+            document.querySelectorAll('#table-section button, #table-section select, #table-section input, #table-section textarea').forEach((control) => {
+                if (control.closest('#batch-operations')) return;
+                if (control.matches('input[data-patient-checkbox], input[data-select-all-checkbox]')) return;
+                if (control.closest('.selection-underlay-target')) return;
+                setSelectionDisabledState(control, isLocked);
+            });
+        }
+
+        function enforceSelectionViewLock(isLocked) {
+            if (!isLocked) return;
+            if (currentViewMode !== 'table') {
+                globalThis.setViewMode('table', { silent: true, bypassSelectionLock: true });
+            }
+            if (currentTab !== 'active') {
+                globalThis.setTab('active', { silent: true, bypassSelectionLock: true });
+            }
         }
 
         function updateBatchOpCount() {
@@ -3203,6 +3225,8 @@
                 Array.from(document.querySelectorAll('input[data-patient-checkbox]:checked'))
                     .map(cb => cb.value)
             );
+
+            enforceSelectionViewLock(checkedCount > 0);
             
             const batchOps = document.getElementById('batch-operations');
             const batchCount = document.getElementById('batch-count');
@@ -3742,6 +3766,12 @@
         globalThis.setViewMode = (mode, options = {}) => {
             const allowedModes = new Set(['table', 'card', 'grouped']);
             if (!allowedModes.has(mode)) mode = 'table';
+
+            if (!options.bypassSelectionLock && selectedPatientIds.size > 0 && mode !== 'table') {
+                showToast('Selection mode is locked to Table View');
+                return;
+            }
+
             currentViewMode = mode;
             localStorage.setItem('app-view-mode', mode);
             
@@ -6997,7 +7027,12 @@
             renderUI();
         };
 
-        globalThis.setTab = (tab) => {
+        globalThis.setTab = (tab, options = {}) => {
+            if (!options.bypassSelectionLock && selectedPatientIds.size > 0 && tab !== 'active') {
+                showToast('Selection mode is locked to Census');
+                return;
+            }
+
             // Force refresh when switching tabs
             globalThis.forceRefresh();
             currentTab = tab;
@@ -7386,6 +7421,7 @@
         globalThis.togglePatientSelection = (id) => { 
             if(selectedPatientIds.has(id)) selectedPatientIds.delete(id); 
             else selectedPatientIds.add(id); 
+            enforceSelectionViewLock(selectedPatientIds.size > 0);
             updateHandoffButton(); 
             renderUI();
         };
@@ -7394,6 +7430,7 @@
             const filtered = getFilteredData();
             if (e.target.checked) filtered.forEach(p => selectedPatientIds.add(p.id));
             else filtered.forEach(p => selectedPatientIds.delete(p.id));
+            enforceSelectionViewLock(selectedPatientIds.size > 0);
             renderUI();
             // Use selectedPatientIds.size directly — DOM-based counting is unreliable
             // immediately after innerHTML replacement in renderUI()
@@ -8402,7 +8439,7 @@
         </nav>
 
         <!-- Content Area -->
-        <div class="content-area selection-underlay-target">
+        <div class="content-area">
             <!-- Advanced Search Panel -->
             <div id="advanced-search" class="advanced-search selection-underlay-target">
                 <label for="search-box" class="text-xs font-bold text-slate-600 block mb-1">🔍 Search</label>
