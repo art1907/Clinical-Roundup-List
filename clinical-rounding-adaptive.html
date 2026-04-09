@@ -308,21 +308,17 @@
             align-items: center;
             gap: 0.5rem;
             flex-wrap: wrap;
-            position: fixed;
-            left: 50%;
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
-            transform: translateX(-50%) translateY(1rem);
+            position: sticky;
+            top: 0.75rem;
             width: min(calc(100% - 1rem), 980px);
+            margin: 0 auto -4.25rem;
             padding: 0.875rem 1rem;
             background: rgba(239, 246, 255, 0.96);
             border: 1px solid #93c5fd;
             border-radius: 1rem;
             box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
             backdrop-filter: blur(10px);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.18s ease, transform 0.18s ease;
-            z-index: 60;
+            z-index: 45;
         }
         
         body.dark-mode .batch-operations {
@@ -332,9 +328,6 @@
         
         .batch-operations.active {
             display: flex;
-            opacity: 1;
-            pointer-events: auto;
-            transform: translateX(-50%) translateY(0);
         }
 
         .batch-eyebrow {
@@ -361,6 +354,16 @@
         .batch-dismiss {
             margin-left: auto;
         }
+
+        .selection-underlay-target {
+            transition: opacity 0.18s ease, filter 0.18s ease;
+        }
+
+        body.selection-mode-active .selection-underlay-target {
+            opacity: 0.3;
+            filter: grayscale(1);
+            pointer-events: none;
+        }
         
         .batch-count {
             flex-shrink: 0;
@@ -378,6 +381,7 @@
                 width: calc(100% - 0.75rem);
                 padding: 0.75rem;
                 gap: 0.4rem;
+                margin-bottom: -5.25rem;
             }
 
             .batch-actions {
@@ -3105,6 +3109,24 @@
                 batchOps.classList.remove('active');
                 if (batchPrint) batchPrint.disabled = true;
             }
+
+            document.body.classList.toggle('selection-mode-active', checkedCount > 0);
+
+            syncSelectAllCheckbox();
+        }
+
+        function syncSelectAllCheckbox() {
+            const selectAllCheckbox = document.querySelector('input[data-select-all-checkbox]');
+            if (!selectAllCheckbox) return;
+
+            const visiblePatients = getFilteredData();
+            const visibleCount = visiblePatients.length;
+            const selectedVisibleCount = visiblePatients.reduce((count, patient) => (
+                selectedPatientIds.has(patient.id) ? count + 1 : count
+            ), 0);
+
+            selectAllCheckbox.checked = visibleCount > 0 && selectedVisibleCount === visibleCount;
+            selectAllCheckbox.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleCount;
         }
 
         // Batch Change Status
@@ -3141,32 +3163,6 @@
             renderUI();
             updateBatchOpCount();
             showToast(failed ? `⚠️ ${updated} saved, ${failed} failed` : `✅ ${updated} records updated to ${newStatus}`);
-        };
-
-        globalThis.batchToggleCrossOut = () => {
-            const ids = [...selectedPatientIds];
-            if (!ids.length) {
-                showToast('⚠️ Select at least one record');
-                return;
-            }
-
-            const shouldClearCrossOut = ids.every((id) => crossedOutPatientIds.has(id));
-            const recordLabel = `record${ids.length === 1 ? '' : 's'}`;
-            ids.forEach((id) => {
-                if (shouldClearCrossOut) {
-                    crossedOutPatientIds.delete(id);
-                } else {
-                    crossedOutPatientIds.add(id);
-                }
-            });
-
-            persistCrossedOutPatientIdsWithSync({ syncCloud: true });
-            renderUI();
-            updateBatchOpCount();
-            const toastMessage = shouldClearCrossOut
-                ? `↺ Removed cross out from ${ids.length} ${recordLabel}`
-                : `✗ Crossed out ${ids.length} ${recordLabel}`;
-            showToast(toastMessage);
         };
 
         // Batch Archive
@@ -3246,6 +3242,7 @@
 
         // Cancel Batch Operation
         globalThis.cancelBatchOp = () => {
+            selectedPatientIds.clear();
             document.querySelectorAll('input[data-patient-checkbox]').forEach(cb => cb.checked = false);
             updateBatchOpCount();
         };
@@ -7306,6 +7303,7 @@
                     if (batchPrint) batchPrint.disabled = true;
                 }
             }
+            syncSelectAllCheckbox();
             updateHandoffButton();
         };
 
@@ -8290,7 +8288,7 @@
         <!-- Content Area -->
         <div class="content-area">
             <!-- Advanced Search Panel -->
-            <div id="advanced-search" class="advanced-search">
+            <div id="advanced-search" class="advanced-search selection-underlay-target">
                 <label for="search-box" class="text-xs font-bold text-slate-600 block mb-1">🔍 Search</label>
                 <input type="text" id="search-box" class="search-box" placeholder="Search by name, MRN, room, hospital, or findings..." onkeyup="globalThis.performSearch(this.value)">
                 <div class="flex gap-2 mt-2 flex-wrap">
@@ -8311,7 +8309,6 @@
                 <div class="batch-actions">
                     <button id="batch-print-selected" onclick="globalThis.printSelectedPatientRecords()" class="px-3 py-1 bg-slate-700 text-white text-xs font-bold rounded hover:bg-slate-800" disabled>🖨️ Print Selected</button>
                     <button onclick="globalThis.batchChangeStatus()" class="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Change Status</button>
-                    <button onclick="globalThis.batchToggleCrossOut()" class="px-3 py-1 bg-rose-600 text-white text-xs font-bold rounded hover:bg-rose-700">Cross Out</button>
                     <button onclick="globalThis.batchArchiveSelected()" class="px-3 py-1 bg-amber-600 text-white text-xs font-bold rounded hover:bg-amber-700">Archive</button>
                     <button onclick="globalThis.batchDeleteSelected()" class="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700">Delete</button>
                 </div>
@@ -8320,7 +8317,7 @@
 
             <div id="table-section" class="h-full">
                 <!-- View Toggle Buttons -->
-                <div class="view-toggle">
+                <div class="view-toggle selection-underlay-target">
                     <button class="view-btn active" onclick="globalThis.setViewMode('table')" title="Standard row-based census table.">📊 Table View</button>
                     <button class="view-btn" onclick="globalThis.setViewMode('card')" title="Identity fields stay pinned at the top; scroll inside card for full details.">🃏 Card View</button>
                     <button class="view-btn" onclick="globalThis.setViewMode('grouped')">🏥 By Hospital</button>
@@ -8329,7 +8326,7 @@
                 <div class="text-[11px] text-slate-500 mb-2">Surgical logic: keyword match in Plan/Findings or surgical follow-up status values.</div>
 
                 <!-- Filter Controls -->
-                <div id="main-table-header" class="flex gap-2 mb-2 p-3 bg-slate-50 border-b border-slate-200 flex-wrap items-center">
+                <div id="main-table-header" class="selection-underlay-target flex gap-2 mb-2 p-3 bg-slate-50 border-b border-slate-200 flex-wrap items-center">
                     <div class="flex flex-col">
                         <label for="filter-date" class="text-[9px] font-bold text-slate-600 mb-1">Date</label>
                         <input type="date" id="filter-date" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
@@ -8366,7 +8363,7 @@
                     <table class="w-full border-collapse text-sm h-full">
                         <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
-                                <th class="p-3 w-12"><input type="checkbox" onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer"></th>
+                                <th class="p-3 w-12"><input type="checkbox" data-select-all-checkbox onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer"></th>
                                 <th class="p-3 text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
                                 <th class="p-3 text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
                                 <th class="p-3 text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>

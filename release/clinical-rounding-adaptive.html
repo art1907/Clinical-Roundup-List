@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Clinical Rounding List - Adaptive Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
@@ -45,28 +45,21 @@
             align-items: center;
             gap: 0.5rem;
             flex-wrap: wrap;
-            position: fixed;
-            left: 50%;
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
-            transform: translateX(-50%) translateY(1rem);
+            position: sticky;
+            top: 0.75rem;
             width: min(calc(100% - 1rem), 920px);
+            margin: 0 auto -4.25rem;
             padding: 0.85rem 1rem;
             background: rgba(239, 246, 255, 0.97);
             border: 1px solid #93c5fd;
             border-radius: 1rem;
             box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
             backdrop-filter: blur(10px);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.18s ease, transform 0.18s ease;
-            z-index: 60;
+            z-index: 45;
         }
 
         .batch-operations.active {
             display: flex;
-            opacity: 1;
-            pointer-events: auto;
-            transform: translateX(-50%) translateY(0);
         }
 
         .batch-eyebrow {
@@ -100,6 +93,16 @@
             margin-left: auto;
         }
 
+        .selection-underlay-target {
+            transition: opacity 0.18s ease, filter 0.18s ease;
+        }
+
+        body.selection-mode-active .selection-underlay-target {
+            opacity: 0.3;
+            filter: grayscale(1);
+            pointer-events: none;
+        }
+
         .cross-out-target {
             text-decoration: line-through;
             text-decoration-thickness: 2px;
@@ -121,6 +124,7 @@
             .batch-operations {
                 width: calc(100% - 0.75rem);
                 padding: 0.75rem;
+                margin-bottom: -5.25rem;
             }
 
             .batch-actions {
@@ -1763,6 +1767,24 @@
             actionButtons.forEach((button) => {
                 button.disabled = !hasSelection;
             });
+
+            document.body.classList.toggle('selection-mode-active', hasSelection);
+
+            syncSelectAllCheckbox();
+        }
+
+        function syncSelectAllCheckbox() {
+            const selectAllCheckbox = document.querySelector('input[data-select-all-checkbox]');
+            if (!selectAllCheckbox) return;
+
+            const visiblePatients = getFilteredData();
+            const visibleCount = visiblePatients.length;
+            const selectedVisibleCount = visiblePatients.reduce((count, patient) => (
+                selectedPatientIds.has(patient.id) ? count + 1 : count
+            ), 0);
+
+            selectAllCheckbox.checked = visibleCount > 0 && selectedVisibleCount === visibleCount;
+            selectAllCheckbox.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleCount;
         }
 
         window.togglePatientSelection = (id) => { 
@@ -1812,27 +1834,10 @@
             showToast(`✅ ${updated} records updated`);
         };
 
-        window.batchToggleCrossOut = () => {
-            const ids = [...selectedPatientIds];
-            if (!ids.length) {
-                showToast('⚠️ Select at least one record');
-                return;
-            }
-
-            const shouldClearCrossOut = ids.every((id) => crossedOutPatientIds.has(id));
-            ids.forEach((id) => {
-                if (shouldClearCrossOut) crossedOutPatientIds.delete(id);
-                else crossedOutPatientIds.add(id);
-            });
-
-            persistCrossedOutPatientIdsWithSync({ syncCloud: true });
-            renderUI();
-            showToast(shouldClearCrossOut ? '↺ Cross out removed' : '✗ Crossed out');
-        };
-
         window.cancelBatchSelection = () => {
             selectedPatientIds.clear();
             renderUI();
+            syncSelectAllCheckbox();
         };
 
         window.generateHandoff = () => {
@@ -2373,7 +2378,6 @@
                     <option>TO BE DISCHARGED/SIGNED OFF</option>
                 </select>
                 <button data-batch-action onclick="window.batchChangeStatus()" class="px-3 py-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700" disabled>Apply Status</button>
-                <button data-batch-action onclick="window.batchToggleCrossOut()" class="px-3 py-2 bg-rose-600 text-white text-xs font-bold rounded hover:bg-rose-700" disabled>Cross Out</button>
                 <button data-batch-action onclick="window.generateHandoff()" class="px-3 py-2 bg-slate-700 text-white text-xs font-bold rounded hover:bg-slate-800" disabled>Handoff</button>
             </div>
             <button onclick="window.cancelBatchSelection()" class="batch-dismiss px-3 py-2 bg-slate-400 text-white text-xs font-bold rounded hover:bg-slate-500">Clear Selection</button>
@@ -2383,13 +2387,13 @@
         <div class="content-area">
             <div id="table-section" class="h-full">
                 <!-- Filter Controls -->
-                <div class="flex gap-2 mb-2 p-3 bg-slate-50 border-b border-slate-200 flex-wrap items-center">
+                <div class="selection-underlay-target flex gap-2 mb-2 p-3 bg-slate-50 border-b border-slate-200 flex-wrap items-center">
                     <div class="flex flex-col">
-                        <label class="text-[9px] font-bold text-slate-600 mb-1">Date</label>
+                        <label for="filter-date" class="text-[9px] font-bold text-slate-600 mb-1">Date</label>
                         <input type="date" id="filter-date" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[9px] font-bold text-slate-600 mb-1">Hospital</label>
+                        <label for="filter-hospital" class="text-[9px] font-bold text-slate-600 mb-1">Hospital</label>
                         <select id="filter-hospital" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500">
                             <option value="">All Hospitals</option>
                             <option value="WGMC">WGMC</option>
@@ -2403,11 +2407,11 @@
                         </select>
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[9px] font-bold text-slate-600 mb-1">Room</label>
+                        <label for="filter-room" class="text-[9px] font-bold text-slate-600 mb-1">Room</label>
                         <input type="text" id="filter-room" placeholder="Room #" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 w-24" />
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[9px] font-bold text-slate-600 mb-1">Patient</label>
+                        <label for="filter-patient" class="text-[9px] font-bold text-slate-600 mb-1">Patient</label>
                         <input type="text" id="filter-patient" placeholder="Name or MRN" class="p-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div class="flex gap-2 items-end">
@@ -2420,7 +2424,7 @@
                     <table class="w-full border-collapse text-sm h-full">
                         <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
-                                <th class="p-3 w-12"><input type="checkbox" onchange="window.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer"></th>
+                                <th class="p-3 w-12"><input type="checkbox" data-select-all-checkbox onchange="window.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer"></th>
                                 <th class="p-3 text-left font-bold text-slate-700">Room</th>
                                 <th class="p-3 text-left font-bold text-slate-700">Hospital</th>
                                 <th class="p-3 text-left font-bold text-slate-700">Patient</th>
@@ -2451,16 +2455,16 @@
                         <h3 class="text-sm font-bold mb-3">Coverage Assignment</h3>
                         <div class="grid grid-cols-2 gap-3 mb-3">
                             <div>
-                                <label class="text-xs font-bold text-slate-600 block mb-1">Date</label>
+                                <label for="oc-date" class="text-xs font-bold text-slate-600 block mb-1">Date</label>
                                 <input type="date" id="oc-date" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-slate-600 block mb-1">Provider</label>
+                                <label for="oc-provider" class="text-xs font-bold text-slate-600 block mb-1">Provider</label>
                                 <input type="text" id="oc-provider" placeholder="Dr. Name" class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm">
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label class="text-xs font-bold text-slate-600 block mb-1">Hospitals (Select multiple)</label>
+                            <label for="oc-hospitals" class="text-xs font-bold text-slate-600 block mb-1">Hospitals (Select multiple)</label>
                             <select id="oc-hospitals" multiple class="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-sm" style="height: 120px;">
                                 <option value="WGMC">Westgate Medical Center (WGMC)</option>
                                 <option value="AWC">Abrazo West Campus (AWC)</option>
@@ -2508,7 +2512,7 @@
 
                 <!-- Hospital Selection -->
                 <div>
-                    <label class="text-xs font-bold text-slate-600">Hospital (Excel: Hospital/Room #)</label>
+                    <label for="f-hospital" class="text-xs font-bold text-slate-600">Hospital (Excel: Hospital/Room #)</label>
                     <select id="f-hospital" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <option value="">Select Hospital</option>
                         <option value="WGMC">Westgate Medical Center (WGMC)</option>
@@ -2524,13 +2528,13 @@
 
                 <!-- Provider/Attending Physician -->
                 <div>
-                    <label class="text-xs font-bold text-slate-600">👨‍⚕️ Provider / Attending Physician</label>
+                    <label for="f-md" class="text-xs font-bold text-slate-600">👨‍⚕️ Provider / Attending Physician</label>
                     <input type="text" id="f-md" placeholder="Dr. Smith" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 </div>
 
                 <!-- Created By (Auto-filled from login) -->
                 <div>
-                    <label class="text-xs font-bold text-slate-400">📝 Created By</label>
+                    <label for="f-created-by" class="text-xs font-bold text-slate-400">📝 Created By</label>
                     <input type="text" id="f-created-by" placeholder="Auto-filled from login" class="w-full mt-2 p-3 bg-slate-100 rounded-lg border border-slate-200 text-slate-600" readonly>
                 </div>
 
@@ -2549,7 +2553,7 @@
                 </div>
 
                 <div>
-                    <label class="text-xs font-bold text-slate-600">Status</label>
+                    <label for="f-proc-status" class="text-xs font-bold text-slate-600">Status</label>
                     <select id="f-proc-status" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <option>NEW CONSULT</option><option>SURGICAL PATIENT (SAME DAY SURGERY)</option><option>NEW SURGICAL PATIENT (AM ADMIT)</option><option>FOLLOW UP (CONSULT)</option><option>FOLLOW UP (POST OP)</option><option>TO BE DISCHARGED/SIGNED OFF</option>
                     </select>
