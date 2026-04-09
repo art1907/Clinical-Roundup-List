@@ -3696,52 +3696,9 @@
             return filtered;
         }
 
-        // Override getFilteredData to include Phase 2 filters
-        const originalGetFilteredData = globalThis.getFilteredData || function() {
-            let f = [];
-            if (currentTab === 'active') f = patients.filter(p => !p.archived);
-            else if (currentTab === 'procedures') f = patients.filter(p => !p.archived && isSurgicalCase(p));
-            else if (currentTab === 'archive') f = patients.filter(p => p.archived);
-            return f;
-        };
-
+        // Expose the main filter pipeline globally so every feature reads the same result set.
         globalThis.getFilteredData = function() {
-            let filtered = originalGetFilteredData(); // Uses base user filters & tab rules
-
-            // 1. Apply Quick filter
-            if (globalThis._quickFilterType) {
-                const type = globalThis._quickFilterType;
-                if (type === 'stat') {
-                    filtered = filtered.filter(p => p.stat === true || p.stat === 'true');
-                } else if (type === 'procedures') {
-                    filtered = filtered.filter(p => isSurgicalCase(p));
-                } else if (type === 'inprogress') {
-                    filtered = filtered.filter(p => isActiveSurgicalWorkflowStatus(getPatientStatus(p)));
-                } else if (type === 'pending') {
-                    filtered = filtered.filter(p => p.pending && String(p.pending).trim().length > 0);
-                } else if (type === 'date' && globalThis._quickFilterDate) {
-                    filtered = filtered.filter(p => p.date === globalThis._quickFilterDate);
-                }
-            }
-
-            // 2. Apply Text Search override
-            if (globalThis._searchQueryText) {
-                const q = globalThis._searchQueryText;
-                filtered = filtered.filter(p => {
-                    const searchFields = [
-                        p.name, p.mrn, p.room, p.hospital, p.plan,
-                        p.findingsText, p.pending, p.followUp, p.supervisingMd
-                    ].map(f => (f || '').toLowerCase()).join(' ');
-                    return searchFields.includes(q);
-                });
-            }
-
-            // 3. Apply advanced filters (from filter panel)
-            filtered = applyActiveFilters(filtered);
-
-            // 4. Apply sorting
-            
-            return filtered;
+            return getFilteredData();
         };
 
         // Update LOS display on slider change
@@ -7348,6 +7305,47 @@
                     (p.mrn || '').toLowerCase().includes(searchTerm)
                 );
             }
+
+            if (globalThis._quickFilterType) {
+                const type = globalThis._quickFilterType;
+                if (type === 'stat') {
+                    f = f.filter(p => p.stat === true || p.stat === 'true');
+                } else if (type === 'procedures') {
+                    f = f.filter(p => isSurgicalCase(p));
+                } else if (type === 'inprogress') {
+                    f = f.filter(p => isActiveSurgicalWorkflowStatus(getPatientStatus(p)));
+                } else if (type === 'pending') {
+                    f = f.filter(p => p.pending && String(p.pending).trim().length > 0);
+                } else if (type === 'date' && globalThis._quickFilterDate) {
+                    f = f.filter(p => p.date === globalThis._quickFilterDate);
+                }
+            }
+
+            if (globalThis._searchQueryText) {
+                const searchTerm = globalThis._searchQueryText;
+                f = f.filter((patient) => {
+                    const searchFields = [
+                        patient.name,
+                        patient.mrn,
+                        patient.room,
+                        patient.hospital,
+                        patient.plan,
+                        patient.findingsText,
+                        patient.pending,
+                        patient.followUp,
+                        patient.supervisingMd,
+                    ].map((fieldValue) => String(fieldValue || '').toLowerCase());
+
+                    const findingsCodes = Array.isArray(patient.findingsCodes)
+                        ? patient.findingsCodes.join(' ')
+                        : String(patient.findingsCodes || '');
+
+                    searchFields.push(findingsCodes.toLowerCase());
+                    return searchFields.some((fieldValue) => fieldValue.includes(searchTerm));
+                });
+            }
+
+            f = applyActiveFilters(f);
             
             return f.sort((a,b) => new Date(b.date) - new Date(a.date));
         }
@@ -8486,7 +8484,7 @@
                 <div id="grouped-view-container"></div>
             </div>
 
-            <div id="calendar-section" class="hidden h-full p-4">
+            <div id="calendar-section" class="selection-underlay-target hidden h-full p-4">
                 <div class="bg-white rounded-lg p-4 h-full flex flex-col">
                     <div class="flex items-center justify-between mb-4 flex-shrink-0">
                         <button onclick="globalThis.prevMonth()" class="px-3 py-2 bg-slate-200 rounded font-bold text-sm">← Prev</button>
@@ -8497,7 +8495,7 @@
                 </div>
             </div>
 
-            <div id="oncall-section" class="hidden h-full p-4">
+            <div id="oncall-section" class="selection-underlay-target hidden h-full p-4">
                 <div class="space-y-4">
                     <div class="bg-white rounded-lg p-4 flex-shrink-0">
                         <h3 class="text-sm font-bold mb-3">Coverage Assignment</h3>
@@ -8560,7 +8558,7 @@
             </div>
 
             <!-- Timeline Section -->
-            <div id="timeline-section" class="hidden h-full p-4 overflow-y-auto">
+            <div id="timeline-section" class="selection-underlay-target hidden h-full p-4 overflow-y-auto">
                 <div class="timeline-view">
                     <div class="timeline-header">📅 Patient Timeline</div>
                     <div class="grid grid-cols-3 gap-2 mb-1 flex-shrink-0">
@@ -8575,7 +8573,7 @@
             </div>
 
             <!-- Analytics Dashboard Section -->
-            <div id="analytics-section" class="hidden h-full p-4 overflow-y-auto">
+            <div id="analytics-section" class="selection-underlay-target hidden h-full p-4 overflow-y-auto">
                 <div>
                     <div class="text-2xl font-bold mb-4">📊 Analytics Dashboard</div>
                     <div class="bg-white border border-slate-200 rounded p-3 mb-4">
@@ -8614,7 +8612,7 @@
             </div>
 
             <!-- PDF Reports Section -->
-            <div id="reports-section" class="hidden h-full p-4 overflow-y-auto">
+            <div id="reports-section" class="selection-underlay-target hidden h-full p-4 overflow-y-auto">
                 <div>
                     <div class="text-2xl font-bold mb-4">📄 PDF Reports</div>
                     <div class="pdf-generator">
@@ -8643,7 +8641,7 @@
             </div>
 
             <!-- Audit Logs Section -->
-            <div id="audit-section" class="hidden h-full p-4 overflow-y-auto">
+            <div id="audit-section" class="selection-underlay-target hidden h-full p-4 overflow-y-auto">
                 <div>
                     <div class="text-2xl font-bold mb-4">🔐 Audit Logs</div>
                     <div class="mb-2 text-xs text-slate-500">Tip: create, update, delete, export, and auth events are captured. Apply filters and click Load Logs.</div>
@@ -8680,7 +8678,7 @@
             </div>
 
             <!-- Procedure Log Section -->
-            <div id="procedure-log-section" class="hidden h-full p-4 overflow-y-auto">
+            <div id="procedure-log-section" class="selection-underlay-target hidden h-full p-4 overflow-y-auto">
                 <div>
                     <div class="text-2xl font-bold mb-4">✂️ Surgical Procedures</div>
                     <div class="procedure-log">
@@ -8700,7 +8698,7 @@
             </div>
 
             <!-- Shift Report Section -->
-            <div id="shift-report-section" class="hidden h-full p-4 overflow-y-auto">
+            <div id="shift-report-section" class="selection-underlay-target hidden h-full p-4 overflow-y-auto">
                 <div>
                     <div class="text-2xl font-bold mb-4">📋 Shift Handoff Report</div>
                     <div class="mb-4 flex-shrink-0">
