@@ -428,6 +428,10 @@
             pointer-events: none;
         }
 
+        body.selection-mode-active .selection-underlay-target * {
+            pointer-events: none !important;
+        }
+
         body.selection-mode-active .selection-underlay-target,
         body.selection-mode-active .selection-underlay-target * {
             cursor: not-allowed !important;
@@ -3179,6 +3183,17 @@
             document.querySelectorAll('.selection-underlay-target').forEach((node) => {
                 node.toggleAttribute('inert', isLocked);
                 node.setAttribute('aria-disabled', isLocked ? 'true' : 'false');
+
+                node.querySelectorAll('button, input, select, textarea').forEach((control) => {
+                    if (isLocked) {
+                        control.dataset.selectionLockDisabled = control.disabled ? 'true' : 'false';
+                        control.disabled = true;
+                    } else {
+                        const wasDisabled = control.dataset.selectionLockDisabled === 'true';
+                        control.disabled = wasDisabled;
+                        delete control.dataset.selectionLockDisabled;
+                    }
+                });
             });
         }
 
@@ -8387,7 +8402,7 @@
         </nav>
 
         <!-- Content Area -->
-        <div class="content-area">
+        <div class="content-area selection-underlay-target">
             <!-- Advanced Search Panel -->
             <div id="advanced-search" class="advanced-search selection-underlay-target">
                 <label for="search-box" class="text-xs font-bold text-slate-600 block mb-1">🔍 Search</label>
