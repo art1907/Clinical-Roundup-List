@@ -60,6 +60,34 @@
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
         }
+
+        .top-action-bar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+
+        .top-action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            min-width: 6.75rem;
+            height: 2.75rem;
+            padding: 0 0.85rem;
+            border-radius: 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 800;
+            line-height: 1.1;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .top-action-icon {
+            font-size: 0.95rem;
+            line-height: 1;
+        }
         
         .no-scroll { overflow: hidden !important; }
         
@@ -6346,7 +6374,7 @@
                         loginBtn.style.display = 'none';
                     } else {
                         loginBtn.style.display = '';
-                        loginBtn.textContent = '🔓 Logout';
+                        loginBtn.innerHTML = '<span class="top-action-icon" aria-hidden="true">🔓</span><span>Logout</span>';
                         loginBtn.onclick = () => globalThis.m365Logout && globalThis.m365Logout();
                     }
                 }
@@ -6368,7 +6396,7 @@
                 if (addBtn) addBtn.style.display = 'none';
                 if (loginBtn) {
                     loginBtn.style.display = '';
-                    loginBtn.textContent = '🔐 Login';
+                    loginBtn.innerHTML = '<span class="top-action-icon" aria-hidden="true">🔐</span><span>Login</span>';
                     loginBtn.onclick = () => globalThis.m365Login && globalThis.m365Login();
                 }
                 
@@ -8131,14 +8159,28 @@
             <div class="flex-1 min-w-0">
                 <h1 class="text-xl font-black tracking-tight truncate">Clinical Rounding List</h1>
             </div>
-            <div class="selection-underlay-target flex gap-2">
-                <button id="m365-login-btn" onclick="globalThis.m365Login && globalThis.m365Login()" class="flex-shrink-0 px-3 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-700">🔐 Login</button>
-                <button onclick="document.getElementById('csv-file-input').click()" class="flex-shrink-0 px-3 py-2.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700">📥 Import Files</button>
-                <button onclick="globalThis.openModal()" class="flex-shrink-0 px-4 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">+ Add</button>
-                <button onclick="globalThis.toggleAdvancedFilterPanel()" title="Advanced Filters (Ctrl+Shift+F)" class="flex-shrink-0 px-3 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700">🔽 Filters</button>
-                <button onclick="globalThis.toggleAdvancedSearch()" title="Advanced Search (Ctrl+/)" class="flex-shrink-0 px-3 py-2.5 bg-slate-600 text-white text-xs font-bold rounded-lg hover:bg-slate-700">🔍</button>
-                <button onclick="globalThis.toggleSettings()" title="Settings (Ctrl+,)" class="flex-shrink-0 px-3 py-2.5 bg-slate-600 text-white text-xs font-bold rounded-lg hover:bg-slate-700">⚙️</button>
-                <button onclick="globalThis.showShortcutsHelp()" title="Keyboard Shortcuts (Ctrl+?)" class="flex-shrink-0 px-3 py-2.5 bg-slate-600 text-white text-xs font-bold rounded-lg hover:bg-slate-700">?</button>
+            <div class="selection-underlay-target top-action-bar">
+                <button id="m365-login-btn" onclick="globalThis.m365Login && globalThis.m365Login()" class="top-action-btn flex-shrink-0 bg-purple-600 text-white hover:bg-purple-700">
+                    <span class="top-action-icon" aria-hidden="true">🔐</span><span>Login</span>
+                </button>
+                <button onclick="document.getElementById('csv-file-input').click()" class="top-action-btn flex-shrink-0 bg-green-600 text-white hover:bg-green-700">
+                    <span class="top-action-icon" aria-hidden="true">📥</span><span>Import Files</span>
+                </button>
+                <button onclick="globalThis.openModal()" class="top-action-btn flex-shrink-0 bg-blue-600 text-white hover:bg-blue-700">
+                    <span class="top-action-icon" aria-hidden="true">＋</span><span>Add Record</span>
+                </button>
+                <button onclick="globalThis.toggleAdvancedFilterPanel()" title="Advanced Filters (Ctrl+Shift+F)" class="top-action-btn flex-shrink-0 bg-indigo-600 text-white hover:bg-indigo-700">
+                    <span class="top-action-icon" aria-hidden="true">🔽</span><span>Adv. Filters</span>
+                </button>
+                <button onclick="globalThis.toggleAdvancedSearch()" title="Advanced Search (Ctrl+/)" class="top-action-btn flex-shrink-0 bg-slate-600 text-white hover:bg-slate-700">
+                    <span class="top-action-icon" aria-hidden="true">🔍</span><span>Search</span>
+                </button>
+                <button onclick="globalThis.toggleSettings()" title="Settings (Ctrl+,)" class="top-action-btn flex-shrink-0 bg-slate-600 text-white hover:bg-slate-700">
+                    <span class="top-action-icon" aria-hidden="true">⚙️</span><span>Settings</span>
+                </button>
+                <button onclick="globalThis.showShortcutsHelp()" title="Keyboard Shortcuts (Ctrl+?)" class="top-action-btn flex-shrink-0 bg-slate-600 text-white hover:bg-slate-700">
+                    <span class="top-action-icon" aria-hidden="true">?</span><span>Help</span>
+                </button>
             </div>
         </header>
 

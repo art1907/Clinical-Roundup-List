@@ -125,12 +125,14 @@ Feedback check:
 - Go to **Table view**
 - Select **3 rows** using checkboxes
 - Use batch action: **Change Status**
+- In the batch status popup, choose the new status value
+- Click **Continue**
+- Enter a change reason when prompted
 - Because the UI is being updated, use this to change old **To-Do** rows to a new status value
 - Pick one option from the new list, such as:
   - **NEW CONSULT**
   - **FOLLOW UP (CONSULT)**
   - **FOLLOW UP (POST OP)**
-- Click **Apply**
 - Confirm all selected rows update
 
 Feedback check:
@@ -143,6 +145,8 @@ Feedback check:
 ## Level 3 - Navigation Test
 
 ### Step 8: Tab Switching
+- If the selection tray is active, click **Clear Selection** first.
+- Multi-select intentionally locks the app to **Census** and **Table View** while rows remain selected.
 - Switch tabs in this order:
   **Census -> Surgical -> Calendar -> Staffing -> Census**
 - If you are using **Card view**, check that the cards refresh when you come back
@@ -178,8 +182,9 @@ Feedback check:
 - Did any field fail to save?
 
 ### Step 11: Sort + Filter Stress
-- Sort by **Room**, **Date**, and **Hospital**
-- Apply filters for **Status** and **Hospital**
+- Sort by **Room** and **Hospital** using the table headers
+- Use the **Date** filter field to verify date filtering
+- Open **Adv. Filters** (top right) and apply filters for **Status** and **Hospital**
 - Reset filters
 
 Feedback check:
@@ -203,14 +208,17 @@ Feedback check:
 Important:
 - Do **not** export from the table screen
 - Export must be done from the **Reports** tab
+- Current build supports the **PDF** export flow from Reports
 
 Do this:
 1. Click the **Reports** tab
-2. Pick one export flow (**Excel**, **CSV**, or **PDF** if available)
-3. Run the export
-4. Confirm the file is created
-5. Open the file
-6. Check that the updated statuses appear correctly
+2. Pick any report type from the report dropdown
+3. Click **Generate PDF**
+4. Confirm the preview appears
+5. Click **Download PDF**
+6. Confirm the file is created
+7. Open the file
+8. Check that the updated statuses appear correctly
 
 Feedback check:
 - Was the Reports tab easy to find?
