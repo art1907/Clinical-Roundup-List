@@ -68,6 +68,51 @@
             gap: 0.5rem;
         }
 
+        .top-action-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+
+        .mobile-toolbar-trigger {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            width: 100%;
+            min-height: 2.85rem;
+            padding: 0.75rem 0.9rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.95rem;
+            background: linear-gradient(135deg, #0f172a, #334155);
+            color: white;
+            font-size: 0.78rem;
+            font-weight: 800;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+        }
+
+        .mobile-toolbar-trigger-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+        }
+
+        .mobile-toolbar-trigger-chevron {
+            font-size: 1rem;
+            line-height: 1;
+            transition: transform 0.2s ease;
+        }
+
+        .mobile-toolbar-trigger[aria-expanded="true"] {
+            border-color: #0f172a;
+            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+        }
+
+        .mobile-toolbar-trigger[aria-expanded="true"] .mobile-toolbar-trigger-chevron {
+            transform: rotate(180deg);
+        }
+
         .top-action-btn {
             display: inline-flex;
             align-items: center;
@@ -1723,9 +1768,47 @@
 
             .top-action-bar {
                 width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.5rem;
+            }
+
+            .mobile-toolbar-trigger {
+                display: inline-flex;
+            }
+
+            .top-action-grid {
                 display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                width: 100%;
                 justify-content: stretch;
+                gap: 0.5rem;
+                max-height: 0;
+                overflow: hidden;
+                opacity: 0;
+                transform: translateY(-0.35rem);
+                pointer-events: none;
+                padding: 0 0.15rem;
+                transition: max-height 0.22s ease, opacity 0.18s ease, transform 0.18s ease, padding 0.22s ease, box-shadow 0.22s ease;
+            }
+
+            .top-action-grid.active {
+                max-height: 24rem;
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: auto;
+                padding: 0.7rem;
+                border: 1px solid #e2e8f0;
+                border-radius: 1rem;
+                background: linear-gradient(180deg, #ffffff, #f8fafc);
+                box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+            }
+
+            body.dark-mode .top-action-grid.active {
+                background: linear-gradient(180deg, #1e293b, #0f172a);
+                border-color: #475569;
+                box-shadow: none;
             }
 
             .top-action-btn {
@@ -1734,10 +1817,6 @@
                 height: 2.7rem;
                 padding: 0 0.5rem;
                 font-size: 0.72rem;
-            }
-
-            .top-action-btn[data-mobile-secondary="true"] {
-                display: none !important;
             }
 
             #mobile-more-trigger {
@@ -2605,6 +2684,43 @@
         function getMobilePrimaryTab(activeTab) {
             return ['active', 'procedures', 'calendar'].includes(activeTab) ? activeTab : 'more';
         }
+
+        globalThis.closeMobileTopActions = () => {
+            const tray = document.getElementById('top-action-grid');
+            const trigger = document.getElementById('mobile-toolbar-trigger');
+            if (!tray) return;
+            tray.classList.remove('active');
+            if (isCompactMobileViewport()) {
+                tray.setAttribute('aria-hidden', 'true');
+                tray.setAttribute('inert', '');
+            } else {
+                tray.setAttribute('aria-hidden', 'false');
+                tray.removeAttribute('inert');
+            }
+            trigger?.setAttribute('aria-expanded', 'false');
+        };
+
+        globalThis.toggleMobileTopActions = (forceState) => {
+            const tray = document.getElementById('top-action-grid');
+            const trigger = document.getElementById('mobile-toolbar-trigger');
+            if (!tray || !trigger) return;
+            if (!isCompactMobileViewport()) {
+                tray.classList.remove('active');
+                tray.setAttribute('aria-hidden', 'false');
+                tray.removeAttribute('inert');
+                trigger.setAttribute('aria-expanded', 'false');
+                return;
+            }
+            const shouldOpen = typeof forceState === 'boolean' ? forceState : !tray.classList.contains('active');
+            tray.classList.toggle('active', shouldOpen);
+            tray.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+            if (shouldOpen) {
+                tray.removeAttribute('inert');
+            } else {
+                tray.setAttribute('inert', '');
+            }
+            trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        };
 
         globalThis.closeMobileMoreMenu = () => {
             const sheet = document.getElementById('mobile-more-sheet');
@@ -8678,30 +8794,36 @@
                 <h1 class="text-xl font-black tracking-tight truncate">Clinical Rounding List</h1>
             </div>
             <div class="selection-underlay-target top-action-bar">
-                <button id="m365-login-btn" onclick="globalThis.m365Login && globalThis.m365Login()" class="top-action-btn flex-shrink-0 bg-purple-600 text-white hover:bg-purple-700">
-                    <span class="top-action-icon" aria-hidden="true">🔐</span><span>Login</span>
+                <button id="mobile-toolbar-trigger" type="button" onclick="globalThis.toggleMobileTopActions()" aria-expanded="false" aria-controls="top-action-grid" class="mobile-toolbar-trigger">
+                    <span class="mobile-toolbar-trigger-label"><span aria-hidden="true">☰</span><span>Quick Actions</span></span>
+                    <span class="mobile-toolbar-trigger-chevron" aria-hidden="true">⌄</span>
                 </button>
-                <button onclick="document.getElementById('csv-file-input').click()" class="top-action-btn flex-shrink-0 bg-green-600 text-white hover:bg-green-700">
-                    <span class="top-action-icon" aria-hidden="true">📥</span><span>Import Files</span>
-                </button>
-                <button onclick="globalThis.openModal()" class="top-action-btn flex-shrink-0 bg-blue-600 text-white hover:bg-blue-700">
-                    <span class="top-action-icon" aria-hidden="true">＋</span><span>Add Record</span>
-                </button>
-                <button onclick="globalThis.toggleAdvancedFilterPanel()" title="Advanced Filters (Ctrl+Shift+F)" class="top-action-btn flex-shrink-0 bg-indigo-600 text-white hover:bg-indigo-700">
-                    <span class="top-action-icon" aria-hidden="true">🔽</span><span>Adv. Filters</span>
-                </button>
-                <button onclick="globalThis.toggleAdvancedSearch()" title="Advanced Search (Ctrl+/)" class="top-action-btn flex-shrink-0 bg-slate-600 text-white hover:bg-slate-700">
-                    <span class="top-action-icon" aria-hidden="true">🔍</span><span>Search</span>
-                </button>
-                <button onclick="globalThis.toggleSettings()" title="Settings (Ctrl+,)" class="top-action-btn flex-shrink-0 bg-slate-600 text-white hover:bg-slate-700">
-                    <span class="top-action-icon" aria-hidden="true">⚙️</span><span>Settings</span>
-                </button>
-                <button onclick="globalThis.showShortcutsHelp()" title="Keyboard Shortcuts (Ctrl+?)" class="top-action-btn flex-shrink-0 bg-slate-600 text-white hover:bg-slate-700">
-                    <span class="top-action-icon" aria-hidden="true">?</span><span>Help</span>
-                </button>
-                <button id="mobile-more-trigger" type="button" onclick="globalThis.toggleMobileMoreMenu()" aria-expanded="false" aria-controls="mobile-more-sheet" class="top-action-btn flex-shrink-0 bg-slate-900 text-white hover:bg-black">
-                    <span class="top-action-icon" aria-hidden="true">☰</span><span>More</span>
-                </button>
+                <div id="top-action-grid" class="top-action-grid" aria-hidden="false">
+                    <button id="m365-login-btn" onclick="globalThis.m365Login && globalThis.m365Login()" class="top-action-btn flex-shrink-0 bg-purple-600 text-white hover:bg-purple-700">
+                        <span class="top-action-icon" aria-hidden="true">🔐</span><span>Login</span>
+                    </button>
+                    <button onclick="document.getElementById('csv-file-input').click()" class="top-action-btn flex-shrink-0 bg-green-600 text-white hover:bg-green-700">
+                        <span class="top-action-icon" aria-hidden="true">📥</span><span>Import Files</span>
+                    </button>
+                    <button onclick="globalThis.openModal()" class="top-action-btn flex-shrink-0 bg-blue-600 text-white hover:bg-blue-700">
+                        <span class="top-action-icon" aria-hidden="true">＋</span><span>Add Record</span>
+                    </button>
+                    <button onclick="globalThis.toggleAdvancedFilterPanel()" title="Advanced Filters (Ctrl+Shift+F)" class="top-action-btn flex-shrink-0 bg-indigo-600 text-white hover:bg-indigo-700">
+                        <span class="top-action-icon" aria-hidden="true">🔽</span><span>Adv. Filters</span>
+                    </button>
+                    <button onclick="globalThis.toggleAdvancedSearch()" title="Advanced Search (Ctrl+/)" class="top-action-btn flex-shrink-0 bg-slate-600 text-white hover:bg-slate-700">
+                        <span class="top-action-icon" aria-hidden="true">🔍</span><span>Search</span>
+                    </button>
+                    <button onclick="globalThis.toggleSettings()" title="Settings (Ctrl+,)" class="top-action-btn flex-shrink-0 bg-slate-600 text-white hover:bg-slate-700">
+                        <span class="top-action-icon" aria-hidden="true">⚙️</span><span>Settings</span>
+                    </button>
+                    <button onclick="globalThis.showShortcutsHelp()" title="Keyboard Shortcuts (Ctrl+?)" class="top-action-btn flex-shrink-0 bg-slate-600 text-white hover:bg-slate-700">
+                        <span class="top-action-icon" aria-hidden="true">?</span><span>Help</span>
+                    </button>
+                    <button id="mobile-more-trigger" type="button" onclick="globalThis.toggleMobileMoreMenu()" aria-expanded="false" aria-controls="mobile-more-sheet" class="top-action-btn flex-shrink-0 bg-slate-900 text-white hover:bg-black">
+                        <span class="top-action-icon" aria-hidden="true">☰</span><span>More</span>
+                    </button>
+                </div>
             </div>
         </header>
 
@@ -11900,6 +12022,7 @@
                 if (!mediaQuery.matches) {
                     globalThis.closeMobileMoreMenu();
                 }
+                globalThis.toggleMobileTopActions(false);
                 updateMobileBottomNav(currentTab);
             };
 
@@ -11913,7 +12036,23 @@
 
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape') {
+                    globalThis.closeMobileTopActions();
                     globalThis.closeMobileMoreMenu();
+                }
+            });
+
+            document.getElementById('top-action-grid')?.addEventListener('click', (event) => {
+                if (!isCompactMobileViewport()) return;
+                if (event.target.closest('button')) {
+                    globalThis.closeMobileTopActions();
+                }
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!isCompactMobileViewport()) return;
+                const toolbar = document.querySelector('.top-action-bar');
+                if (toolbar && !toolbar.contains(event.target)) {
+                    globalThis.closeMobileTopActions();
                 }
             });
         };
