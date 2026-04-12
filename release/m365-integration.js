@@ -144,9 +144,46 @@ function updateConnectionStatus(connected, username = '') {
     const statusEl = document.getElementById('connection-status');
     if (statusEl) {
         if (connected) {
-            statusEl.innerHTML = `<span class="text-green-600 font-bold">● Connected (M365)</span> <span class="text-slate-600">${username}</span>`;
+            statusEl.innerHTML = '<span class="text-green-700 font-semibold">M365</span>';
         } else {
-            statusEl.innerHTML = '<span class="text-red-600 font-bold">● Offline</span>';
+            statusEl.innerHTML = '';
+        }
+    }
+
+    const statusBar = document.getElementById('connection-status-bar');
+    const statusIndicator = document.getElementById('status-indicator');
+    const statusText = document.getElementById('status-text');
+    const statusDetail = document.getElementById('status-detail');
+
+    if (connected) {
+        if (statusBar) {
+            statusBar.className = 'system-ribbon flex-shrink-0 bg-green-50 border-b border-green-200';
+        }
+        if (statusIndicator) {
+            statusIndicator.className = 'inline-flex h-3 w-3 rounded-full bg-green-600';
+        }
+        if (statusText) {
+            statusText.className = 'text-sm font-bold text-green-900 uppercase tracking-wide';
+            statusText.innerText = 'Connected';
+        }
+        if (statusDetail) {
+            statusDetail.className = 'text-xs text-green-700 font-semibold';
+            statusDetail.innerText = username || 'Authenticated';
+        }
+    } else {
+        if (statusBar) {
+            statusBar.className = 'system-ribbon flex-shrink-0 bg-amber-50 border-b border-amber-200';
+        }
+        if (statusIndicator) {
+            statusIndicator.className = 'inline-flex h-3 w-3 rounded-full bg-amber-600';
+        }
+        if (statusText) {
+            statusText.className = 'text-sm font-bold text-amber-900 uppercase tracking-wide';
+            statusText.innerText = 'Local';
+        }
+        if (statusDetail) {
+            statusDetail.className = 'text-xs text-amber-700 font-semibold';
+            statusDetail.innerText = 'No persistence';
         }
     }
 }

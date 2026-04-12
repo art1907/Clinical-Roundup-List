@@ -309,11 +309,11 @@ function updateConnectionStatus(connected, username = '') {
     const statusEl = document.getElementById('connection-status');
     if (statusEl) {
         if (connected) {
-            statusEl.innerHTML = `<span class="text-green-600 font-bold">● Connected (M365)</span> <span class="text-slate-600">${username}</span>`;
+            statusEl.innerHTML = '<span class="text-green-700 font-semibold">M365</span>';
             console.log('✓ Updated connection-status element');
         } else {
-            statusEl.innerHTML = '<span class="text-red-600 font-bold">● Offline</span>';
-            console.log('✓ Updated connection-status (offline)');
+            statusEl.innerHTML = '';
+            console.log('✓ Cleared connection-status (local mode)');
         }
     } else {
         console.warn('⚠️ Element not found: #connection-status');
@@ -331,9 +331,8 @@ function updateConnectionStatus(connected, username = '') {
     if (!statusDetail) console.warn('⚠️ Element not found: #status-detail');
     
     if (connected) {
-        // Change to green "Connected (M365)" mode
         if (statusBar) {
-            statusBar.className = 'px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-green-50 border-b border-green-200 gap-1';
+            statusBar.className = 'system-ribbon flex-shrink-0 bg-green-50 border-b border-green-200';
             console.log('✓ Updated statusBar to Connected (green)');
         }
         if (statusIndicator) {
@@ -341,8 +340,8 @@ function updateConnectionStatus(connected, username = '') {
         }
         if (statusText) {
             statusText.className = 'text-sm font-bold text-green-900 uppercase tracking-wide';
-            statusText.innerText = 'Connected (M365)';
-            console.log('✓ Updated statusText to "Connected (M365)"');
+            statusText.innerText = 'Connected';
+            console.log('✓ Updated statusText to "Connected"');
         }
         if (statusDetail) {
             statusDetail.className = 'text-xs text-green-700 font-semibold';
@@ -350,16 +349,15 @@ function updateConnectionStatus(connected, username = '') {
             console.log('✓ Updated statusDetail to:', username);
         }
     } else {
-        // Revert to amber "Local Mode"
         if (statusBar) {
-            statusBar.className = 'px-4 py-3 flex-shrink-0 flex flex-col items-center justify-center bg-amber-50 border-b border-amber-200 gap-1';
+            statusBar.className = 'system-ribbon flex-shrink-0 bg-amber-50 border-b border-amber-200';
         }
         if (statusIndicator) {
             statusIndicator.className = 'inline-flex h-3 w-3 rounded-full bg-amber-600';
         }
         if (statusText) {
             statusText.className = 'text-sm font-bold text-amber-900 uppercase tracking-wide';
-            statusText.innerText = 'Local Mode';
+            statusText.innerText = 'Local';
         }
         if (statusDetail) {
             statusDetail.className = 'text-xs text-amber-700 font-semibold';

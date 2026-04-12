@@ -136,12 +136,20 @@
 
         .system-ribbon {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.75rem;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.45rem;
             padding: 0.75rem 1rem;
             border-bottom: 1px solid #e2e8f0;
             background: white;
+        }
+
+        .system-ribbon-status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            min-width: 0;
         }
 
         .system-ribbon-status {
@@ -153,24 +161,18 @@
 
         .system-ribbon-status-copy {
             display: flex;
-            flex-direction: column;
-            min-width: 0;
-            gap: 0.1rem;
-        }
-
-        .system-ribbon-status-line {
-            display: flex;
             align-items: center;
             gap: 0.45rem;
             min-width: 0;
+            flex-wrap: wrap;
         }
 
         .system-ribbon-stats {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, auto));
-            gap: 0.4rem;
+            display: flex;
             align-items: center;
-            margin-left: auto;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            gap: 0.4rem;
         }
 
         .system-stat-chip {
@@ -1987,19 +1989,17 @@
             }
 
             .system-ribbon {
-                gap: 0.5rem;
+                gap: 0.32rem;
                 padding: 0.45rem 0.7rem;
-                align-items: center;
-                flex-wrap: nowrap;
+            }
+
+            .system-ribbon-status-row {
+                min-width: 0;
+                gap: 0.4rem;
             }
 
             .system-ribbon-status {
                 min-width: 0;
-                flex: 0 1 auto;
-            }
-
-            .system-ribbon-status-copy {
-                gap: 0;
             }
 
             #status-indicator {
@@ -2015,6 +2015,7 @@
             }
 
             #connection-status,
+            #status-detail,
             .swipe-hint,
             .desktop-tab-nav,
             .view-toggle,
@@ -2025,19 +2026,10 @@
                 display: none !important;
             }
 
-            #status-detail {
-                display: block !important;
-                font-size: 0.62rem;
-                line-height: 1;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                max-width: 7rem;
-            }
-
             .system-ribbon-stats {
                 gap: 0.3rem;
-                flex: 0 0 auto;
+                width: 100%;
+                justify-content: flex-start;
             }
 
             .system-stat-chip {
@@ -2053,14 +2045,6 @@
 
             .system-stat-chip-value {
                 font-size: 0.82rem;
-            }
-
-            #summary-stats {
-                display: contents;
-                padding: 0;
-                gap: 0;
-                background: transparent;
-                border: 0;
             }
 
             .mobile-bottom-nav {
@@ -9580,18 +9564,17 @@
 
         <!-- Connection Status Bar -->
         <div id="connection-status-bar" class="system-ribbon flex-shrink-0 bg-amber-50 border-b border-amber-200">
-            <div class="system-ribbon-status">
-                <span id="status-indicator" class="inline-flex h-3 w-3 rounded-full bg-amber-600"></span>
-                <div class="system-ribbon-status-copy">
-                    <div class="system-ribbon-status-line">
-                        <span id="status-text" class="text-sm font-bold text-amber-900 uppercase tracking-wide">Local Mode</span>
+            <div class="system-ribbon-status-row">
+                <div class="system-ribbon-status">
+                    <span id="status-indicator" class="inline-flex h-3 w-3 rounded-full bg-amber-600"></span>
+                    <div class="system-ribbon-status-copy">
+                        <span id="status-text" class="text-sm font-bold text-amber-900 uppercase tracking-wide">Local</span>
                         <span id="connection-status" class="text-xs"></span>
+                        <span id="status-detail" class="text-xs text-amber-700 font-semibold">No persistence</span>
                     </div>
-                    <span id="status-detail" class="text-xs text-amber-700 font-semibold">No persistence</span>
                 </div>
             </div>
 
-            <!-- Stats -->
             <div id="summary-stats" class="system-ribbon-stats flex-shrink-0">
                 <div class="system-stat-chip">
                     <span class="system-stat-chip-label">Active</span>
