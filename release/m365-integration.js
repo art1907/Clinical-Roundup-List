@@ -14,12 +14,22 @@
 // CONFIGURATION
 // =============================================================================
 
+function resolveRedirectUri() {
+    const configuredRedirect = String(globalThis.__M365_AUTH_REDIRECT_URI || '').trim();
+    if (configuredRedirect) return configuredRedirect;
+
+    const currentUri = `${globalThis.location.origin}${globalThis.location.pathname}`;
+    if (currentUri) return currentUri;
+
+    return 'http://localhost:3000/clinical-rounding-adaptive.html';
+}
+
 const M365_CONFIG = {
     // MSAL Configuration - Update these values after Entra ID app registration
     auth: {
         clientId: 'YOUR_CLIENT_ID_HERE',  // From Entra ID app registration
         authority: 'https://login.microsoftonline.com/YOUR_TENANT_ID_HERE',
-        redirectUri: window.location.origin + window.location.pathname
+        redirectUri: resolveRedirectUri()
     },
     cache: {
         cacheLocation: 'localStorage',

@@ -8502,11 +8502,11 @@
                         <div class="text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}">${p.name || 'Anon'}</div>
                         <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
                     </td>
-                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
-                    ${visibleCols.includes('plan') ? `<td class="p-3 align-top w-[20%]"><div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass}">${p.plan || '-'}</div></td>` : ''}
-                    <td class="p-3 align-top w-72">
+                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
+                    <td class="p-3 align-top w-[20%] min-w-[16rem]">
+                        <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${p.plan || '-'}</div>
                         <div class="flex items-start">
-                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-0">
+                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-[16rem]">
                                 ${renderStatusOptionsMarkup(status)}
                             </select>
                         </div>
@@ -9867,15 +9867,15 @@
                 </div>
                 
                 <div class="overflow-x-auto h-full">
-                    <table class="w-full border-collapse text-sm h-full table-fixed">
+                    <table class="w-full min-w-[72rem] border-collapse text-sm h-full table-fixed">
                         <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
                                 <th class="p-3 w-12 align-top"><input type="checkbox" data-select-all-checkbox onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer"></th>
                                 <th class="p-3 w-20 align-top text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-28 align-top text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-48 align-top text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
-                                <th class="p-3 w-[34%] align-top text-left font-bold text-slate-700">Findings</th>
-                                <th class="p-3 w-[20%] align-top text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
+                                <th class="p-3 w-[34%] min-w-[18rem] align-top text-left font-bold text-slate-700">Findings</th>
+                                <th class="p-3 w-[20%] min-w-[16rem] align-top text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-20 align-top text-left font-bold text-slate-700">Actions</th>
                             </tr>
                         </thead>

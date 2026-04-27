@@ -17,23 +17,24 @@
 // Build/version marker to confirm the right bundle is loaded
 const JS_VERSION = '2026-02-08T07:50Z';
 
+function resolveRedirectUri() {
+    const configuredRedirect = String(globalThis.__M365_AUTH_REDIRECT_URI || '').trim();
+    if (configuredRedirect) return configuredRedirect;
+
+    const currentUri = `${globalThis.location.origin}${globalThis.location.pathname}`;
+    if (currentUri) return currentUri;
+
+    return 'http://localhost:3000/clinical-rounding-adaptive.html';
+}
+
 const M365_CONFIG = {
     // MSAL Configuration - Configured with your Entra ID app
     auth: {
         clientId: '2030acbd-8796-420d-8990-acdf468227a6',  // Your Entra ID Client ID
         authority: 'https://login.microsoftonline.com/d4402872-0ebc-4758-9c54-71923320c29d',  // Your Tenant ID
-        // IMPORTANT: This exact URL must be registered in Azure Portal → App Registration → Authentication
-        // Use the page you're actually running on to avoid silent auth failures (Local Mode symptom)
-        redirectUri: (() => {
-            const currentUri = `${window.location.origin}${window.location.pathname}`;
-            // Known good URIs kept for clarity; Entra app must list every value you run from
-            const allowed = [
-                'http://localhost:3000/clinical-rounding-adaptive.html',
-                'https://art1907.github.io/Clinical-Roundup-List/clinical-rounding-adaptive.html'
-            ];
-            // Prefer exact current page; fallback to first known dev URI to avoid empty string
-            return currentUri || allowed[0];
-        })()
+        // IMPORTANT: This exact URL must be registered in Azure Portal → App Registration → Authentication.
+        // Override with globalThis.__M365_AUTH_REDIRECT_URI before this script loads if you want a fixed custom auth URL.
+        redirectUri: resolveRedirectUri()
     },
     cache: {
         cacheLocation: 'sessionStorage',  // Use sessionStorage to match MSAL state storage
