@@ -8505,7 +8505,11 @@
                     ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
                     ${visibleCols.includes('plan') ? `<td class="p-3 align-top w-[20%]"><div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass}">${p.plan || '-'}</div></td>` : ''}
                     <td class="p-3 align-top w-72">
-                        <div class="inline-flex max-w-full rounded-md border px-2 py-1 text-[10px] font-bold leading-snug whitespace-normal break-words ${statusObj.bg} ${statusObj.text}">${status}</div>
+                        <div class="flex items-start">
+                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-0">
+                                ${renderStatusOptionsMarkup(status)}
+                            </select>
+                        </div>
                     </td>
                     <td class="p-3 align-top w-20">
                         <div class="flex flex-col items-start gap-1">
