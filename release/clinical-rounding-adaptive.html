@@ -9733,18 +9733,18 @@
             </div>
 
             <div id="summary-stats" class="system-ribbon-stats flex-shrink-0">
-                <div class="system-stat-chip">
+                <button type="button" class="system-stat-chip" onclick="globalThis.setTab('active')" title="Open Census">
                     <span class="system-stat-chip-label">Active</span>
                     <span id="count-total" class="system-stat-chip-value">0</span>
-                </div>
-                <div class="system-stat-chip procedures">
+                </button>
+                <button type="button" class="system-stat-chip procedures" onclick="globalThis.setTab('procedures')" title="Open Surgical">
                     <span class="system-stat-chip-label">Proc</span>
                     <span id="count-procedures" class="system-stat-chip-value">0</span>
-                </div>
-                <div class="system-stat-chip">
+                </button>
+                <button type="button" class="system-stat-chip" onclick="globalThis.setTab('archive')" title="Open Archive">
                     <span class="system-stat-chip-label">Arch</span>
                     <span id="count-archived" class="system-stat-chip-value">0</span>
-                </div>
+                </button>
             </div>
         </div>
 
