@@ -6435,8 +6435,7 @@
                         </div>
 
                         <div class="mobile-card-status-row">
-                            <span class="mobile-status-pill ${statusObj.bg} ${statusObj.text}">${statusObj.badge} ${status}</span>
-                            ${isSurgical ? `<select onchange="globalThis.updateStatusQuick('${patient.id}', this.value)" class="mobile-status-select ${statusObj.bg} ${statusObj.text} border">${renderStatusOptionsMarkup(status)}</select>` : ''}
+                            <span class="mobile-status-pill ${statusObj.bg} ${statusObj.text}">${status}</span>
                         </div>
 
                         <div class="mobile-card-actions">
@@ -8460,7 +8459,6 @@
             const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
             
             container.innerHTML = filtered.map(p => {
-                const isProc = isSurgicalCase(p);
                 const status = getSafeConfiguredStatus(getPatientStatus(p));
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || STATUS_COLORS['To-Do'];
                 const findingsDisplay = getFindingsDisplay(p);
@@ -8488,17 +8486,12 @@
                     ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
                     ${visibleCols.includes('plan') ? `<td class="p-3 align-top w-[20%]"><div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass}">${p.plan || '-'}</div></td>` : ''}
                     <td class="p-3 align-top w-72">
-                        <div class="flex items-start gap-2">
-                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[8px] rounded px-1.5 py-1 ${statusObj.bg} ${statusObj.text} border font-bold flex-1 min-w-0">
-                                ${renderStatusOptionsMarkup(status)}
-                            </select>
-                            <span class="inline-block ${statusObj.bg} ${statusObj.text} px-2 py-1 rounded whitespace-nowrap font-bold text-[9px]">${statusObj.badge}</span>
-                        </div>
+                        <div class="inline-flex max-w-full rounded-md border px-2 py-1 text-[10px] font-bold leading-snug whitespace-normal break-words ${statusObj.bg} ${statusObj.text}">${status}</div>
                     </td>
-                    <td class="p-3 align-top w-24">
-                        <div class="flex flex-col gap-1">
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModal('${p.id}')" class="text-[9px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1.5 rounded transition-colors">Edit</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="text-[9px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1.5 rounded transition-colors">Print</button>
+                    <td class="p-3 align-top w-20">
+                        <div class="flex flex-col items-start gap-1">
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModal('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Edit</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
                         </div>
                     </td>
                 </tr>`;
@@ -9860,7 +9853,7 @@
                                 <th class="p-3 w-48 align-top text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-[34%] align-top text-left font-bold text-slate-700">Findings</th>
                                 <th class="p-3 w-[20%] align-top text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
-                                <th class="p-3 w-24 align-top text-left font-bold text-slate-700">Actions</th>
+                                <th class="p-3 w-20 align-top text-left font-bold text-slate-700">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="table-body" class="divide-y divide-slate-100"></tbody>
