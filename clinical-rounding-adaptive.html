@@ -4287,6 +4287,7 @@
                 }
             }
 
+            hideArchivedFromCensus();
             renderUI();
             updateBatchOpCount();
             showToast(failed ? `⚠️ ${archived} archived, ${failed} failed` : `📦 ${archived} records archived`);
@@ -7450,6 +7451,22 @@
             patients = patientsData;
             renderUI();
         };
+
+        function isArchivedRecord(patient) {
+            const archivedValue = patient?.archived;
+            if (archivedValue === true || archivedValue === 1) return true;
+            if (typeof archivedValue === 'string') {
+                const normalized = archivedValue.trim().toLowerCase();
+                return normalized === 'true' || normalized === 'yes' || normalized === 'y' || normalized === '1';
+            }
+            return false;
+        }
+
+        function hideArchivedFromCensus() {
+            if (activeFilters.showArchived !== true) return;
+            activeFilters.showArchived = false;
+            syncAdvancedFilterPanel();
+        }
         
         globalThis.updateOnCallFromM365 = function(onCallData) {
             console.log('📅 updateOnCallFromM365 called with', onCallData.length, 'on-call shifts');
@@ -8114,6 +8131,7 @@
                     p.lastChangeNoteAt = new Date().toISOString();
                     p.lastChangeNoteBy = auditUser;
                     p.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(p), changeNote, auditUser, shouldArchive ? 'archive' : 'restore');
+                    if (shouldArchive) hideArchivedFromCensus();
                     renderUI();
                     showToast(shouldArchive ? "Archived" : "Restored");
                 }
@@ -8131,6 +8149,7 @@
                         patient.lastChangeNoteBy = auditUser;
                         patient.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(patient), changeNote, auditUser, shouldArchive ? 'archive' : 'restore');
                         await globalThis.m365SavePatient(patient);
+                        if (shouldArchive) hideArchivedFromCensus();
                         renderUI();
                         showToast(shouldArchive ? "Archived" : "Restored");
                     }
@@ -8534,13 +8553,13 @@
         }
 
         function updateStats() {
-            const active = patients.filter(p => !p.archived);
+            const active = patients.filter(p => !isArchivedRecord(p));
             ['total', 'procedures', 'archived'].forEach(stat => {
                 const el = document.getElementById(`count-${stat}`);
                 if (!el) return;
                 if (stat === 'total') el.innerText = active.length;
                 else if (stat === 'procedures') el.innerText = active.filter(p => isSurgicalCase(p)).length;
-                else if (stat === 'archived') el.innerText = patients.filter(p => p.archived).length;
+                else if (stat === 'archived') el.innerText = patients.filter(p => isArchivedRecord(p)).length;
             });
         }
 
@@ -8555,9 +8574,9 @@
 
         function getFilteredData() {
             let f = [];
-            if (currentTab === 'active') f = patients.filter(p => activeFilters.showArchived || !p.archived);
-            else if (currentTab === 'procedures') f = patients.filter(p => (activeFilters.showArchived || !p.archived) && isSurgicalCase(p));
-            else if (currentTab === 'archive') f = patients.filter(p => p.archived);
+            if (currentTab === 'active') f = patients.filter(p => activeFilters.showArchived || !isArchivedRecord(p));
+            else if (currentTab === 'procedures') f = patients.filter(p => (activeFilters.showArchived || !isArchivedRecord(p)) && isSurgicalCase(p));
+            else if (currentTab === 'archive') f = patients.filter(p => isArchivedRecord(p));
             
             // Apply user filters
             const filterDate = document.getElementById('filter-date')?.value;
