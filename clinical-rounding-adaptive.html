@@ -7171,94 +7171,153 @@
 
         // CSV IMPORT ENGINE
         const CSVImporter = (() => {
-            // 3-Pass Parser as per architecture
+            const normalizeCell = (value) => String(value ?? '').replace(/\u00A0/g, ' ').trim();
+
+            const parseCsvLine = (line) => {
+                const out = [];
+                let cur = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const ch = line[i];
+                    if (ch === '"') {
+                        if (inQuotes && line[i + 1] === '"') {
+                            cur += '"';
+                            i++;
+                        } else {
+                            inQuotes = !inQuotes;
+                        }
+                    } else if (ch === ',' && !inQuotes) {
+                        out.push(normalizeCell(cur));
+                        cur = '';
+                    } else {
+                        cur += ch;
+                    }
+                }
+                out.push(normalizeCell(cur));
+                return out;
+            };
+
+            const normalizeHeader = (header) => normalizeCell(header).toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+            const findCol = (normalizedHeaders, aliases) => {
+                const normalizedAliases = aliases.map(a => normalizeHeader(a));
+                return normalizedHeaders.findIndex(h => normalizedAliases.some(a => h === a || h.includes(a)));
+            };
+
+            const findHeaderIndex = (rows) => {
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i] || [];
+                    const normalized = row.map(normalizeHeader);
+                    const hasDate = findCol(normalized, ['Date of Service', 'Date']) !== -1;
+                    const hasIdentity = findCol(normalized, ['MRN', 'Name', 'Room', 'Hospital/Room #', 'Hospital']) !== -1;
+                    if (hasDate && hasIdentity) return i;
+                }
+                return -1;
+            };
+
+            const parseRows3Pass = (rowsInput) => {
+                const rows = (rowsInput || [])
+                    .map(r => (r || []).map(normalizeCell))
+                    .filter(r => r.some(c => c));
+
+                if (rows.length < 2) throw new Error('Invalid import: insufficient rows');
+
+                const result = { onCall: [], patients: [], hospitals: [] };
+
+                for (let i = 0; i < Math.min(8, rows.length); i++) {
+                    const parts = rows[i];
+                    const lead = (parts[0] || '').toLowerCase().replace(':', '').trim();
+                    if ((lead === 'physician on-call' || lead === 'physician on call') && parts.length >= 4) {
+                        result.onCall.push({
+                            date: parts[1],
+                            provider: parts[2],
+                            hospitals: parts[3]
+                        });
+                    }
+                }
+
+                const headerIdx = findHeaderIndex(rows);
+                if (headerIdx < 0) throw new Error('Header row not found (expected Date/Room/MRN style headers)');
+
+                const headerRow = rows[headerIdx];
+                const normalizedHeaders = headerRow.map(normalizeHeader);
+                const colMap = {
+                    hospital: findCol(normalizedHeaders, ['Hospital', 'Hospital/Room #', 'Facility']),
+                    room: findCol(normalizedHeaders, ['Room', 'Bed', 'Hospital/Room #']),
+                    dateService: findCol(normalizedHeaders, ['Date of Service', 'Date']),
+                    name: findCol(normalizedHeaders, ['Name', 'Patient']),
+                    dob: findCol(normalizedHeaders, ['DOB', 'Date of Birth']),
+                    mrn: findCol(normalizedHeaders, ['MRN', 'Medical Record Number']),
+                    findings: findCol(normalizedHeaders, ['Dx/Findings', 'Findings', 'Diagnosis', 'FindingsText']),
+                    plan: findCol(normalizedHeaders, ['Plan', 'Assessment/Plan']),
+                    md: findCol(normalizedHeaders, ['Supervising MD', 'SupervisingMD', 'Attending', 'Provider']),
+                    pending: findCol(normalizedHeaders, ['Pending Tests/Info', 'Pending', 'Pending Info']),
+                    followUp: findCol(normalizedHeaders, ['Follow-Up Appt', 'Follow Up', 'FollowUp'])
+                };
+
+                if (colMap.dateService === -1) {
+                    throw new Error('Header mapping failed: missing Date/Date of Service column');
+                }
+
+                let currentHospital = '';
+                for (let i = headerIdx + 1; i < rows.length; i++) {
+                    const parts = rows[i];
+                    const first = parts[0] || '';
+                    const nonEmptyCount = parts.filter(Boolean).length;
+                    const isHospitalHeader = first && nonEmptyCount === 1;
+
+                    if (isHospitalHeader) {
+                        currentHospital = first;
+                        if (!result.hospitals.includes(currentHospital)) result.hospitals.push(currentHospital);
+                        continue;
+                    }
+
+                    if (!parts.some(Boolean)) continue;
+
+                    const dateValue = colMap.dateService >= 0 ? (parts[colMap.dateService] || '') : '';
+                    const roomValue = colMap.room >= 0 ? (parts[colMap.room] || '') : first;
+                    const mrnValue = colMap.mrn >= 0 ? (parts[colMap.mrn] || '') : '';
+
+                    if (!dateValue && !roomValue && !mrnValue) continue;
+
+                    const patient = {
+                        id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        date: dateValue || new Date().toISOString().split('T')[0],
+                        room: roomValue || first,
+                        name: colMap.name >= 0 ? (parts[colMap.name] || '') : '',
+                        dob: colMap.dob >= 0 ? (parts[colMap.dob] || '') : '',
+                        mrn: mrnValue,
+                        hospital: (colMap.hospital >= 0 ? (parts[colMap.hospital] || '') : '') || currentHospital || 'Unassigned',
+                        findingsText: colMap.findings >= 0 ? (parts[colMap.findings] || '') : '',
+                        plan: colMap.plan >= 0 ? (parts[colMap.plan] || '') : '',
+                        supervisingMd: colMap.md >= 0 ? (parts[colMap.md] || '') : '',
+                        pending: colMap.pending >= 0 ? (parts[colMap.pending] || '') : '',
+                        followUp: colMap.followUp >= 0 ? (parts[colMap.followUp] || '') : '',
+                        procedureStatus: DEFAULT_RECORD_STATUS,
+                        archived: false,
+                        cptPrimary: '',
+                        icdPrimary: '',
+                        chargeCodesSecondary: '',
+                        findingsCodes: [],
+                        findingsValues: {}
+                    };
+
+                    result.patients.push(patient);
+                }
+
+                return result;
+            };
+
             return {
+                parseRows3Pass,
                 parse3Pass: (csvText) => {
-                    const lines = csvText.trim().split('\n').map(l => l.trim()).filter(Boolean);
-                    if (lines.length < 5) throw new Error('Invalid CSV: insufficient rows');
-
-                    const result = { onCall: [], patients: [], hospitals: [] };
-
                     try {
-                        // Pass 1: Parse on-call schedule (rows 1-3)
-                        const onCallData = [];
-                        for (let i = 0; i < Math.min(3, lines.length); i++) {
-                            const parts = lines[i].split(',').map(p => p.trim());
-                            if (parts[0] === 'Physician On-Call:' && parts.length >= 4) {
-                                onCallData.push({
-                                    date: parts[1],
-                                    provider: parts[2],
-                                    hospitals: parts[3]
-                                });
-                            }
-                        }
-                        result.onCall = onCallData;
-
-                        // Pass 2: Find header row (row 4) and map columns
-                        let headerIdx = 3;
-                        while (headerIdx < lines.length && !lines[headerIdx].includes('Date of Service')) headerIdx++;
-                        if (headerIdx >= lines.length) throw new Error('Header row not found');
-
-                        const headerRow = lines[headerIdx].split(',').map(h => h.trim());
-                        const colMap = {
-                            hospital: headerRow.indexOf('Hospital/Room #'),
-                            room: headerRow.findIndex(h => h.includes('Room') || h === 'Hospital/Room #'),
-                            dateService: headerRow.indexOf('Date of Service'),
-                            name: headerRow.findIndex(h => h.includes('Name')),
-                            dob: headerRow.findIndex(h => h.includes('DOB')),
-                            mrn: headerRow.findIndex(h => h.includes('MRN')),
-                            findings: headerRow.findIndex(h => h.includes('Dx') || h.includes('Findings')),
-                            plan: headerRow.findIndex(h => h.includes('Plan')),
-                            md: headerRow.findIndex(h => h.includes('Supervising')),
-                            pending: headerRow.findIndex(h => h.includes('Pending')),
-                            followUp: headerRow.findIndex(h => h.includes('Follow-Up'))
-                        };
-
-                        // Pass 3: Parse patient rows (rows 5+) with hospital detection
-                        let currentHospital = '';
-                        for (let i = headerIdx + 1; i < lines.length; i++) {
-                            const parts = lines[i].split(',').map(p => p.trim());
-                            
-                            // Detect hospital section header (first col filled, rest empty)
-                            const isHospitalHeader = parts[0] && parts.slice(1).every(p => !p);
-                            if (isHospitalHeader) {
-                                currentHospital = parts[0];
-                                if (!result.hospitals.includes(currentHospital)) {
-                                    result.hospitals.push(currentHospital);
-                                }
-                                continue;
-                            }
-
-                            // Skip empty rows or incomplete rows
-                            if (!parts[0] || parts.every(p => !p)) continue;
-
-                            // Parse patient record
-                            const patient = {
-                                id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                                date: parts[colMap.dateService] || new Date().toISOString().split('T')[0],
-                                room: parts[colMap.room] || parts[0],
-                                name: parts[colMap.name] || '',
-                                dob: parts[colMap.dob] || '',
-                                mrn: parts[colMap.mrn] || '',
-                                hospital: currentHospital || 'Unassigned',
-                                findingsText: parts[colMap.findings] || '',
-                                plan: parts[colMap.plan] || '',
-                                supervisingMd: parts[colMap.md] || '',
-                                pending: parts[colMap.pending] || '',
-                                followUp: parts[colMap.followUp] || '',
-                                procedureStatus: DEFAULT_RECORD_STATUS,
-                                archived: false,
-                                cptPrimary: '',
-                                icdPrimary: '',
-                                chargeCodesSecondary: '',
-                                findingsCodes: [],
-                                findingsValues: {}
-                            };
-
-                            result.patients.push(patient);
-                        }
-
-                        return result;
+                        const rows = csvText
+                            .replace(/\r\n/g, '\n')
+                            .replace(/\r/g, '\n')
+                            .split('\n')
+                            .map(parseCsvLine);
+                        return parseRows3Pass(rows);
                     } catch (e) {
                         console.error('CSV parse error:', e);
                         throw e;
@@ -8965,14 +9024,16 @@
                             const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                             for (const sheetName of workbook.SheetNames) {
                                 const sheet = workbook.Sheets[sheetName];
-                                const csvText = XLSX.utils.sheet_to_csv(sheet);
+                                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
                                 try {
-                                    const parsed = CSVImporter.parse3Pass(csvText);
+                                    const parsed = CSVImporter.parseRows3Pass(rows);
                                     fileOnCall = fileOnCall.concat(parsed.onCall);
                                     filePatients = filePatients.concat(parsed.patients);
                                     fileHospitals = [...new Set([...fileHospitals, ...parsed.hospitals])];
                                 } catch (sheetErr) {
-                                    console.warn(`Skipped sheet "${sheetName}" in ${fileName}:`, sheetErr.message);
+                                    const message = `Skipped sheet "${sheetName}" in ${fileName}: ${sheetErr.message}`;
+                                    preview.errors.push(message);
+                                    console.warn(message);
                                 }
                             }
                         } else if (fileName.endsWith('.csv')) {
@@ -8986,6 +9047,10 @@
                         let newInFile = 0;
                         let duplicatesInFile = 0;
                         const filePreviewDetails = [];
+
+                        if (filePatients.length === 0 && fileOnCall.length === 0) {
+                            preview.errors.push(`${fileName}: No recognizable patient/schedule rows found`);
+                        }
 
                         filePatients.forEach(p => {
                             const isDuplicate = patients.some(existing => existing.mrn === p.mrn && existing.date === p.date);
@@ -9123,14 +9188,16 @@
                             const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                             for (const sheetName of workbook.SheetNames) {
                                 const sheet = workbook.Sheets[sheetName];
-                                const csvText = XLSX.utils.sheet_to_csv(sheet);
+                                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
                                 try {
-                                    const parsed = CSVImporter.parse3Pass(csvText);
+                                    const parsed = CSVImporter.parseRows3Pass(rows);
                                     fileOnCall = fileOnCall.concat(parsed.onCall);
                                     filePatients = filePatients.concat(parsed.patients);
                                     fileHospitals = [...new Set([...fileHospitals, ...parsed.hospitals])];
                                 } catch (sheetErr) {
-                                    console.warn(`Skipped sheet "${sheetName}" in ${fileName}:`, sheetErr.message);
+                                    const message = `Skipped sheet "${sheetName}" in ${fileName}: ${sheetErr.message}`;
+                                    errors.push(message);
+                                    console.warn(message);
                                 }
                             }
                         } else if (fileName.endsWith('.csv')) {
