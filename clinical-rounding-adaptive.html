@@ -3511,10 +3511,14 @@
 
                 logDataChange: (userId, patientId, fieldChanged, oldValue, newValue) => {
                     if (!shouldLog('data_change')) return;
+                    const normalizedField = String(fieldChanged || '').toLowerCase().trim();
+                    const isRecordCreate = normalizedField === 'record' && (oldValue == null || oldValue === '');
+                    const isRecordDelete = normalizedField === 'record' && oldValue != null && newValue === 'deleted';
                     const logEntry = createLogEntry('data_change', {
                         userId,
                         patientId,
                         fieldChanged,
+                        action: isRecordCreate ? 'create' : (isRecordDelete ? 'delete' : 'update'),
                         oldValue: oldValue ? '[REDACTED]' : null,
                         newValue: newValue ? '[REDACTED]' : null,
                         timestamp: new Date().toISOString()
@@ -5507,6 +5511,7 @@
             if (!tableBody) return;
 
             const actionFilterRaw = String(document.getElementById('audit-filter-action')?.value || '').toLowerCase();
+            const userFilterRaw = String(document.getElementById('audit-filter-user')?.value || '').trim().toLowerCase();
             const fromDate = document.getElementById('audit-filter-from')?.value || '';
             const toDate = document.getElementById('audit-filter-to')?.value || '';
             tableBody.innerHTML = '<tr><td colspan="5" class="p-3 text-center text-slate-500">Loading audit logs...</td></tr>';
@@ -5600,6 +5605,12 @@
 
                 if (actionFilterRaw) {
                     logs = logs.filter((entry) => entry.normalizedAction === actionFilterRaw);
+                }
+                if (userFilterRaw) {
+                    logs = logs.filter((entry) => {
+                        const userValue = String(entry.userId || entry.userIdentity || '').trim().toLowerCase();
+                        return userValue.includes(userFilterRaw);
+                    });
                 }
                 if (fromDate) {
                     const from = new Date(`${fromDate}T00:00:00`).getTime();
@@ -7169,6 +7180,20 @@
         globalThis.initScrollHints = initScrollHints;
         window.addEventListener('resize', () => globalThis.initScrollHints?.(), { passive: true });
 
+        const buildImportIdentityKey = (patient = {}) => {
+            const normalizedDate = String(patient.date || '').trim();
+            const normalizedMrn = String(patient.mrn || '').trim().toLowerCase();
+            const normalizedHospital = String(patient.hospital || '').trim().toLowerCase();
+            const normalizedRoom = String(patient.room || '').trim().toLowerCase();
+            const normalizedName = String(patient.name || '').trim().toLowerCase();
+
+            if (normalizedMrn && normalizedDate) {
+                return `mrn|${normalizedMrn}|${normalizedDate}`;
+            }
+
+            return `fallback|${normalizedDate}|${normalizedHospital || 'unknown-hospital'}|${normalizedRoom || 'unknown-room'}|${normalizedName || 'unknown-name'}`;
+        };
+
         // CSV IMPORT ENGINE
         const CSVImporter = (() => {
             const normalizeCell = (value) => String(value ?? '').replace(/\u00A0/g, ' ').trim();
@@ -7301,6 +7326,8 @@
                         findingsCodes: [],
                         findingsValues: {}
                     };
+
+                    patient.visitKey = buildImportIdentityKey(patient);
 
                     result.patients.push(patient);
                 }
@@ -8971,7 +8998,8 @@
                 // Import patients
                 if (parsed.patients.length > 0) {
                     parsed.patients.forEach(p => {
-                        const idx = patients.findIndex(existing => existing.mrn === p.mrn && existing.date === p.date);
+                        const patientKey = buildImportIdentityKey(p);
+                        const idx = patients.findIndex(existing => buildImportIdentityKey(existing) === patientKey);
                         if (idx >= 0) {
                             patients[idx] = { ...patients[idx], ...p };
                         } else {
@@ -9053,7 +9081,8 @@
                         }
 
                         filePatients.forEach(p => {
-                            const isDuplicate = patients.some(existing => existing.mrn === p.mrn && existing.date === p.date);
+                            const patientKey = buildImportIdentityKey(p);
+                            const isDuplicate = patients.some(existing => buildImportIdentityKey(existing) === patientKey);
                             if (isDuplicate) {
                                 duplicatesInFile++;
                                 filePreviewDetails.push({
@@ -9166,6 +9195,33 @@
             const modal = document.getElementById('patient-modal');
             modal.style.display = 'none';
             const useCloudImport = isConnected && useM365 && typeof globalThis.m365SavePatient === 'function';
+            const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
+            const auditFields = [
+                'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
+                'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
+                'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues',
+                'findingsDates', 'stat', 'priority', 'archived'
+            ];
+            const toComparable = (value) => {
+                if (value == null || value === '' || value === 'undefined' || value === 'null') return '';
+                if (Array.isArray(value)) return value.length ? JSON.stringify(value) : '';
+                if (typeof value === 'object') {
+                    const serialized = JSON.stringify(value);
+                    return serialized === '{}' || serialized === '[]' ? '' : serialized;
+                }
+                return String(value).trim();
+            };
+            const logImportedPatientChange = (previousPatient, nextPatient, recordId) => {
+                if (!recordId) return;
+                if (!previousPatient) {
+                    AuditLogger.logDataChange(auditUser, recordId, 'record', null, 'created');
+                    return;
+                }
+                const changedFields = auditFields.filter((field) => toComparable(previousPatient[field]) !== toComparable(nextPatient[field]));
+                if (changedFields.length) {
+                    AuditLogger.logDataChanges(auditUser, recordId, changedFields, previousPatient, nextPatient);
+                }
+            };
 
             let totalPatients = 0;
             let totalOnCall = 0;
@@ -9229,26 +9285,44 @@
 
                         // Import patients based on chosen action
                         for (const p of filePatients) {
-                            const idx = patients.findIndex(existing => existing.mrn === p.mrn && existing.date === p.date);
-                            if (idx >= 0) {
-                                if (action !== 'replace') continue;
+                            try {
+                                const patientKey = buildImportIdentityKey(p);
+                                const idx = patients.findIndex(existing => buildImportIdentityKey(existing) === patientKey);
+                                if (idx >= 0) {
+                                    if (action !== 'replace') continue;
 
-                                const mergedPatient = { ...patients[idx], ...p };
-                                patients[idx] = mergedPatient;
+                                    const previousPatient = { ...patients[idx] };
+                                    const mergedPatient = { ...patients[idx], ...p };
+                                    patients[idx] = mergedPatient;
 
-                                if (useCloudImport) {
-                                    await globalThis.m365SavePatient(mergedPatient);
-                                }
-                                totalPatients++;
-                            } else {
-                                patients.push(p);
-                                if (useCloudImport) {
-                                    const savedId = await globalThis.m365SavePatient(p);
-                                    if (savedId !== undefined && savedId !== null) {
-                                        p.id = String(savedId);
+                                    if (useCloudImport) {
+                                        await globalThis.m365SavePatient(mergedPatient);
                                     }
+                                    logImportedPatientChange(previousPatient, mergedPatient, mergedPatient.id || previousPatient.id);
+                                    totalPatients++;
+                                } else {
+                                    patients.push(p);
+                                    if (useCloudImport) {
+                                        const savedId = await globalThis.m365SavePatient(p);
+                                        if (savedId !== undefined && savedId !== null) {
+                                            p.id = String(savedId);
+                                        }
+                                    }
+                                    logImportedPatientChange(null, p, p.id);
+                                    totalPatients++;
                                 }
-                                totalPatients++;
+                            } catch (patientErr) {
+                                const rowLabel = [p.hospital, p.room, p.date, p.name || p.mrn || 'unknown-patient']
+                                    .filter(Boolean)
+                                    .join(' | ');
+                                errors.push(`${fileName}: ${rowLabel}: ${patientErr.message}`);
+                                AuditLogger.logError(auditUser, 'bulk_import_patient_failed', patientErr.message, {
+                                    fileName,
+                                    action,
+                                    rowLabel,
+                                    visitKey: p.visitKey || buildImportIdentityKey(p)
+                                });
+                                console.error('Patient import error:', patientErr, p);
                             }
                         }
 
@@ -9265,6 +9339,7 @@
 
                     } catch (fileErr) {
                         errors.push(`${fileName}: ${fileErr.message}`);
+                        AuditLogger.logError(auditUser, 'bulk_import_failed', fileErr.message, { fileName, action });
                         console.error(`Error processing ${fileName}:`, fileErr);
                     }
                 }
@@ -10160,7 +10235,7 @@
                     <div class="text-2xl font-bold mb-4">🔐 Audit Logs</div>
                     <div class="mb-2 text-xs text-slate-500">Tip: create, update, delete, export, and auth events are captured. Apply filters and click Load Logs.</div>
                     <div class="mb-4">
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 flex-shrink-0">
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 flex-shrink-0">
                             <select id="audit-filter-action" class="p-2 text-xs border rounded">
                                 <option value="">All Actions</option>
                                 <option value="create">Create</option>
@@ -10169,6 +10244,7 @@
                                 <option value="view">View</option>
                                 <option value="export">Export</option>
                             </select>
+                            <input type="text" id="audit-filter-user" placeholder="Username" class="p-2 text-xs border rounded" />
                             <input type="date" id="audit-filter-from" placeholder="From" class="p-2 text-xs border rounded" />
                             <input type="date" id="audit-filter-to" placeholder="To" class="p-2 text-xs border rounded" />
                             <button onclick="globalThis.loadAuditLogs()" class="p-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700" title="Reloads logs from memory and M365 audit list.">Load Logs</button>

@@ -718,9 +718,23 @@ async function api_savePatient(patientData) {
     };
 
     const normalizeBool = (val) => parseBoolish(val);
+    const computeVisitKey = () => {
+        if (patientData.visitKey) return patientData.visitKey;
+        const normalizedDate = String(patientData.date || '').trim();
+        const normalizedMrn = String(patientData.mrn || '').trim().toLowerCase();
+        const normalizedHospital = String(patientData.hospital || '').trim().toLowerCase();
+        const normalizedRoom = String(patientData.room || '').trim().toLowerCase();
+        const normalizedName = String(patientData.name || '').trim().toLowerCase();
+
+        if (normalizedMrn && normalizedDate) {
+            return `${normalizedMrn}|${normalizedDate}|${patientData.visitTime || ''}`;
+        }
+
+        return `fallback|${normalizedDate}|${normalizedHospital || 'unknown-hospital'}|${normalizedRoom || 'unknown-room'}|${normalizedName || 'unknown-name'}`;
+    };
 
     const visitTimeValue = patientData.visitTime || (isUpdate ? '' : new Date().toISOString());
-    const visitKeyValue = patientData.visitKey || (isUpdate ? '' : `${patientData.mrn}|${patientData.date}|${visitTimeValue}`);
+    const visitKeyValue = isUpdate ? (patientData.visitKey || '') : computeVisitKey();
 
     const fields = {
         Room: patientData.room || '',
@@ -770,8 +784,8 @@ async function api_savePatient(patientData) {
         delete fieldsToSend.VisitKey;
     }
 
-    if (!isUpdate && (!fieldsToSend.Date || !fieldsToSend.MRN)) {
-        throw new Error('Missing required fields: MRN and Date are required to create a record');
+    if (!isUpdate && (!fieldsToSend.Date || !fieldsToSend.VisitKey)) {
+        throw new Error('Missing required fields: Date and visit identity are required to create a record');
     }
 
     console.log('SAVE fields', { visitKey: fieldsToSend.VisitKey, hospital: fieldsToSend.Hospital_x0028_s_x0029_ });
