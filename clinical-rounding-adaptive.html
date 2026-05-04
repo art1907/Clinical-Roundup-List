@@ -9165,6 +9165,7 @@
             const files = document.getElementById('csv-file-input').files;
             const modal = document.getElementById('patient-modal');
             modal.style.display = 'none';
+            const useCloudImport = isConnected && useM365 && typeof globalThis.m365SavePatient === 'function';
 
             let totalPatients = 0;
             let totalOnCall = 0;
@@ -9209,32 +9210,47 @@
                         }
 
                         // Import schedules
-                        fileOnCall.forEach(oc => {
+                        for (const oc of fileOnCall) {
                             const idx = onCallSchedule.findIndex(s => s.date === oc.date);
                             if (idx >= 0) {
                                 onCallSchedule[idx] = { ...onCallSchedule[idx], ...oc, id: onCallSchedule[idx].id };
+                                if (useCloudImport && typeof globalThis.m365SaveOnCallShift === 'function') {
+                                    await globalThis.m365SaveOnCallShift({ ...onCallSchedule[idx] });
+                                }
                             } else {
-                                onCallSchedule.push({ id: 'oc_' + Math.random().toString(36).substr(2, 9), ...oc });
+                                const newShift = { id: 'oc_' + Math.random().toString(36).substr(2, 9), ...oc };
+                                onCallSchedule.push(newShift);
+                                if (useCloudImport && typeof globalThis.m365SaveOnCallShift === 'function') {
+                                    const savedShift = await globalThis.m365SaveOnCallShift(newShift);
+                                    if (savedShift?.id) newShift.id = savedShift.id;
+                                }
                             }
-                        });
+                        }
 
                         // Import patients based on chosen action
-                        filePatients.forEach(p => {
+                        for (const p of filePatients) {
                             const idx = patients.findIndex(existing => existing.mrn === p.mrn && existing.date === p.date);
                             if (idx >= 0) {
-                                // Duplicate found
-                                if (action === 'replace') {
-                                    // Replace with new data
-                                    patients[idx] = { ...patients[idx], ...p };
-                                    totalPatients++;
+                                if (action !== 'replace') continue;
+
+                                const mergedPatient = { ...patients[idx], ...p };
+                                patients[idx] = mergedPatient;
+
+                                if (useCloudImport) {
+                                    await globalThis.m365SavePatient(mergedPatient);
                                 }
-                                // If 'newonly', skip this record
+                                totalPatients++;
                             } else {
-                                // New record
                                 patients.push(p);
+                                if (useCloudImport) {
+                                    const savedId = await globalThis.m365SavePatient(p);
+                                    if (savedId !== undefined && savedId !== null) {
+                                        p.id = String(savedId);
+                                    }
+                                }
                                 totalPatients++;
                             }
-                        });
+                        }
 
                         // Update hospitals
                         if (fileHospitals.length > 0) {
@@ -9250,6 +9266,20 @@
                     } catch (fileErr) {
                         errors.push(`${fileName}: ${fileErr.message}`);
                         console.error(`Error processing ${fileName}:`, fileErr);
+                    }
+                }
+
+                if (useCloudImport && typeof globalThis.m365FetchPatients === 'function') {
+                    const refreshedPatients = await globalThis.m365FetchPatients();
+                    if (Array.isArray(refreshedPatients)) {
+                        patients = refreshedPatients;
+                    }
+                }
+
+                if (useCloudImport && typeof globalThis.m365FetchOnCall === 'function') {
+                    const refreshedOnCall = await globalThis.m365FetchOnCall();
+                    if (Array.isArray(refreshedOnCall)) {
+                        onCallSchedule = refreshedOnCall;
                     }
                 }
 
