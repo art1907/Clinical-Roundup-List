@@ -7566,7 +7566,7 @@
                         });
 
                     const patient = {
-                        id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        id: `local-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                             date: normalizedDates.date,
                         room: roomValue || first,
                         name: colMap.name >= 0 ? (parts[colMap.name] || '') : '',

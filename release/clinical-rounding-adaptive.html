@@ -7233,7 +7233,7 @@
 
                             // Parse patient record
                             const patient = {
-                                id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                                id: `local-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                                 date: parts[colMap.dateService] || new Date().toISOString().split('T')[0],
                                 room: parts[colMap.room] || parts[0],
                                 name: parts[colMap.name] || '',
