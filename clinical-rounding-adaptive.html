@@ -8345,7 +8345,7 @@
                 syncDateReviewUI();
                 if (!data.visitKey) {
                     data.visitKey = data.mrn && data.date
-                        ? `${data.mrn}|${data.date}|${data.visitTime}`
+                        ? `${data.mrn}|${data.date}`
                         : buildImportIdentityKey(data);
                 }
                 if (normalizedDateState.appliedDefaults.length) {
@@ -9314,7 +9314,13 @@
                         const patientKey = buildImportIdentityKey(p);
                         const idx = patients.findIndex(existing => buildImportIdentityKey(existing) === patientKey);
                         if (idx >= 0) {
-                            patients[idx] = { ...patients[idx], ...p };
+                            for (const [key, value] of Object.entries(p)) {
+                                if (key === 'id') continue;
+                                if (value === '' || value === null || value === undefined) continue;
+                                if (Array.isArray(value) && value.length === 0) continue;
+                                if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) continue;
+                                patients[idx][key] = value;
+                            }
                         } else {
                             patients.push(p);
                         }
@@ -9387,7 +9393,9 @@
                         // Analyze: count new vs. duplicates
                         let newInFile = 0;
                         let duplicatesInFile = 0;
+                        let intraFileDuplicates = 0;
                         const filePreviewDetails = [];
+                        const seenKeysInFile = new Set();
 
                         if (filePatients.length === 0 && fileOnCall.length === 0) {
                             preview.errors.push(`${fileName}: No recognizable patient/schedule rows found`);
@@ -9395,14 +9403,26 @@
 
                         filePatients.forEach(p => {
                             const patientKey = buildImportIdentityKey(p);
-                            const isDuplicate = patients.some(existing => buildImportIdentityKey(existing) === patientKey);
-                            if (isDuplicate) {
+                            const isDuplicateOfExisting = patients.some(existing => buildImportIdentityKey(existing) === patientKey);
+                            const isDuplicateWithinFile = seenKeysInFile.has(patientKey);
+                            seenKeysInFile.add(patientKey);
+
+                            if (isDuplicateOfExisting) {
                                 duplicatesInFile++;
                                 filePreviewDetails.push({
                                     status: 'duplicate',
                                     mrn: p.mrn,
                                     date: p.date,
                                     name: p.name || 'Unknown'
+                                });
+                            } else if (isDuplicateWithinFile) {
+                                intraFileDuplicates++;
+                                filePreviewDetails.push({
+                                    status: 'intra-file-duplicate',
+                                    mrn: p.mrn,
+                                    date: p.date,
+                                    name: p.name || 'Unknown',
+                                    note: 'Same MRN+date appears earlier in this file; later row will merge into earlier'
                                 });
                             } else {
                                 newInFile++;
@@ -9419,12 +9439,14 @@
                             fileName,
                             newRecords: newInFile,
                             duplicates: duplicatesInFile,
+                            intraFileDuplicates,
                             schedules: fileOnCall.length,
                             details: filePreviewDetails
                         });
 
                         preview.totalNewRecords += newInFile;
                         preview.totalDuplicates += duplicatesInFile;
+                        preview.totalIntraFileDuplicates = (preview.totalIntraFileDuplicates || 0) + intraFileDuplicates;
                         preview.totalSchedules += fileOnCall.length;
                         preview.allPatients = preview.allPatients.concat(filePatients);
                         preview.allSchedules = preview.allSchedules.concat(fileOnCall);
@@ -9446,13 +9468,15 @@
         globalThis.showBulkImportPreview = (preview, onConfirm) => {
             const duplicateCount = preview.totalDuplicates;
             const newCount = preview.totalNewRecords;
+            const intraFileCount = preview.totalIntraFileDuplicates || 0;
 
             const detailsHtml = preview.files.map(f => `
                 <div class="bg-slate-50 p-3 rounded border border-slate-200 mb-2">
                     <div class="font-semibold text-sm text-slate-800">${f.fileName}</div>
                     <div class="text-xs text-slate-600 mt-1">
                         <span class="text-green-700 font-semibold">✓ ${f.newRecords} new</span> | 
-                        <span class="text-amber-700 font-semibold">⚠ ${f.duplicates} duplicates</span> | 
+                        <span class="text-amber-700 font-semibold">⚠ ${f.duplicates} duplicates</span>${f.intraFileDuplicates ? ` | 
+                        <span class="text-purple-700 font-semibold">🔄 ${f.intraFileDuplicates} same-patient repeats</span>` : ''} | 
                         <span class="text-blue-700 font-semibold">📅 ${f.schedules} schedules</span>
                     </div>
                 </div>
@@ -9468,7 +9492,8 @@
                         <div class="text-xs text-blue-800 mt-2 space-y-1">
                             <div>📁 <strong>${preview.files.length} file(s)</strong> ready to import</div>
                             <div>✅ <strong>${newCount} new record(s)</strong> will be added</div>
-                            <div>⚠️ <strong>${duplicateCount} duplicate(s)</strong> found (same MRN + date)</div>
+                            <div>⚠️ <strong>${duplicateCount} duplicate(s)</strong> found (same MRN + date already in system)</div>
+                            ${intraFileCount ? `<div>🔄 <strong>${intraFileCount} repeat row(s)</strong> within the file (same patient+date appears multiple times; later row merges into earlier)</div>` : ''}
                             <div>📅 <strong>${preview.totalSchedules} schedule update(s)</strong></div>
                         </div>
                     </div>
@@ -9605,7 +9630,14 @@
                                     if (action !== 'replace') continue;
 
                                     const previousPatient = { ...patients[idx] };
-                                    const mergedPatient = { ...patients[idx], ...p };
+                                    const mergedPatient = { ...patients[idx] };
+                                    for (const [key, value] of Object.entries(p)) {
+                                        if (key === 'id') continue;
+                                        if (value === '' || value === null || value === undefined) continue;
+                                        if (Array.isArray(value) && value.length === 0) continue;
+                                        if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) continue;
+                                        mergedPatient[key] = value;
+                                    }
                                     patients[idx] = mergedPatient;
 
                                     if (useCloudImport) {

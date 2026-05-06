@@ -727,7 +727,7 @@ async function api_savePatient(patientData) {
         const normalizedName = String(patientData.name || '').trim().toLowerCase();
 
         if (normalizedMrn && normalizedDate) {
-            return `${normalizedMrn}|${normalizedDate}|${patientData.visitTime || ''}`;
+            return `${normalizedMrn}|${normalizedDate}`;
         }
 
         return `fallback|${normalizedDate}|${normalizedHospital || 'unknown-hospital'}|${normalizedRoom || 'unknown-room'}|${normalizedName || 'unknown-name'}`;
