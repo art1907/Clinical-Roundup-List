@@ -2839,6 +2839,25 @@
                 grid-template-columns: repeat(4, 1fr);
             }
         }
+
+        /* Flashing Amber Animation for Review Tab */
+        @keyframes amber-flash {
+            0%, 100% {
+                background-color: #fbbf24;
+                color: #78350f;
+            }
+            50% {
+                background-color: #f59e0b;
+                color: #5a2e0f;
+            }
+        }
+
+        #tab-review-btn.has-flagged-records {
+            animation: amber-flash 1.5s ease-in-out infinite;
+            font-weight: bold;
+            border: 2px solid #d97706;
+            box-shadow: 0 0 12px rgba(217, 119, 6, 0.6);
+        }
     </style>
     
     <script>
@@ -8245,13 +8264,28 @@
                 action: null // 'acknowledge', 'edit', 'delete', 'archive'
             };
             flaggedRecords.push(flaggedRecord);
+            // Update Review tab button with flashing amber animation
+            const reviewBtn = document.getElementById('tab-review-btn');
+            if (reviewBtn && flaggedRecords.some(r => !r.resolved)) {
+                reviewBtn.classList.add('has-flagged-records');
+            }
             console.log('✓ Record flagged for review:', flaggedRecord);
         };
 
         // RENDER REVIEW TAB
         globalThis.renderReviewTab = () => {
             const reviewPanel = document.getElementById('review-section');
+            const reviewBtn = document.getElementById('tab-review-btn');
             if (!reviewPanel) return;
+
+            // Update tab button animation state
+            if (reviewBtn) {
+                if (flaggedRecords.length > 0 && flaggedRecords.some(r => !r.resolved)) {
+                    reviewBtn.classList.add('has-flagged-records');
+                } else {
+                    reviewBtn.classList.remove('has-flagged-records');
+                }
+            }
 
             if (flaggedRecords.length === 0) {
                 reviewPanel.innerHTML = `<div class="p-6 text-center text-slate-500"><p class="text-lg font-semibold">✓ All Clear</p><p class="text-sm">No records flagged for review. All imports processed successfully.</p></div>`;
@@ -8316,6 +8350,11 @@
                 flag.resolved = true;
                 flag.action = 'acknowledge';
                 globalThis.renderReviewTab();
+                // Remove animation if no more unresolved flags
+                if (!flaggedRecords.some(r => !r.resolved)) {
+                    const reviewBtn = document.getElementById('tab-review-btn');
+                    if (reviewBtn) reviewBtn.classList.remove('has-flagged-records');
+                }
                 showToast('✓ Flag acknowledged');
             }
         };
@@ -8350,6 +8389,11 @@
             if (idx >= 0) {
                 flaggedRecords.splice(idx, 1);
                 globalThis.renderReviewTab();
+                // Remove animation if no more unresolved flags
+                if (!flaggedRecords.some(r => !r.resolved)) {
+                    const reviewBtn = document.getElementById('tab-review-btn');
+                    if (reviewBtn) reviewBtn.classList.remove('has-flagged-records');
+                }
                 showToast('🗑 Record removed from review queue');
             }
         };
@@ -9926,7 +9970,7 @@
             <button id="tab-audit-btn" onclick="globalThis.setTab('audit')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="audit-panel">Audit</button>
             <button id="tab-shift-report-btn" onclick="globalThis.setTab('shift-report')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="shift-report-panel">Shifts</button>
             <button id="tab-procedure-log-btn" onclick="globalThis.setTab('procedure-log')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedure-log-panel">Procedures</button>
-            <button id="tab-review-btn" onclick="globalThis.setTab('review')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="review-panel" title="Records flagged during import requiring human review">🚨 Review</button>
+            <button id="tab-review-btn" onclick="globalThis.setTab('review')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="review-panel" title="Records flagged during import requiring human review">Review</button>
             <button id="tab-archive-btn" onclick="globalThis.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="archive-panel">Archive</button>
             <button id="tab-oncall-btn" onclick="globalThis.setTab('oncall')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="oncall-panel" title="On-call staffing">Staffing</button>
         </nav>
