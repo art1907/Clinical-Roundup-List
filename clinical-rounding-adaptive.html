@@ -2848,6 +2848,7 @@
         var currentUser = null;
         var globalSettings = { onCall: "", hospitals: "" };
         var currentTab = 'active';
+        var flaggedRecords = []; // Records flagged during import for human review
         var rawImportData = null;
         var calDate = new Date();
         var isConnected = false;
@@ -8610,7 +8611,7 @@
         };
 
         globalThis.updateTabButtonStyles = (activeTab) => {
-            const tabs = ['active', 'procedures', 'calendar', 'oncall', 'archive', 'timeline', 'analytics', 'reports', 'audit', 'procedure-log', 'shift-report'];
+            const tabs = ['active', 'procedures', 'calendar', 'timeline', 'analytics', 'reports', 'audit', 'shift-report', 'procedure-log', 'review', 'archive'];
             const activeClass = 'flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase';
             const inactiveClass = 'flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase';
 
@@ -8623,6 +8624,136 @@
             });
 
             updateMobileBottomNav(activeTab);
+        };
+
+        // FLAG RECORDS FOR HUMAN REVIEW
+        globalThis.flagRecordForReview = (patientData, rowLabel, explanation, reason = 'reconciliation_issue') => {
+            const timestamp = new Date().toISOString();
+            const visitKey = patientData.visitKey || buildImportIdentityKey(patientData);
+            const flaggedRecord = {
+                id: `flagged_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                patientData,
+                rowLabel,
+                explanation,
+                reason, // 'import_failed', 'duplicate_recovered', 'merge_conflict', etc.
+                visitKey,
+                timestamp,
+                resolved: false,
+                action: null // 'acknowledge', 'edit', 'delete', 'archive'
+            };
+            flaggedRecords.push(flaggedRecord);
+            console.log('✓ Record flagged for review:', flaggedRecord);
+        };
+
+        // RENDER REVIEW TAB
+        globalThis.renderReviewTab = () => {
+            const reviewPanel = document.getElementById('review-section');
+            if (!reviewPanel) return;
+
+            if (flaggedRecords.length === 0) {
+                reviewPanel.innerHTML = `<div class="p-6 text-center text-slate-500"><p class="text-lg font-semibold">✓ All Clear</p><p class="text-sm">No records flagged for review. All imports processed successfully.</p></div>`;
+                return;
+            }
+
+            let html = `
+                <div class="p-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-bold text-slate-700">📋 Human Review Queue</h2>
+                        <div class="flex gap-2">
+                            <span class="text-sm font-semibold text-red-600 bg-red-50 px-3 py-1 rounded">🚨 ${flaggedRecords.filter(r => !r.resolved).length} Flagged</span>
+                            <button onclick="globalThis.clearResolvedFlags()" class="text-xs bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold px-2 py-1 rounded">Clear Resolved</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3 overflow-y-auto" style="max-height: calc(100vh - 200px);">
+            `;
+
+            flaggedRecords.forEach((record, idx) => {
+                const { patientData, rowLabel, explanation, reason, timestamp, resolved, id } = record;
+                const bgColor = resolved ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-300';
+                const textColor = resolved ? 'text-green-700' : 'text-red-700';
+                const reasonBadge = {
+                    'import_failed': '❌ Import Failed',
+                    'duplicate_recovered': '🔄 Duplicate Recovered',
+                    'merge_conflict': '⚠️ Merge Conflict',
+                    'validation_error': '⚠️ Validation Error',
+                    'reconciliation_issue': '❓ Reconciliation Issue'
+                }[reason] || reason;
+
+                const timeLabel = new Date(timestamp).toLocaleString();
+
+                html += `
+                    <div class="border-2 ${bgColor} rounded-lg p-3 flex gap-3">
+                        <div class="flex-1">
+                            <div class="flex gap-2 items-start mb-2">
+                                <span class="text-xs font-bold ${textColor} bg-opacity-20 rounded px-2 py-1">${reasonBadge}</span>
+                                <span class="text-xs text-slate-500">${timeLabel}</span>
+                                ${resolved ? '<span class="text-xs font-semibold text-green-600">✓ Resolved</span>' : ''}
+                            </div>
+                            <div class="text-sm font-semibold text-slate-700 mb-1">📍 ${rowLabel}</div>
+                            <div class="text-sm text-slate-600 mb-2"><strong>Record:</strong> ${patientData.name || patientData.mrn || 'Unknown'} (MRN: ${patientData.mrn || 'N/A'}, Date: ${patientData.date || 'N/A'})</div>
+                            <div class="text-sm text-slate-700 bg-white bg-opacity-60 rounded p-2 font-mono text-xs border-l-4 border-yellow-500"><strong>Issue:</strong> ${explanation}</div>
+                        </div>
+                        <div class="flex flex-col gap-1 flex-shrink-0">
+                            <button onclick="globalThis.acknowledgeFlag('${id}')" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-2 py-1 rounded whitespace-nowrap">✓ Acknowledge</button>\n                            <button onclick="globalThis.editFlaggedRecord('${id}')" class="text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold px-2 py-1 rounded whitespace-nowrap">✎ Edit</button>\n                            <button onclick="globalThis.deleteFlaggedRecord('${id}')" class="text-xs bg-slate-600 hover:bg-slate-700 text-white font-semibold px-2 py-1 rounded whitespace-nowrap">🗑 Delete</button>\n                        </div>\n                    </div>
+                `;
+            });
+
+            html += '</div></div>';
+            reviewPanel.innerHTML = html;
+        };
+
+        // ACKNOWLEDGE FLAG (Mark as resolved)
+        globalThis.acknowledgeFlag = (flaggedId) => {
+            const flag = flaggedRecords.find(f => f.id === flaggedId);
+            if (flag) {
+                flag.resolved = true;
+                flag.action = 'acknowledge';
+                globalThis.renderReviewTab();
+                showToast('✓ Flag acknowledged');
+            }
+        };
+
+        // EDIT FLAGGED RECORD
+        globalThis.editFlaggedRecord = (flaggedId) => {
+            const flag = flaggedRecords.find(f => f.id === flaggedId);
+            if (flag) {
+                globalThis.openModal();
+                const form = document.getElementById('patient-modal');
+                if (form) {
+                    // Pre-populate form with flagged record data
+                    const { patientData } = flag;
+                    const formFields = ['f-room', 'f-name', 'f-dob', 'f-mrn', 'f-hospital', 'f-plan', 'f-supervising-md',
+                                       'f-pending-text', 'f-followup-text', 'f-findings-text', 'f-cpt-primary', 'f-icd-primary'];
+                    formFields.forEach(fieldId => {
+                        const fieldName = fieldId.replace('f-', '').replace(/-/g, '_');
+                        const input = document.getElementById(fieldId);
+                        if (input) {
+                            const value = patientData[fieldName] || '';
+                            input.value = value;
+                        }
+                    });
+                }
+                showToast('📝 Edit mode - Review and update the flagged record');
+            }
+        };
+
+        // DELETE FLAGGED RECORD
+        globalThis.deleteFlaggedRecord = (flaggedId) => {
+            const idx = flaggedRecords.findIndex(f => f.id === flaggedId);
+            if (idx >= 0) {
+                flaggedRecords.splice(idx, 1);
+                globalThis.renderReviewTab();
+                showToast('🗑 Record removed from review queue');
+            }
+        };
+
+        // CLEAR ALL RESOLVED FLAGS
+        globalThis.clearResolvedFlags = () => {
+            const before = flaggedRecords.length;
+            flaggedRecords = flaggedRecords.filter(r => !r.resolved);
+            const cleared = before - flaggedRecords.length;
+            globalThis.renderReviewTab();
+            showToast(`✓ Cleared ${cleared} resolved record(s)`);
         };
 
         // Force Refresh: Clears cache and re-renders display
@@ -8646,7 +8777,7 @@
             // Force refresh when switching tabs
             globalThis.forceRefresh();
             currentTab = tab;
-            ['table-section', 'calendar-section', 'oncall-section', 'timeline-section', 'analytics-section', 'reports-section', 'audit-section', 'procedure-log-section', 'shift-report-section'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+            ['table-section', 'calendar-section', 'oncall-section', 'timeline-section', 'analytics-section', 'reports-section', 'audit-section', 'procedure-log-section', 'shift-report-section', 'review-section'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
             
             if (tab === 'calendar') {
                 document.getElementById('calendar-section')?.classList.remove('hidden');
@@ -8697,6 +8828,9 @@
                 globalThis.renderProcedureLog();
             } else if (tab === 'shift-report') {
                 document.getElementById('shift-report-section')?.classList.remove('hidden');
+            } else if (tab === 'review') {
+                document.getElementById('review-section')?.classList.remove('hidden');
+                globalThis.renderReviewTab();
             } else {
                 document.getElementById('table-section')?.classList.remove('hidden');
             }
@@ -9661,12 +9795,15 @@
                                     .filter(Boolean)
                                     .join(' | ');
                                 errors.push(`${fileName}: ${rowLabel}: ${patientErr.message}`);
+                                const visitKey = p.visitKey || buildImportIdentityKey(p);
                                 AuditLogger.logError(auditUser, 'bulk_import_patient_failed', patientErr.message, {
                                     fileName,
                                     action,
                                     rowLabel,
-                                    visitKey: p.visitKey || buildImportIdentityKey(p)
+                                    visitKey
                                 });
+                                // Flag record for human review
+                                globalThis.flagRecordForReview(p, rowLabel, patientErr.message, 'import_failed');
                                 console.error('Patient import error:', patientErr, p);
                             }
                         }
@@ -10305,19 +10442,20 @@
 
         <div class="swipe-hint">👆 Swipe left/right to navigate tabs on mobile</div>
 
-        <!-- Tabs -->
+        <!-- Tabs: Business Flow Order (Census→Surgical→Calendar→Timeline→Analytics→Reports→Audit→Shifts→Procedures→Review→Archive) -->
         <nav class="selection-underlay-target desktop-tab-nav px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" aria-label="Main Navigation">
             <button id="tab-active-btn" onclick="globalThis.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="active-panel">Census</button>
             <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedures-panel" title="Shows records tagged as surgical by keyword match in Plan/Findings or by surgical status.">Surgical</button>
             <button id="tab-calendar-btn" onclick="globalThis.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-panel">Calendar</button>
-            <button id="tab-oncall-btn" onclick="globalThis.setTab('oncall')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="oncall-panel">Staffing</button>
-            <button id="tab-archive-btn" onclick="globalThis.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="archive-panel">Archive</button>
             <button id="tab-timeline-btn" onclick="globalThis.setTab('timeline')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="timeline-panel">Timeline</button>
             <button id="tab-analytics-btn" onclick="globalThis.setTab('analytics')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="analytics-panel">Analytics</button>
-            <button id="tab-audit-btn" onclick="globalThis.setTab('audit')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="audit-panel">Audit</button>
-            <button id="tab-procedure-log-btn" onclick="globalThis.setTab('procedure-log')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedure-log-panel">Procedures</button>
-            <button id="tab-shift-report-btn" onclick="globalThis.setTab('shift-report')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="shift-report-panel">Shifts</button>
             <button id="tab-reports-btn" onclick="globalThis.setTab('reports')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="reports-panel">Reports</button>
+            <button id="tab-audit-btn" onclick="globalThis.setTab('audit')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="audit-panel">Audit</button>
+            <button id="tab-shift-report-btn" onclick="globalThis.setTab('shift-report')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="shift-report-panel">Shifts</button>
+            <button id="tab-procedure-log-btn" onclick="globalThis.setTab('procedure-log')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedure-log-panel">Procedures</button>
+            <button id="tab-review-btn" onclick="globalThis.setTab('review')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="review-panel" title="Records flagged during import requiring human review">🚨 Review</button>
+            <button id="tab-archive-btn" onclick="globalThis.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="archive-panel">Archive</button>
+            <button id="tab-oncall-btn" onclick="globalThis.setTab('oncall')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="oncall-panel" title="On-call staffing">Staffing</button>
         </nav>
 
         <!-- Content Area -->
@@ -10647,6 +10785,13 @@
                         </div>
                     </div>
                     <div id="shift-report-content"></div>
+                </div>
+            </div>
+
+            <!-- Human Review Queue Section (Records flagged during import) -->
+            <div id="review-section" class="selection-underlay-target hidden h-full p-4 overflow-y-auto">
+                <div id="review-content">
+                    <p class="text-slate-500">Loading review queue...</p>
                 </div>
             </div>
 

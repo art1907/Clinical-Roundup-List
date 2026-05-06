@@ -289,6 +289,8 @@ async function fetchPatients(dateFilter = null) {
 async function savePatient(patientData) {
     const listId = M365_CONFIG.sharepoint.lists.patients;
     const siteId = M365_CONFIG.sharepoint.siteId;
+    const normalizedPatientItemId = normalizeSharePointListItemId(patientData?.id);
+    const visitKey = `${patientData.mrn}|${patientData.date}`;
     
     // Build SharePoint list item fields
     const fields = {
@@ -298,7 +300,7 @@ async function savePatient(patientData) {
         DOB: patientData.dob || '',
         MRN: patientData.mrn || '',
         Hospital: patientData.hospital || '',
-        VisitKey: `${patientData.mrn}|${patientData.date}`,  // Compound unique key
+        VisitKey: visitKey,  // Compound unique key
         FindingsCodes: patientData.findingsCodes ? patientData.findingsCodes.join(',') : '',
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
         FindingsText: patientData.findingsText || '',
@@ -313,25 +315,51 @@ async function savePatient(patientData) {
         ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '[]',
         Archived: patientData.archived ? 'Yes' : 'No'
     };
-    
-    if (patientData.id && patientData.id.startsWith('local-')) {
-        // New record (local ID) - create in SharePoint
+
+    const isUniqueConstraintError = (err) => {
+        const message = String(err?.message || '');
+        return /unique constraints already has the provided value/i.test(message)
+            || (/Graph API error:\s*400/i.test(message) && /invalidRequest/i.test(message) && /unique/i.test(message));
+    };
+
+    const createOrRecoverByVisitKey = async () => {
         const endpoint = `/sites/${siteId}/lists/${listId}/items`;
         const body = { fields: fields };
-        const response = await graphRequest(endpoint, 'POST', body);
-        return response.id;
-    } else if (patientData.id) {
-        // Update existing record
-        const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientData.id}/fields`;
-        await graphRequest(endpoint, 'PATCH', fields);
-        return patientData.id;
-    } else {
-        // New record (no ID) - create in SharePoint
-        const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-        const body = { fields: fields };
-        const response = await graphRequest(endpoint, 'POST', body);
-        return response.id;
+
+        try {
+            const response = await graphRequest(endpoint, 'POST', body);
+            return response.id;
+        } catch (createErr) {
+            if (!isUniqueConstraintError(createErr)) {
+                throw createErr;
+            }
+
+            const recoveredItemId = await resolvePatientItemIdByVisitKey(siteId, listId, visitKey);
+            if (!recoveredItemId) {
+                throw createErr;
+            }
+
+            const updateFields = { ...fields };
+            delete updateFields.VisitKey;
+            await graphRequest(`/sites/${siteId}/lists/${listId}/items/${recoveredItemId}/fields`, 'PATCH', updateFields);
+            return recoveredItemId;
+        }
+    };
+
+    let targetItemId = normalizedPatientItemId;
+    if (!targetItemId) {
+        targetItemId = await resolvePatientItemIdByVisitKey(siteId, listId, visitKey);
     }
+
+    if (targetItemId) {
+        const endpoint = `/sites/${siteId}/lists/${listId}/items/${targetItemId}/fields`;
+        const updateFields = { ...fields };
+        delete updateFields.VisitKey;
+        await graphRequest(endpoint, 'PATCH', updateFields);
+        return targetItemId;
+    }
+
+    return await createOrRecoverByVisitKey();
 }
 
 async function deletePatient(patientId) {
@@ -419,6 +447,20 @@ function normalizeSharePointListItemId(value) {
     if (prefixed && prefixed[1]) return prefixed[1];
 
     return '';
+}
+
+async function resolvePatientItemIdByVisitKey(siteId, listId, visitKey) {
+    if (!visitKey) return '';
+
+    try {
+        const escapedVisitKey = String(visitKey).replaceAll("'", "''");
+        const response = await graphRequest(`/sites/${siteId}/lists/${listId}/items?expand=fields&$filter=fields/VisitKey eq '${escapedVisitKey}'&$top=2`);
+        const match = (response.value || [])[0];
+        return normalizeSharePointListItemId(match?.id);
+    } catch (err) {
+        console.warn('Failed resolving patient item id by VisitKey:', err?.message || err);
+        return '';
+    }
 }
 
 async function resolveOnCallShiftItemIdByDate(siteId, listId, shiftDate) {

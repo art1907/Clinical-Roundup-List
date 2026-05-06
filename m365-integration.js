@@ -580,7 +580,7 @@ async function api_fetchPatients(dateFilter = null) {
             // Keep STAT compatibility across app variants (stat and priority)
             stat: statValue,
             priority: statValue,
-            id: item.id,
+            id: normalizeSharePointListItemId(item.id) || String(item.id || ''),
             room: item.fields.Room || '',
             date: normalizeDateFromSharePoint(item.fields.Date || ''),
             name: item.fields.Name || item.fields.Title || '',
@@ -710,7 +710,8 @@ async function api_savePatient(patientData) {
 
     const listId = M365_CONFIG.sharepoint.lists.patients;
     const siteId = M365_CONFIG.sharepoint.siteId;
-    const isUpdate = !!patientData?.id && !patientData.id.startsWith('local-');
+    const normalizedPatientItemId = normalizeSharePointListItemId(patientData?.id);
+    const isUpdate = Boolean(normalizedPatientItemId);
 
     const normalizeDateForSharePoint = (dateStr) => {
         if (!dateStr) return '';
@@ -734,7 +735,8 @@ async function api_savePatient(patientData) {
     };
 
     const visitTimeValue = patientData.visitTime || (isUpdate ? '' : new Date().toISOString());
-    const visitKeyValue = isUpdate ? (patientData.visitKey || '') : computeVisitKey();
+    const computedVisitKey = computeVisitKey();
+    const visitKeyValue = isUpdate ? (patientData.visitKey || computedVisitKey) : computedVisitKey;
 
     const fields = {
         Room: patientData.room || '',
@@ -903,35 +905,22 @@ async function api_savePatient(patientData) {
         throw new Error('PATCH retry limit exceeded while removing unknown SharePoint fields');
     };
 
-    try {
-        if (patientData.id && patientData.id.startsWith('local-')) {
-            console.log('SAVE create (local id)');
-            const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-            const baseFields = buildBaseFields();
+    const isUniqueConstraintError = (err) => {
+        const message = String(err?.message || '');
+        return /unique constraints already has the provided value/i.test(message)
+            || (/Graph API error:\s*400/i.test(message) && /invalidRequest/i.test(message) && /unique/i.test(message));
+    };
+
+    const createOrRecoverByVisitKey = async (contextLabel) => {
+        const endpoint = `/sites/${siteId}/lists/${listId}/items`;
+        const baseFields = buildBaseFields();
+
+        try {
             const response = await graphRequest(endpoint, 'POST', { fields: baseFields });
-            const newId = logAndValidateResponse(response, 'create-local');
+            const newId = logAndValidateResponse(response, contextLabel);
             const patchFields = buildPatchFields();
             if (Object.keys(patchFields).length > 0) {
-                console.log('SAVE patch after create (local id)', Object.keys(patchFields));
-                await patchFieldsWithRetry(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, patchFields);
-            }
-            console.log('SAVE created id', newId);
-            return newId;
-        } else if (patientData.id) {
-            console.log('SAVE update id', patientData.id);
-            const endpoint = `/sites/${siteId}/lists/${listId}/items/${patientData.id}/fields`;
-            const response = await patchFieldsWithRetry(endpoint, fieldsToSend);
-            console.log('SAVE patch response', response);
-            return patientData.id;
-        } else {
-            console.log('SAVE create (no id)');
-            const endpoint = `/sites/${siteId}/lists/${listId}/items`;
-            const baseFields = buildBaseFields();
-            const response = await graphRequest(endpoint, 'POST', { fields: baseFields });
-            const newId = logAndValidateResponse(response, 'create-noid');
-            const patchFields = buildPatchFields();
-            if (Object.keys(patchFields).length > 0) {
-                console.log('SAVE patch after create (no id)', Object.keys(patchFields));
+                console.log(`SAVE patch after create (${contextLabel})`, Object.keys(patchFields));
                 try {
                     await patchFieldsWithRetry(`/sites/${siteId}/lists/${listId}/items/${newId}/fields`, patchFields);
                 } catch (patchErr) {
@@ -952,6 +941,47 @@ async function api_savePatient(patientData) {
             }
             console.log('SAVE created id', newId);
             return newId;
+        } catch (createErr) {
+            if (!isUniqueConstraintError(createErr)) {
+                throw createErr;
+            }
+
+            console.warn('SAVE create hit unique VisitKey; attempting recovery', computedVisitKey);
+            const recoveredItemId = await resolvePatientItemIdByVisitKey(siteId, listId, computedVisitKey);
+            if (!recoveredItemId) {
+                throw createErr;
+            }
+
+            const updateFields = { ...fieldsToSend };
+            delete updateFields.VisitKey;
+            await patchFieldsWithRetry(`/sites/${siteId}/lists/${listId}/items/${recoveredItemId}/fields`, updateFields);
+            console.log('SAVE recovered existing id after unique constraint', recoveredItemId);
+            return recoveredItemId;
+        }
+    };
+
+    try {
+        let targetItemId = normalizedPatientItemId;
+        if (!targetItemId) {
+            targetItemId = await resolvePatientItemIdByVisitKey(siteId, listId, computedVisitKey);
+        }
+
+        if (targetItemId) {
+            console.log('SAVE update resolved id', targetItemId);
+            const updateFields = { ...fieldsToSend };
+            delete updateFields.VisitKey;
+            const endpoint = `/sites/${siteId}/lists/${listId}/items/${targetItemId}/fields`;
+            const response = await patchFieldsWithRetry(endpoint, updateFields);
+            console.log('SAVE patch response', response);
+            return targetItemId;
+        }
+
+        if (patientData.id && patientData.id.startsWith('local-')) {
+            console.log('SAVE create (local id)');
+            return await createOrRecoverByVisitKey('create-local');
+        } else {
+            console.log('SAVE create (no id)');
+            return await createOrRecoverByVisitKey('create-noid');
         }
     } catch (err) {
         console.error('SAVE error', err);
@@ -1055,6 +1085,20 @@ function normalizeSharePointListItemId(value) {
     if (prefixed && prefixed[1]) return prefixed[1];
 
     return '';
+}
+
+async function resolvePatientItemIdByVisitKey(siteId, listId, visitKey) {
+    if (!visitKey) return '';
+
+    try {
+        const escapedVisitKey = String(visitKey).replaceAll("'", "''");
+        const response = await graphRequest(`/sites/${siteId}/lists/${listId}/items?expand=fields&$filter=fields/VisitKey eq '${escapedVisitKey}'&$top=2`);
+        const match = (response.value || [])[0];
+        return normalizeSharePointListItemId(match?.id);
+    } catch (err) {
+        console.warn('Failed resolving patient item id by VisitKey:', err?.message || err);
+        return '';
+    }
 }
 
 async function resolveOnCallShiftItemIdByDate(siteId, listId, shiftDate) {
