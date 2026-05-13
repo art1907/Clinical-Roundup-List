@@ -7536,26 +7536,48 @@
                 return normalizedHeaders.findIndex(h => normalizedAliases.some(a => h === a || h.includes(a)));
             };
 
-            const findHeaderIndex = (rows) => {
-                for (let i = 0; i < rows.length; i++) {
-                    const row = rows[i] || [];
-                    const normalized = row.map(normalizeHeader);
-                    const hasDate = findCol(normalized, ['Date of Service', 'Date']) !== -1;
-                    const hasIdentity = findCol(normalized, ['MRN', 'Name', 'Room', 'Hospital/Room #', 'Hospital']) !== -1;
-                    if (hasDate && hasIdentity) return i;
-                }
+const findHeaderIndex = (rows, sheetLog) => {
+                    if (sheetLog) sheetLog(`Searching ${rows.length} rows for header pattern (Date + MRN/Name/Room)...`);
+                    for (let i = 0; i < rows.length; i++) {
+                        const row = rows[i] || [];
+                        const normalized = row.map(normalizeHeader);
+                        const hasDate = findCol(normalized, ['Date of Service', 'Date']) !== -1;
+                        const hasIdentity = findCol(normalized, ['MRN', 'Name', 'Room', 'Hospital/Room #', 'Hospital']) !== -1;
+                        if (hasDate && hasIdentity) {
+                            if (sheetLog) sheetLog(`✅ Found header at row ${i}: ${row.slice(0, 6).join(' | ')}...`, 'success');
+                            return i;
+                        }
+                    }
+                    if (sheetLog) sheetLog(`❌ Header row not found in any of ${rows.length} rows!`, 'error');
                 return -1;
             };
 
-            const parseRows3Pass = (rowsInput) => {
+            const parseRows3Pass = (rowsInput, sheetName = 'Data') => {
+                const validationLog = [];
+                const log = (msg, level = 'info') => {
+                    const prefix = level === 'error' ? '❌ ERROR' : level === 'warn' ? '⚠️ WARN' : level === 'success' ? '✅' : '💬';
+                    const fullMsg = `    [${sheetName}] ${prefix}: ${msg}`;
+                    validationLog.push(fullMsg);
+                    if (level === 'error' || level === 'warn') console.log(fullMsg);
+                };
+                
+                log(`Starting parse: ${(rowsInput || []).length} raw rows`);
                 const rows = (rowsInput || [])
                     .map(r => (r || []).map(normalizeCell))
                     .filter(r => r.some(c => c));
+                log(`After filtering empty rows: ${rows.length} data rows`);
 
-                if (rows.length < 2) throw new Error('Invalid import: insufficient rows');
+                if (rows.length < 2) {
+                    const msg = `INSUFFICIENT DATA: Only ${rows.length} row(s) after filtering. Sheet must have header row + at least 1 patient row. File may be empty or all cells blank.`;
+                    log(msg, 'error');
+                    const err = new Error(msg);
+                    err.validationLog = validationLog;
+                    throw err;
+                }
 
-                const result = { onCall: [], patients: [], hospitals: [] };
+                const result = { onCall: [], patients: [], hospitals: [], validationLog, stats: { skipped: 0, parsed: 0, errors: [] } };
 
+                let onCallFound = 0;
                 for (let i = 0; i < Math.min(8, rows.length); i++) {
                     const parts = rows[i];
                     const lead = (parts[0] || '').toLowerCase().replace(':', '').trim();
@@ -7565,11 +7587,21 @@
                             provider: parts[2],
                             hospitals: parts[3]
                         });
+                        log(`Row ${i}: Found on-call entry - ${parts[2]} on ${parts[1]}`, 'success');
+                        onCallFound++;
                     }
                 }
+                if (onCallFound === 0) log(`No on-call entries found in rows 0-7`, 'warn');
 
-                const headerIdx = findHeaderIndex(rows);
-                if (headerIdx < 0) throw new Error('Header row not found (expected Date/Room/MRN style headers)');
+                const headerIdx = findHeaderIndex(rows, log);
+                if (headerIdx < 0) {
+                    const msg = `HEADER NOT FOUND: Could not locate header row with Date + (MRN/Name/Room/Hospital). Checked all ${rows.length} rows. File format may not match expected structure.`;
+                    log(msg, 'error');
+                    const err = new Error(msg);
+                    err.validationLog = validationLog;
+                    throw err;
+                }
+                log(`Using row ${headerIdx} as header`, 'success');
 
                 const headerRow = rows[headerIdx];
                 const normalizedHeaders = headerRow.map(normalizeHeader);
@@ -7601,17 +7633,27 @@
                     if (isHospitalHeader) {
                         currentHospital = first;
                         if (!result.hospitals.includes(currentHospital)) result.hospitals.push(currentHospital);
+                        log(`Row ${i}: Hospital section header: "${currentHospital}"`, 'info');
                         continue;
                     }
 
-                    if (!parts.some(Boolean)) continue;
+                    if (!parts.some(Boolean)) {
+                        result.stats.skipped++;
+                        log(`Row ${i}: Completely empty - SKIPPED`, 'warn');
+                        continue;
+                    }
 
                     const dateValue = colMap.dateService >= 0 ? (parts[colMap.dateService] || '') : '';
                     const roomValue = colMap.room >= 0 ? (parts[colMap.room] || '') : first;
                     const mrnValue = colMap.mrn >= 0 ? (parts[colMap.mrn] || '') : '';
 
-                    if (!dateValue && !roomValue && !mrnValue) continue;
+                    if (!dateValue && !roomValue && !mrnValue) {
+                        result.stats.skipped++;
+                        log(`Row ${i}: No date/room/MRN - SKIPPED (incomplete row)`, 'warn');
+                        continue;
+                    }
 
+                    try {
                         const normalizedDates = applyDateReviewDefaultsToRecord({
                             date: dateValue,
                             findingsDates: {},
@@ -7619,34 +7661,41 @@
                             createdOnDate: getTodayDateString()
                         });
 
-                    const patient = {
-                        id: `local-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        const patient = {
+                            id: `local-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                             date: normalizedDates.date,
-                        room: roomValue || first,
-                        name: colMap.name >= 0 ? (parts[colMap.name] || '') : '',
-                        dob: colMap.dob >= 0 ? (parts[colMap.dob] || '') : '',
-                        mrn: mrnValue,
-                        hospital: (colMap.hospital >= 0 ? (parts[colMap.hospital] || '') : '') || currentHospital || 'Unassigned',
-                        findingsText: colMap.findings >= 0 ? (parts[colMap.findings] || '') : '',
-                        plan: colMap.plan >= 0 ? (parts[colMap.plan] || '') : '',
-                        supervisingMd: colMap.md >= 0 ? (parts[colMap.md] || '') : '',
-                        pending: colMap.pending >= 0 ? (parts[colMap.pending] || '') : '',
-                        followUp: colMap.followUp >= 0 ? (parts[colMap.followUp] || '') : '',
-                        procedureStatus: DEFAULT_RECORD_STATUS,
-                        archived: false,
-                        progressNotes: buildProgressNotesWithDateReviewMeta('', normalizedDates.reviewMeta),
-                        cptPrimary: '',
-                        icdPrimary: '',
-                        chargeCodesSecondary: '',
-                        findingsCodes: [],
-                        findingsValues: {},
-                        findingsDates: normalizedDates.findingsDates
-                    };
+                            room: roomValue || first,
+                            name: colMap.name >= 0 ? (parts[colMap.name] || '') : '',
+                            dob: colMap.dob >= 0 ? (parts[colMap.dob] || '') : '',
+                            mrn: mrnValue,
+                            hospital: (colMap.hospital >= 0 ? (parts[colMap.hospital] || '') : '') || currentHospital || 'Unassigned',
+                            findingsText: colMap.findings >= 0 ? (parts[colMap.findings] || '') : '',
+                            plan: colMap.plan >= 0 ? (parts[colMap.plan] || '') : '',
+                            supervisingMd: colMap.md >= 0 ? (parts[colMap.md] || '') : '',
+                            pending: colMap.pending >= 0 ? (parts[colMap.pending] || '') : '',
+                            followUp: colMap.followUp >= 0 ? (parts[colMap.followUp] || '') : '',
+                            procedureStatus: DEFAULT_RECORD_STATUS,
+                            archived: false,
+                            progressNotes: buildProgressNotesWithDateReviewMeta('', normalizedDates.reviewMeta),
+                            cptPrimary: '',
+                            icdPrimary: '',
+                            chargeCodesSecondary: '',
+                            findingsCodes: [],
+                            findingsValues: {},
+                            findingsDates: normalizedDates.findingsDates
+                        };
 
-                    patient.visitKey = buildImportIdentityKey(patient);
-
-                    result.patients.push(patient);
+                        patient.visitKey = buildImportIdentityKey(patient);
+                        result.patients.push(patient);
+                        result.stats.parsed++;
+                        log(`Row ${i}: Parsed patient \"${patient.name || patient.mrn || '(no ID)'}\"`, 'success');
+                    } catch (rowErr) {
+                        result.stats.errors.push({ row: i, error: rowErr.message });
+                        result.stats.skipped++;
+                        log(`Row ${i}: ❌ Parse failed: ${rowErr.message}`, 'error');
+                    }
                 }
+                log(`Sheet summary: ${result.stats.parsed} parsed, ${result.stats.skipped} skipped, ${result.stats.errors.length} errors`, 'info');
 
                 return result;
             };
@@ -9573,11 +9622,49 @@
 
         // PREVIEW BULK IMPORT (Parse files, compare with existing, show summary)
         globalThis.previewBulkImport = async (files) => {
+            // Fields compared for change detection (field key → display label)
+            const DIFF_FIELDS = [
+                { key: 'name',          label: 'Name' },
+                { key: 'dob',           label: 'DOB' },
+                { key: 'room',          label: 'Room/Bed' },
+                { key: 'hospital',      label: 'Hospital' },
+                { key: 'plan',          label: 'Plan' },
+                { key: 'supervisingMd', label: 'Supervising MD' },
+                { key: 'findingsText',  label: 'Findings' },
+                { key: 'pending',       label: 'Pending' },
+                { key: 'followUp',      label: 'Follow-Up' },
+                { key: 'procedureStatus', label: 'Status' },
+                { key: 'cptPrimary',    label: 'CPT Code' },
+                { key: 'icdPrimary',    label: 'ICD Code' },
+                { key: 'stat',          label: 'STAT Priority' },
+            ];
+            const EXPECTED_COLUMNS = [
+                { key: 'name',          label: 'Patient Name' },
+                { key: 'dob',           label: 'Date of Birth' },
+                { key: 'mrn',           label: 'MRN' },
+                { key: 'hospital',      label: 'Hospital' },
+                { key: 'plan',          label: 'Plan' },
+                { key: 'supervisingMd', label: 'Supervising MD' },
+                { key: 'findingsText',  label: 'Dx/Findings' },
+                { key: 'pending',       label: 'Pending Tests' },
+                { key: 'followUp',      label: 'Follow-Up' },
+            ];
+            const toStr = (v) => {
+                if (v == null || v === '' || v === 'undefined' || v === 'null') return '';
+                if (Array.isArray(v)) return v.length ? JSON.stringify(v) : '';
+                if (typeof v === 'object') { const s = JSON.stringify(v); return (s === '{}' || s === '[]') ? '' : s; }
+                return String(v).trim();
+            };
+            const getDiff = (existing, incoming) =>
+                DIFF_FIELDS.filter(f => toStr(existing[f.key]) !== toStr(incoming[f.key]))
+                    .map(f => ({ field: f.key, label: f.label, from: toStr(existing[f.key]) || '(empty)', to: toStr(incoming[f.key]) || '(empty)' }));
+
             const preview = {
                 files: [],
-                totalNewRecords: 0,
-                totalDuplicates: 0,
-                totalSchedules: 0,
+                totals: { new: 0, updates: 0, unchanged: 0, intraFileDupes: 0, schedules: 0 },
+                updates: [],          // { patient, existing, changedFields, fileName }
+                missingFromFile: [],  // Existing records for same dates NOT in new file
+                missingColumns: [],   // Expected column names absent from import
                 errors: [],
                 allPatients: [],
                 allSchedules: []
@@ -9585,6 +9672,7 @@
 
             try {
                 showToast(`🔍 Analyzing ${files.length} file(s)...`);
+                const seenKeysGlobal = new Set();
 
                 for (const file of files) {
                     const fileName = file.name;
@@ -9596,92 +9684,121 @@
                         if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
                             const arrayBuffer = await file.arrayBuffer();
                             const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                            console.log(`📊 Processing workbook "${fileName}" with ${workbook.SheetNames.length} sheet(s):`, workbook.SheetNames);
                             for (const sheetName of workbook.SheetNames) {
                                 const sheet = workbook.Sheets[sheetName];
                                 const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
                                 try {
-                                    const parsed = CSVImporter.parseRows3Pass(rows);
+                                    const parsed = CSVImporter.parseRows3Pass(rows, sheetName);
+                                    console.log(`  ✅ Sheet "${sheetName}": ${parsed.patients.length} patients, ${parsed.onCall.length} on-call, ${parsed.stats.skipped} rows skipped`);
+                                    if (parsed.validationLog && parsed.validationLog.length > 0) {
+                                        parsed.validationLog.forEach(logLine => console.log(logLine));
+                                    }
                                     fileOnCall = fileOnCall.concat(parsed.onCall);
                                     filePatients = filePatients.concat(parsed.patients);
                                     fileHospitals = [...new Set([...fileHospitals, ...parsed.hospitals])];
                                 } catch (sheetErr) {
-                                    const message = `Skipped sheet "${sheetName}" in ${fileName}: ${sheetErr.message}`;
+                                    const message = `FAILED: Sheet "${sheetName}" — ${sheetErr.message}`;
+                                    console.error(`  ❌ Sheet "${sheetName}" failed:`, sheetErr);
+                                    if (sheetErr.validationLog && sheetErr.validationLog.length > 0) {
+                                        sheetErr.validationLog.forEach(logLine => console.log(logLine));
+                                    }
                                     preview.errors.push(message);
-                                    console.warn(message);
                                 }
                             }
+                            console.log(`📁 File "${fileName}" total: ${filePatients.length} patients, ${fileOnCall.length} on-call`);
                         } else if (fileName.endsWith('.csv')) {
                             const csvText = await file.text();
                             const parsed = CSVImporter.parse3Pass(csvText);
                             fileOnCall = parsed.onCall;
                             filePatients = parsed.patients;
+                            fileHospitals = parsed.hospitals || [];
                         }
-
-                        // Analyze: count new vs. duplicates
-                        let newInFile = 0;
-                        let duplicatesInFile = 0;
-                        let intraFileDuplicates = 0;
-                        const filePreviewDetails = [];
-                        const seenKeysInFile = new Set();
 
                         if (filePatients.length === 0 && fileOnCall.length === 0) {
-                            preview.errors.push(`${fileName}: No recognizable patient/schedule rows found`);
+                            preview.errors.push(`${fileName}: No recognizable patient or schedule rows found`);
                         }
 
-                        filePatients.forEach(p => {
-                            const patientKey = buildImportIdentityKey(p);
-                            const isDuplicateOfExisting = patients.some(existing => buildImportIdentityKey(existing) === patientKey);
-                            const isDuplicateWithinFile = seenKeysInFile.has(patientKey);
-                            seenKeysInFile.add(patientKey);
+                        // ── CLASSIFY EACH ROW ───────────────────────────────────────────
+                        let fileNew = 0, fileUpdates = 0, fileUnchanged = 0, fileIntraDupe = 0;
+                        const fileDetails = [];
 
-                            if (isDuplicateOfExisting) {
-                                duplicatesInFile++;
-                                filePreviewDetails.push({
-                                    status: 'duplicate',
-                                    mrn: p.mrn,
-                                    date: p.date,
-                                    name: p.name || 'Unknown'
-                                });
-                            } else if (isDuplicateWithinFile) {
-                                intraFileDuplicates++;
-                                filePreviewDetails.push({
-                                    status: 'intra-file-duplicate',
-                                    mrn: p.mrn,
-                                    date: p.date,
-                                    name: p.name || 'Unknown',
-                                    note: 'Same MRN+date appears earlier in this file; later row will merge into earlier'
-                                });
+                        filePatients.forEach(p => {
+                            const key = buildImportIdentityKey(p);
+                            if (seenKeysGlobal.has(key)) {
+                                fileIntraDupe++;
+                                fileDetails.push({ status: 'intra-dupe', mrn: p.mrn, date: p.date, name: p.name });
+                                return;
+                            }
+                            seenKeysGlobal.add(key);
+
+                            const existingIdx = patients.findIndex(e => buildImportIdentityKey(e) === key);
+                            if (existingIdx < 0) {
+                                fileNew++;
+                                fileDetails.push({ status: 'new', mrn: p.mrn, date: p.date, name: p.name });
                             } else {
-                                newInFile++;
-                                filePreviewDetails.push({
-                                    status: 'new',
-                                    mrn: p.mrn,
-                                    date: p.date,
-                                    name: p.name || 'Unknown'
-                                });
+                                const existing = patients[existingIdx];
+                                const diff = getDiff(existing, p);
+                                if (diff.length > 0) {
+                                    fileUpdates++;
+                                    fileDetails.push({ status: 'update', mrn: p.mrn, date: p.date, name: p.name || existing.name, diff });
+                                    preview.updates.push({ patient: p, existing, changedFields: diff, fileName });
+                                } else {
+                                    fileUnchanged++;
+                                    fileDetails.push({ status: 'unchanged', mrn: p.mrn, date: p.date, name: p.name });
+                                }
                             }
                         });
 
                         preview.files.push({
                             fileName,
-                            newRecords: newInFile,
-                            duplicates: duplicatesInFile,
-                            intraFileDuplicates,
-                            schedules: fileOnCall.length,
-                            details: filePreviewDetails
+                            counts: { new: fileNew, updates: fileUpdates, unchanged: fileUnchanged, intraDupe: fileIntraDupe, schedules: fileOnCall.length },
+                            details: fileDetails
                         });
-
-                        preview.totalNewRecords += newInFile;
-                        preview.totalDuplicates += duplicatesInFile;
-                        preview.totalIntraFileDuplicates = (preview.totalIntraFileDuplicates || 0) + intraFileDuplicates;
-                        preview.totalSchedules += fileOnCall.length;
-                        preview.allPatients = preview.allPatients.concat(filePatients);
+                        preview.totals.new      += fileNew;
+                        preview.totals.updates  += fileUpdates;
+                        preview.totals.unchanged += fileUnchanged;
+                        preview.totals.intraFileDupes += fileIntraDupe;
+                        preview.totals.schedules += fileOnCall.length;
+                        preview.allPatients  = preview.allPatients.concat(filePatients);
                         preview.allSchedules = preview.allSchedules.concat(fileOnCall);
 
                     } catch (fileErr) {
                         preview.errors.push(`${fileName}: ${fileErr.message}`);
                         console.error(`Error previewing ${fileName}:`, fileErr);
                     }
+                }
+
+                // ── DETECT RECORDS IN SYSTEM NOT IN FILE (possible removals) ────────
+                const incomingKeys  = new Set(preview.allPatients.map(p => buildImportIdentityKey(p)));
+                const incomingDates = new Set(preview.allPatients.map(p => p.date).filter(Boolean));
+                if (incomingDates.size > 0) {
+                    patients.forEach(existing => {
+                        if (existing.archived) return;
+                        if (!incomingDates.has(existing.date)) return;
+                        if (!incomingKeys.has(buildImportIdentityKey(existing))) {
+                            preview.missingFromFile.push({
+                                mrn: existing.mrn, date: existing.date,
+                                name: existing.name || existing.mrn || 'Unknown',
+                                hospital: existing.hospital || ''
+                            });
+                        }
+                    });
+                }
+
+                // ── DETECT COLUMNS ABSENT FROM THIS FILE ────────────────────────────
+                if (preview.allPatients.length > 0) {
+                    EXPECTED_COLUMNS.forEach(f => {
+                        const allEmpty = preview.allPatients.every(p => !toStr(p[f.key]));
+                        if (!allEmpty) return; // Column present — fine
+                        // Only warn if the matched existing records actually have data for this field
+                        const matchedExisting = preview.allPatients
+                            .map(p => patients.find(e => buildImportIdentityKey(e) === buildImportIdentityKey(p)))
+                            .filter(Boolean);
+                        if (matchedExisting.some(e => toStr(e[f.key]))) {
+                            preview.missingColumns.push(f.label);
+                        }
+                    });
                 }
 
                 return preview;
@@ -9692,59 +9809,122 @@
         };
 
         // SHOW BULK IMPORT PREVIEW MODAL
-        globalThis.showBulkImportPreview = (preview, onConfirm) => {
-            const duplicateCount = preview.totalDuplicates;
-            const newCount = preview.totalNewRecords;
-            const intraFileCount = preview.totalIntraFileDuplicates || 0;
+        globalThis.showBulkImportPreview = (preview) => {
+            const { totals, updates, missingFromFile, missingColumns, errors, files } = preview;
 
-            const detailsHtml = preview.files.map(f => `
-                <div class="bg-slate-50 p-3 rounded border border-slate-200 mb-2">
-                    <div class="font-semibold text-sm text-slate-800">${f.fileName}</div>
-                    <div class="text-xs text-slate-600 mt-1">
-                        <span class="text-green-700 font-semibold">✓ ${f.newRecords} new</span> | 
-                        <span class="text-amber-700 font-semibold">⚠ ${f.duplicates} duplicates</span>${f.intraFileDuplicates ? ` | 
-                        <span class="text-purple-700 font-semibold">🔄 ${f.intraFileDuplicates} same-patient repeats</span>` : ''} | 
-                        <span class="text-blue-700 font-semibold">📅 ${f.schedules} schedules</span>
+            // ── FILE SUMMARIES ──────────────────────────────────────────────────
+            const filesHtml = files.map(f => `
+                <div class="bg-slate-50 p-2.5 rounded border border-slate-200 mb-2">
+                    <div class="font-semibold text-xs text-slate-800 mb-1">${f.fileName}</div>
+                    <div class="flex flex-wrap gap-2 text-xs">
+                        ${f.counts.new       ? `<span class="text-green-700 font-semibold">➕ ${f.counts.new} new</span>` : ''}
+                        ${f.counts.updates   ? `<span class="text-amber-700 font-semibold">✏️ ${f.counts.updates} changed</span>` : ''}
+                        ${f.counts.unchanged ? `<span class="text-slate-400">✓ ${f.counts.unchanged} unchanged</span>` : ''}
+                        ${f.counts.intraDupe ? `<span class="text-purple-600">🔄 ${f.counts.intraDupe} within-file dupes</span>` : ''}
+                        ${f.counts.schedules ? `<span class="text-blue-600">📅 ${f.counts.schedules} schedules</span>` : ''}
                     </div>
                 </div>
             `).join('');
+
+            // ── FIELD-LEVEL DIFFS FOR UPDATES ───────────────────────────────────
+            const updatesHtml = updates.length ? `
+                <div class="border border-amber-200 bg-amber-50 rounded p-3">
+                    <div class="text-xs font-bold text-amber-800 mb-2">✏️ ${updates.length} record(s) have changes — fields that will be overwritten:</div>
+                    <div class="max-h-44 overflow-y-auto space-y-2 pr-1">
+                        ${updates.slice(0, 25).map(u => `
+                            <div class="text-xs border-l-2 border-amber-400 pl-2 py-0.5">
+                                <div class="font-semibold text-slate-800">${u.patient.name || u.existing.name || 'Unknown'} <span class="font-normal text-slate-500">· MRN:${u.patient.mrn} · ${u.patient.date}</span></div>
+                                ${u.changedFields.slice(0, 3).map(c => `
+                                    <div class="text-slate-600"><span class="font-medium">${c.label}:</span>
+                                        <span class="line-through text-red-500 ml-1">${c.from.length > 35 ? c.from.slice(0,35)+'…' : c.from}</span>
+                                        <span class="text-slate-400 mx-0.5">→</span>
+                                        <span class="text-green-700">${c.to.length > 35 ? c.to.slice(0,35)+'…' : c.to}</span>
+                                    </div>`).join('')}
+                                ${u.changedFields.length > 3 ? `<div class="text-slate-400 italic">+${u.changedFields.length - 3} more field(s)</div>` : ''}
+                            </div>`).join('')}
+                        ${updates.length > 25 ? `<div class="text-xs text-slate-500 pt-1">…and ${updates.length - 25} more records not shown</div>` : ''}
+                    </div>
+                </div>
+            ` : '';
+
+            // ── RECORDS NOT IN FILE (possible removals) ─────────────────────────
+            const missingHtml = missingFromFile.length ? `
+                <div class="border border-red-300 bg-red-50 rounded p-3">
+                    <div class="text-xs font-bold text-red-800 mb-1">⚠️ ${missingFromFile.length} record(s) in system not found in this file</div>
+                    <div class="text-xs text-red-700 mb-2">These exist for the same date(s) being imported but are absent from the file. They will <strong>NOT be deleted</strong> automatically — but you should confirm they are discharged or transferred.</div>
+                    <div class="max-h-28 overflow-y-auto space-y-0.5">
+                        ${missingFromFile.slice(0, 15).map(r =>
+                            `<div class="text-xs text-red-800">· ${r.name} · MRN: ${r.mrn} · ${r.date}${r.hospital ? ' · ' + r.hospital : ''}</div>`
+                        ).join('')}
+                        ${missingFromFile.length > 15 ? `<div class="text-xs text-red-500 mt-1">…and ${missingFromFile.length - 15} more</div>` : ''}
+                    </div>
+                </div>
+            ` : '';
+
+            // ── MISSING COLUMNS ─────────────────────────────────────────────────
+            const missingColsHtml = missingColumns.length ? `
+                <div class="border border-orange-300 bg-orange-50 rounded p-3">
+                    <div class="text-xs font-bold text-orange-800 mb-1">⚠️ Column(s) not found in this file</div>
+                    <div class="text-xs text-orange-700">The following expected columns appear absent or blank — existing data for these fields <strong>will be preserved</strong> and not overwritten: <span class="font-semibold">${missingColumns.join(', ')}</span></div>
+                </div>
+            ` : '';
+
+            // ── PARSE ERRORS ────────────────────────────────────────────────────
+            const errorsHtml = errors.length ? `
+                <div class="border border-red-400 bg-red-50 rounded p-3">
+                    <div class="text-xs font-bold text-red-900 mb-1">❌ Parse error(s) — these sheets/files were skipped:</div>
+                    <div class="text-xs text-red-800 space-y-0.5">${errors.map(e => `<div>· ${e}</div>`).join('')}</div>
+                </div>
+            ` : '';
+
+            const hasWarnings = missingFromFile.length > 0 || missingColumns.length > 0 || errors.length > 0;
+
+            // ── ACTION BUTTONS (only shown if relevant) ─────────────────────────
+            const btnAll = (totals.new > 0 || totals.updates > 0) ? `
+                <button onclick="globalThis.proceedBulkImport('replace')" class="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">
+                    ✓ Import All — Add ${totals.new} new + Apply ${totals.updates} change(s)
+                </button>` : '';
+            const btnNewOnly = totals.new > 0 ? `
+                <button onclick="globalThis.proceedBulkImport('newonly')" class="w-full px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700">
+                    ➕ New Records Only — ${totals.new} add(s), skip ${totals.updates} change(s)
+                </button>` : '';
+            const btnUpdateOnly = totals.updates > 0 ? `
+                <button onclick="globalThis.proceedBulkImport('updateonly')" class="w-full px-4 py-2.5 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700">
+                    ✏️ Apply Changes Only — ${totals.updates} update(s), no new adds
+                </button>` : '';
 
             const html = `
                 <div class="modal-header border-b border-slate-200 pb-3 mb-4">
                     <h2 class="text-xl font-bold text-slate-900">📊 Import Preview</h2>
                 </div>
-                <div class="space-y-3 mb-6 max-h-96 overflow-y-auto">
+                <div class="space-y-3 mb-5 overflow-y-auto" style="max-height:65vh">
                     <div class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
-                        <div class="text-sm font-semibold text-blue-900">Summary</div>
-                        <div class="text-xs text-blue-800 mt-2 space-y-1">
-                            <div>📁 <strong>${preview.files.length} file(s)</strong> ready to import</div>
-                            <div>✅ <strong>${newCount} new record(s)</strong> will be added</div>
-                            <div>⚠️ <strong>${duplicateCount} duplicate(s)</strong> found (same MRN + date already in system)</div>
-                            ${intraFileCount ? `<div>🔄 <strong>${intraFileCount} repeat row(s)</strong> within the file (same patient+date appears multiple times; later row merges into earlier)</div>` : ''}
-                            <div>📅 <strong>${preview.totalSchedules} schedule update(s)</strong></div>
+                        <div class="text-sm font-bold text-blue-900 mb-2">Summary</div>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            <div class="text-green-700 font-semibold">➕ ${totals.new} NEW record(s) to add</div>
+                            <div class="text-amber-700 font-semibold">✏️ ${totals.updates} record(s) with changes</div>
+                            <div class="text-slate-400">✓ ${totals.unchanged} record(s) unchanged</div>
+                            <div class="text-blue-600">📅 ${totals.schedules} schedule update(s)</div>
+                            ${totals.intraFileDupes ? `<div class="text-purple-600 col-span-2">🔄 ${totals.intraFileDupes} within-file duplicate row(s) (merged)</div>` : ''}
                         </div>
                     </div>
-                    <div class="border-t border-slate-200 pt-3">
-                        <div class="text-xs font-semibold text-slate-600 mb-2">Files:</div>
-                        ${detailsHtml}
+                    ${hasWarnings ? `<div class="text-xs font-bold text-red-700">⚠️ WARNINGS — Review carefully before proceeding:</div>` : ''}
+                    ${missingHtml}
+                    ${missingColsHtml}
+                    ${updatesHtml}
+                    <div class="border-t border-slate-200 pt-2">
+                        <div class="text-xs font-semibold text-slate-500 mb-1">Per-file breakdown:</div>
+                        ${filesHtml}
                     </div>
-                    ${preview.errors.length > 0 ? `
-                        <div class="bg-red-50 border-l-4 border-red-500 p-3 rounded">
-                            <div class="text-xs font-semibold text-red-900">⚠️ Errors:</div>
-                            <div class="text-xs text-red-800 mt-1">${preview.errors.join('<br>')}</div>
-                        </div>
-                    ` : ''}
+                    ${errorsHtml}
                 </div>
                 <div class="space-y-2">
-                    <div class="text-xs font-semibold text-slate-700 mb-3">How to proceed?</div>
-                    <button onclick="globalThis.proceedBulkImport('replace', ${newCount}, ${duplicateCount})" class="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">
-                        ✓ Import All (${newCount} new + ${duplicateCount} replace)
-                    </button>
-                    <button onclick="globalThis.proceedBulkImport('newonly', ${newCount}, ${duplicateCount})" class="w-full px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700">
-                        ✓ Import New Only (${newCount} only, skip ${duplicateCount})
-                    </button>
-                    <button onclick="globalThis.closeModal('bulk-preview-modal')" class="w-full px-4 py-2.5 bg-slate-300 text-slate-800 text-sm font-semibold rounded-lg hover:bg-slate-400">
-                        ✗ Cancel
+                    <div class="text-xs font-semibold text-slate-600 mb-1">Choose how to proceed:</div>
+                    ${btnAll}
+                    ${btnNewOnly}
+                    ${btnUpdateOnly}
+                    <button onclick="globalThis.closeModal('bulk-preview-modal')" class="w-full px-4 py-2.5 bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-300">
+                        ✗ Cancel — Do nothing
                     </button>
                 </div>
             `;
@@ -9755,7 +9935,7 @@
         };
 
         // EXECUTE BULK IMPORT with chosen action
-        globalThis.proceedBulkImport = async (action, newCount, dupCount) => {
+        globalThis.proceedBulkImport = async (action) => {
             const files = document.getElementById('csv-file-input').files;
             const modal = document.getElementById('patient-modal');
             modal.style.display = 'none';
@@ -9794,7 +9974,8 @@
             const errors = [];
 
             try {
-                showToast(`⏳ Importing with action: ${action}...`);
+                const actionLabel = action === 'newonly' ? 'adding new records only' : action === 'updateonly' ? 'applying updates only' : 'adding new + applying updates';
+                showToast(`⏳ Importing (${actionLabel})…`);
 
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
@@ -9808,20 +9989,28 @@
                         if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
                             const arrayBuffer = await file.arrayBuffer();
                             const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                            console.log(`📊 Importing workbook "${fileName}" with ${workbook.SheetNames.length} sheet(s)`);
                             for (const sheetName of workbook.SheetNames) {
                                 const sheet = workbook.Sheets[sheetName];
                                 const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
                                 try {
-                                    const parsed = CSVImporter.parseRows3Pass(rows);
+                                    const parsed = CSVImporter.parseRows3Pass(rows, sheetName);
+                                    console.log(`  ✅ Sheet "${sheetName}": importing ${parsed.patients.length} patients`);\n                                    if (parsed.validationLog && parsed.validationLog.length > 0) {
+                                        parsed.validationLog.slice(0, 5).forEach(logLine => console.log(logLine));
+                                    }
                                     fileOnCall = fileOnCall.concat(parsed.onCall);
                                     filePatients = filePatients.concat(parsed.patients);
                                     fileHospitals = [...new Set([...fileHospitals, ...parsed.hospitals])];
                                 } catch (sheetErr) {
-                                    const message = `Skipped sheet "${sheetName}" in ${fileName}: ${sheetErr.message}`;
+                                    const message = `FAILED: Sheet "${sheetName}" - ${sheetErr.message}`;
+                                    console.error(`  ❌ Sheet "${sheetName}" failed:`, sheetErr);
+                                    if (sheetErr.validationLog && sheetErr.validationLog.length > 0) {
+                                        sheetErr.validationLog.forEach(logLine => console.log(logLine));
+                                    }
                                     errors.push(message);
-                                    console.warn(message);
                                 }
                             }
+                            console.log(`📁 File "${fileName}" importing: ${filePatients.length} total patients`);
                         } else if (fileName.endsWith('.csv')) {
                             const csvText = await file.text();
                             const parsed = CSVImporter.parse3Pass(csvText);
@@ -9848,13 +10037,17 @@
                             }
                         }
 
-                        // Import patients based on chosen action
+                        // Import patients based on chosen action:
+                        //   replace    = add new + overwrite changed existing
+                        //   newonly    = add new only, skip all existing
+                        //   updateonly = update changed existing only, skip new
                         for (const p of filePatients) {
                             try {
                                 const patientKey = buildImportIdentityKey(p);
                                 const idx = patients.findIndex(existing => buildImportIdentityKey(existing) === patientKey);
                                 if (idx >= 0) {
-                                    if (action !== 'replace') continue;
+                                    // Record exists — skip if newonly, update if replace or updateonly
+                                    if (action === 'newonly') continue;
 
                                     const previousPatient = { ...patients[idx] };
                                     const mergedPatient = { ...patients[idx] };
@@ -9873,6 +10066,9 @@
                                     logImportedPatientChange(previousPatient, mergedPatient, mergedPatient.id || previousPatient.id);
                                     totalPatients++;
                                 } else {
+                                    // New record — skip if updateonly
+                                    if (action === 'updateonly') continue;
+
                                     patients.push(p);
                                     if (useCloudImport) {
                                         const savedId = await globalThis.m365SavePatient(p);
