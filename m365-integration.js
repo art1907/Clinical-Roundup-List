@@ -203,6 +203,16 @@ async function login() {
     try {
         // Clear any previous auth error flags when user tries again
         sessionStorage.removeItem('msal_auth_error');
+
+        // Ensure MSAL client is available before attempting redirect login.
+        if (!msalInstance) {
+            if (typeof initializeMSAL === 'function') {
+                initializeMSAL();
+            }
+            if (!msalInstance) {
+                throw new Error('Authentication client not initialized yet. Please refresh and try again.');
+            }
+        }
         
         const loginRequest = {
             scopes: M365_CONFIG.scopes,
@@ -229,12 +239,21 @@ function logout() {
         window.updateAuthState(false, '');
     }
     
+    if (!msalInstance) {
+        console.warn('MSAL instance not initialized during logout request.');
+        return;
+    }
+
     msalInstance.logoutRedirect({
         account: currentAccount
     });
 }
 
 async function getAccessToken() {
+    if (!msalInstance) {
+        throw new Error('Authentication client is not initialized. Please sign in again.');
+    }
+
     if (!currentAccount) {
         throw new Error('No active account. Please sign in.');
     }

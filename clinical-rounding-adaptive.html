@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Clinical Rounding List - Adaptive Platform</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230f172a'/%3E%3Cpath d='M50 22v56M22 50h56' stroke='white' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -9995,7 +9996,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
                                 try {
                                     const parsed = CSVImporter.parseRows3Pass(rows, sheetName);
-                                    console.log(`  ✅ Sheet "${sheetName}": importing ${parsed.patients.length} patients`);\n                                    if (parsed.validationLog && parsed.validationLog.length > 0) {
+                                    console.log(`  ✅ Sheet "${sheetName}": importing ${parsed.patients.length} patients`);
+                                    if (parsed.validationLog && parsed.validationLog.length > 0) {
                                         parsed.validationLog.slice(0, 5).forEach(logLine => console.log(logLine));
                                     }
                                     fileOnCall = fileOnCall.concat(parsed.onCall);
