@@ -235,6 +235,40 @@
         
         .no-scroll { overflow: hidden !important; }
         
+        /* Sortable Headers */
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.15s;
+        }
+        
+        th.sortable:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        .sort-indicator {
+            display: inline-block;
+            margin-left: 4px;
+            font-size: 0.85em;
+            opacity: 0.5;
+        }
+        
+        th.sortable.sort-asc .sort-indicator::after {
+            content: '▲';
+            opacity: 1;
+        }
+        
+        th.sortable.sort-desc .sort-indicator::after {
+            content: '▼';
+            opacity: 1;
+        }
+        
+        th.sortable.sort-asc,
+        th.sortable.sort-desc {
+            background-color: rgba(37, 99, 235, 0.08);
+            font-weight: 600;
+        }
+        
         /* ============================================================================= */
         /* DARK MODE & THEMING */
         /* ============================================================================= */
@@ -8585,6 +8619,9 @@
             const tableContainer = document.querySelector('#table-section .overflow-x-auto');
             const cardContainer = document.getElementById('card-view-container');
             const groupedContainer = document.getElementById('grouped-view-container');
+            
+            // Initialize sortable headers before rendering
+            setTimeout(() => globalThis.initSortableHeaders(), 10);
             const mobileListContainer = document.getElementById('mobile-patient-list');
             const useMobileCards = shouldUseMobilePatientCards();
 
@@ -8682,6 +8719,17 @@
                     </td>
                 </tr>`;
             }).join('');
+            
+            // Apply header styling based on current sort state
+            setTimeout(() => {
+                document.querySelectorAll('th.sortable').forEach(h => {
+                    h.classList.remove('sort-asc', 'sort-desc');
+                });
+                const activeHeader = document.querySelector(`th.sortable[data-sort-column="${currentSort.column}"]`);
+                if (activeHeader) {
+                    activeHeader.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                }
+            }, 10);
         }
 
         function renderOnCallSchedule() {
@@ -8825,7 +8873,8 @@
 
             f = applyActiveFilters(f);
             
-            return f.sort((a,b) => new Date(b.date) - new Date(a.date));
+            // Apply current sort settings
+            return sortPatients(f);
         }
 
         globalThis.applyFilters = () => {
