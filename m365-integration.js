@@ -392,54 +392,128 @@ function updateConnectionStatus(connected, username = '') {
 // SHAREPOINT LIST OPERATIONS
 // =============================================================================
 
-async function graphRequest(endpoint, method = 'GET', body = null) {
+/**
+ * graphRequest — single Graph API call with:
+ *   • AbortController timeout (default 30 s, 60 s for batch)
+ *   • Automatic 429 retry honouring Retry-After header
+ *   • Exponential back-off for 5xx / network errors (max 3 retries)
+ *
+ * @param {string}        endpoint   Relative path after graphBaseUrl
+ * @param {string}        method     HTTP verb
+ * @param {object|null}   body       JSON body (serialised internally)
+ * @param {object}        opts
+ * @param {number}        opts.timeoutMs   Per-attempt timeout (default 30 000)
+ * @param {number}        opts.maxRetries  Total retry budget (default 3)
+ * @param {AbortSignal}   opts.signal      External abort signal (e.g. from ImportEngine)
+ */
+async function graphRequest(endpoint, method = 'GET', body = null, opts = {}) {
+    const timeoutMs  = opts.timeoutMs  ?? 30_000;
+    const maxRetries = opts.maxRetries ?? 3;
+    const external   = opts.signal     ?? null;
+
     console.log('🔐 graphRequest: Getting access token...');
     const token = await getAccessToken();
     console.log('✅ Access token obtained, length:', token ? token.length : 0);
-    
+
     const url = M365_CONFIG.graphBaseUrl + endpoint;
-    console.log('🌐 Calling Graph API:', { method, url: url.substring(0, 100) + '...' });
-    
-    const options = {
-        method: method,
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+    console.log('🌐 Calling Graph API:', { method, url: url.substring(0, 120) + '...' });
+
+    const bodyStr = body ? JSON.stringify(body) : null;
+    if (bodyStr) console.log('📦 Request body size:', bodyStr.length, 'bytes');
+
+    let lastErr;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        // Abort if an external signal (e.g. user cancel) has fired
+        if (external?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+        const controller = new AbortController();
+        const timer      = setTimeout(() => controller.abort(), timeoutMs);
+
+        // Link external signal to our internal controller
+        const onExternalAbort = () => controller.abort();
+        if (external) external.addEventListener('abort', onExternalAbort, { once: true });
+
+        try {
+            const options = {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type':  'application/json'
+                },
+                signal: controller.signal
+            };
+            if (bodyStr) options.body = bodyStr;
+
+            const response = await fetch(url, options);
+            clearTimeout(timer);
+            if (external) external.removeEventListener('abort', onExternalAbort);
+
+            console.log('📨 Response received:', { status: response.status, statusText: response.statusText });
+
+            // ── 429 Throttle ─────────────────────────────────────────────────
+            if (response.status === 429) {
+                const retryAfter = parseInt(response.headers.get('Retry-After') || '10', 10);
+                const waitMs     = Math.max(retryAfter * 1000, 1000);
+                console.warn(`⏳ Graph API 429 throttle — waiting ${retryAfter}s before retry (attempt ${attempt + 1}/${maxRetries + 1})`);
+                await new Promise(r => setTimeout(r, waitMs));
+                lastErr = new Error(`Graph API error: 429 - throttled (retry-after ${retryAfter}s)`);
+                continue;   // retry
+            }
+
+            // ── 5xx Server Error — retryable ─────────────────────────────────
+            if (response.status >= 500 && attempt < maxRetries) {
+                const backoff = Math.min(Math.pow(2, attempt) * 1000, 15_000);
+                console.warn(`⚠️ Graph API ${response.status} — back-off ${backoff}ms (attempt ${attempt + 1})`);
+                await new Promise(r => setTimeout(r, backoff));
+                lastErr = new Error(`Graph API error: ${response.status}`);
+                continue;
+            }
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Graph API error response:', { status: response.status, text: errorText });
+                throw new Error(`Graph API error: ${response.status} - ${errorText}`);
+            }
+
+            if (response.status === 204) {
+                console.log('✅ No content response (204)');
+                return null;
+            }
+
+            const data = await response.json();
+            console.log('✅ Response JSON parsed successfully');
+            return data;
+
+        } catch (fetchErr) {
+            clearTimeout(timer);
+            if (external) external.removeEventListener('abort', onExternalAbort);
+
+            if (fetchErr.name === 'AbortError') {
+                if (external?.aborted) throw new DOMException('Aborted by caller', 'AbortError');
+                // Our own timeout
+                lastErr = new Error(`Graph API request timed out after ${timeoutMs}ms (${method} ${endpoint.substring(0, 60)})`);
+                if (attempt < maxRetries) {
+                    const backoff = Math.min(Math.pow(2, attempt) * 1000, 10_000);
+                    console.warn('⏱️ Request timeout — back-off', backoff, 'ms');
+                    await new Promise(r => setTimeout(r, backoff));
+                    continue;
+                }
+            } else {
+                lastErr = fetchErr;
+                if (attempt < maxRetries) {
+                    const backoff = Math.min(Math.pow(2, attempt) * 1000, 10_000);
+                    console.warn('❌ Network/fetch error — back-off', backoff, 'ms:', fetchErr.message);
+                    await new Promise(r => setTimeout(r, backoff));
+                    continue;
+                }
+            }
+
+            console.error('❌ graphRequest failed after all retries:', lastErr.message);
+            throw lastErr;
         }
-    };
-    
-    if (body) {
-        options.body = JSON.stringify(body);
-        console.log('📦 Request body size:', options.body.length, 'bytes');
     }
-    
-    try {
-        const response = await fetch(url, options);
-        console.log('📨 Response received:', { status: response.status, statusText: response.statusText });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Graph API error response:', { status: response.status, text: errorText });
-            throw new Error(`Graph API error: ${response.status} - ${errorText}`);
-        }
-        
-        if (response.status === 204) {
-            console.log('✅ No content response (204)');
-            return null;  // No content
-        }
-        
-        const data = await response.json();
-        console.log('✅ Response JSON parsed successfully');
-        return data;
-    } catch (fetchErr) {
-        console.error('❌ Network/fetch error in graphRequest:', fetchErr.message);
-        console.error('   Possible causes:');
-        console.error('   - Network connectivity issue');
-        console.error('   - CORS blocking');
-        console.error('   - Token invalid/expired');
-        console.error('   - Timeout');
-        throw fetchErr;
-    }
+
+    throw lastErr ?? new Error('graphRequest: exhausted retries');
 }
 
 // -----------------------------------------------------------------------------
@@ -582,17 +656,30 @@ async function api_fetchPatients(dateFilter = null) {
     try {
         const listId = M365_CONFIG.sharepoint.lists.patients;
         const siteId = M365_CONFIG.sharepoint.siteId;
-        
-        let endpoint = `/sites/${siteId}/lists/${listId}/items?expand=fields&$top=1000`;
-        
+
+        let baseEndpoint = `/sites/${siteId}/lists/${listId}/items?expand=fields&$top=1000`;
         if (dateFilter) {
-            // Filter by date if provided
-            endpoint += `&$filter=fields/Date eq '${dateFilter}'`;
+            baseEndpoint += `&$filter=fields/Date eq '${dateFilter}'`;
         }
-        
-        const response = await graphRequest(endpoint);
-        
-        const patients = response.value.map(item => {
+
+        // Follow @odata.nextLink pages so we never silently truncate large lists
+        let allItems = [];
+        let nextEndpoint = baseEndpoint;
+        while (nextEndpoint) {
+            const response = await graphRequest(nextEndpoint);
+            allItems = allItems.concat(response.value || []);
+            // nextLink is an absolute URL — strip the base so graphRequest can prefix it again
+            const nl = response['@odata.nextLink'];
+            if (nl) {
+                nextEndpoint = nl.replace(M365_CONFIG.graphBaseUrl, '');
+                console.log(`📄 Fetching next page of patients (${allItems.length} so far)...`);
+            } else {
+                nextEndpoint = null;
+            }
+        }
+        console.log(`✅ Fetched ${allItems.length} patient records (all pages)`);
+
+        const patients = allItems.map(item => {
             const rawPriority = item.fields.Priority ?? item.fields.Stat ?? item.fields.STAT ?? item.fields.StatPriority ?? item.fields.IsSTAT;
             const statValue = parseBoolish(rawPriority);
             return ({

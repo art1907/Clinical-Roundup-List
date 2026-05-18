@@ -59,7 +59,6 @@
             flex: 1;
             overflow-y: auto;
             overflow-x: hidden;
-            -webkit-overflow-scrolling: touch;
         }
 
         .top-action-bar {
@@ -236,38 +235,9 @@
         
         .no-scroll { overflow: hidden !important; }
         
-        /* Sortable Headers */
-        th.sortable {
-            cursor: pointer;
-            user-select: none;
-            transition: background-color 0.15s;
-        }
-        
-        th.sortable:hover {
-            background-color: rgba(0, 0, 0, 0.05);
-        }
-        
-        .sort-indicator {
-            display: inline-block;
-            margin-left: 4px;
-            font-size: 0.85em;
-            opacity: 0.5;
-        }
-        
-        th.sortable.sort-asc .sort-indicator::after {
-            content: '▲';
-            opacity: 1;
-        }
-        
-        th.sortable.sort-desc .sort-indicator::after {
-            content: '▼';
-            opacity: 1;
-        }
-        
-        th.sortable.sort-asc,
-        th.sortable.sort-desc {
-            background-color: rgba(37, 99, 235, 0.08);
-            font-weight: 600;
+        .findings-value {
+            min-height: 28px;
+            max-height: 120px;
         }
         
         /* ============================================================================= */
@@ -587,6 +557,7 @@
             border: 1px solid #93c5fd;
             border-radius: 1rem;
             box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
             z-index: 45;
         }
@@ -844,6 +815,7 @@
             gap: 0.75rem;
             padding: 0.9rem 1rem;
             cursor: pointer;
+            -webkit-user-select: none;
             user-select: none;
         }
 
@@ -922,6 +894,7 @@
         /* Sort indicators in table headers */
         th.sortable {
             cursor: pointer;
+            -webkit-user-select: none;
             user-select: none;
             position: relative;
         }
@@ -1886,6 +1859,7 @@
             bottom: 0;
             z-index: 55;
             background: rgba(255, 255, 255, 0.96);
+            -webkit-backdrop-filter: blur(12px);
             backdrop-filter: blur(12px);
             border-top: 1px solid #e2e8f0;
             padding: 0.45rem 0.5rem max(0.45rem, env(safe-area-inset-bottom));
@@ -2267,7 +2241,6 @@
             
             nav {
                 overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
             }
             
             .main-table-header {
@@ -3569,11 +3542,14 @@
                     const normalizedField = String(fieldChanged || '').toLowerCase().trim();
                     const isRecordCreate = normalizedField === 'record' && (oldValue == null || oldValue === '');
                     const isRecordDelete = normalizedField === 'record' && oldValue != null && newValue === 'deleted';
+                    let actionType = 'update';
+                    if (isRecordCreate) actionType = 'create';
+                    else if (isRecordDelete) actionType = 'delete';
                     const logEntry = createLogEntry('data_change', {
                         userId,
                         patientId,
                         fieldChanged,
-                        action: isRecordCreate ? 'create' : (isRecordDelete ? 'delete' : 'update'),
+                        action: actionType,
                         oldValue: oldValue ? '[REDACTED]' : null,
                         newValue: newValue ? '[REDACTED]' : null,
                         timestamp: new Date().toISOString()
@@ -5197,7 +5173,6 @@
             }
 
             if (preset === 'provider') {
-                const providerCounts = {};
                 const providerStats = {};
                 data.activePatients.forEach((p) => {
                     const md = p.supervisingMd || 'Unassigned';
@@ -5240,13 +5215,19 @@
                     }
                     if (p.chargeCodesSecondary) {
                         try {
-                            const codes = Array.isArray(p.chargeCodesSecondary) ? p.chargeCodesSecondary : 
-                                         (typeof p.chargeCodesSecondary === 'string' ? JSON.parse(p.chargeCodesSecondary) : []);
+                            let codes = [];
+                            if (Array.isArray(p.chargeCodesSecondary)) {
+                                codes = p.chargeCodesSecondary;
+                            } else if (typeof p.chargeCodesSecondary === 'string') {
+                                codes = JSON.parse(p.chargeCodesSecondary);
+                            }
                             codes.forEach(c => {
                                 const code = String(c).trim();
                                 chargeCodes[code] = (chargeCodes[code] || 0) + 1;
                             });
-                        } catch (e) {}
+                        } catch (e) {
+                            console.debug('Skipping invalid secondary charge codes:', e?.message || e);
+                        }
                     }
                 });
 
@@ -7504,7 +7485,7 @@
 
         // CSV IMPORT ENGINE
         const CSVImporter = (() => {
-            const normalizeCell = (value) => String(value ?? '').replace(/\u00A0/g, ' ').trim();
+            const normalizeCell = (value) => String(value ?? '').replaceAll('\u00A0', ' ').trim();
 
             const parseCsvLine = (line) => {
                 const out = [];
@@ -7530,7 +7511,7 @@
                 return out;
             };
 
-            const normalizeHeader = (header) => normalizeCell(header).toLowerCase().replace(/[^a-z0-9]+/g, '');
+            const normalizeHeader = (header) => normalizeCell(header).toLowerCase().replaceAll(/[^a-z0-9]+/g, '');
 
             const findCol = (normalizedHeaders, aliases) => {
                 const normalizedAliases = aliases.map(a => normalizeHeader(a));
@@ -7565,7 +7546,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 log(`Starting parse: ${(rowsInput || []).length} raw rows`);
                 const rows = (rowsInput || [])
                     .map(r => (r || []).map(normalizeCell))
-                    .filter(r => r.some(c => c));
+                    .filter(r => r.some(Boolean));
                 log(`After filtering empty rows: ${rows.length} data rows`);
 
                 if (rows.length < 2) {
@@ -7581,7 +7562,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 let onCallFound = 0;
                 for (let i = 0; i < Math.min(8, rows.length); i++) {
                     const parts = rows[i];
-                    const lead = (parts[0] || '').toLowerCase().replace(':', '').trim();
+                    const lead = (parts[0] || '').toLowerCase().replaceAll(':', '').trim();
                     if ((lead === 'physician on-call' || lead === 'physician on call') && parts.length >= 4) {
                         result.onCall.push({
                             date: parts[1],
@@ -7689,7 +7670,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         patient.visitKey = buildImportIdentityKey(patient);
                         result.patients.push(patient);
                         result.stats.parsed++;
-                        log(`Row ${i}: Parsed patient \"${patient.name || patient.mrn || '(no ID)'}\"`, 'success');
+                        log(`Row ${i}: Parsed patient "${patient.name || patient.mrn || '(no ID)'}"`, 'success');
                     } catch (rowErr) {
                         result.stats.errors.push({ row: i, error: rowErr.message });
                         result.stats.skipped++;
@@ -7706,8 +7687,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                 parse3Pass: (csvText) => {
                     try {
                         const rows = csvText
-                            .replace(/\r\n/g, '\n')
-                            .replace(/\r/g, '\n')
+                            .replaceAll('\r\n', '\n')
+                            .replaceAll('\r', '\n')
                             .split('\n')
                             .map(parseCsvLine);
                         return parseRows3Pass(rows);
@@ -8848,7 +8829,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     const formFields = ['f-room', 'f-name', 'f-dob', 'f-mrn', 'f-hospital', 'f-plan', 'f-supervising-md',
                                        'f-pending-text', 'f-followup-text', 'f-findings-text', 'f-cpt-primary', 'f-icd-primary'];
                     formFields.forEach(fieldId => {
-                        const fieldName = fieldId.replace('f-', '').replace(/-/g, '_');
+                        const fieldName = fieldId.replaceAll('f-', '').replaceAll('-', '_');
                         const input = document.getElementById(fieldId);
                         if (input) {
                             const value = patientData[fieldName] || '';
@@ -10151,12 +10132,54 @@ const findHeaderIndex = (rows, sheetLog) => {
         };
 
         // BULK IMPORT HANDLER (Multiple files: CSV + XLSX)
+        // Routing: Excel files or >20 parsed records → full Import Wizard
+        //          Single small CSV (≤20 records) → existing inline preview
         globalThis.handleBulkImport = async (event) => {
             const files = event.target.files;
             if (!files || files.length === 0) return;
 
+            // Determine whether to use the full wizard
+            const hasExcel    = Array.from(files).some(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
+            const multiFile   = files.length > 1;
+            const useWizard   = hasExcel || multiFile;
+
+            if (useWizard) {
+                // Store files on the hidden input so the wizard can access them
+                // then open the wizard — it will call previewBulkImport internally
+                if (typeof globalThis.openImportWizard === 'function') {
+                    // Pass files into the wizard immediately after opening
+                    globalThis.openImportWizard();
+                    // Small delay so DOM is ready, then populate the file selection step
+                    setTimeout(() => {
+                        if (typeof globalThis._iwFilesChosen === 'function') {
+                            globalThis._iwFilesChosen(files);
+                        }
+                    }, 50);
+                } else {
+                    // Fallback: wizard not loaded yet, use legacy path
+                    try {
+                        const preview = await globalThis.previewBulkImport(files);
+                        globalThis.showBulkImportPreview(preview);
+                    } catch (err) {
+                        console.error("Bulk import error:", err);
+                        showToast("❌ Failed to analyze files: " + err.message);
+                    }
+                }
+                return;
+            }
+
+            // Quick path: single small CSV
             try {
                 const preview = await globalThis.previewBulkImport(files);
+                // If preview shows >20 records, redirect to wizard anyway
+                const totalRecords = (preview.totals.new || 0) + (preview.totals.updates || 0) + (preview.totals.unchanged || 0);
+                if (totalRecords > 20 && typeof globalThis.openImportWizard === 'function') {
+                    globalThis.openImportWizard();
+                    setTimeout(() => {
+                        if (typeof globalThis._iwFilesChosen === 'function') globalThis._iwFilesChosen(files);
+                    }, 50);
+                    return;
+                }
                 globalThis.showBulkImportPreview(preview);
             } catch (err) {
                 console.error("Bulk import error:", err);
@@ -10368,7 +10391,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         </header>
 
         <!-- Hidden CSV File Input -->
-        <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" multiple style="display:none;" onchange="globalThis.handleBulkImport(event)">
+        <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" multiple class="hidden" onchange="globalThis.handleBulkImport(event)" aria-label="Import patient files" title="Import patient files">
 
         <!-- Offline Indicator Banner -->
         <div id="offline-banner" class="offline-banner">
@@ -10734,19 +10757,19 @@ const findHeaderIndex = (rows, sheetLog) => {
         <div class="swipe-hint">👆 Swipe left/right to navigate tabs on mobile</div>
 
         <!-- Tabs: Business Flow Order (Census→Surgical→Calendar→Timeline→Analytics→Reports→Audit→Shifts→Procedures→Review→Archive) -->
-        <nav class="selection-underlay-target desktop-tab-nav px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" aria-label="Main Navigation">
-            <button id="tab-active-btn" onclick="globalThis.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="active-panel">Census</button>
-            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedures-panel" title="Shows records tagged as surgical by keyword match in Plan/Findings or by surgical status.">Surgical</button>
-            <button id="tab-calendar-btn" onclick="globalThis.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-panel">Calendar</button>
-            <button id="tab-timeline-btn" onclick="globalThis.setTab('timeline')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="timeline-panel">Timeline</button>
-            <button id="tab-analytics-btn" onclick="globalThis.setTab('analytics')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="analytics-panel">Analytics</button>
-            <button id="tab-reports-btn" onclick="globalThis.setTab('reports')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="reports-panel">Reports</button>
-            <button id="tab-audit-btn" onclick="globalThis.setTab('audit')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="audit-panel">Audit</button>
-            <button id="tab-shift-report-btn" onclick="globalThis.setTab('shift-report')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="shift-report-panel">Shifts</button>
-            <button id="tab-procedure-log-btn" onclick="globalThis.setTab('procedure-log')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedure-log-panel">Procedures</button>
-            <button id="tab-review-btn" onclick="globalThis.setTab('review')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="review-panel" title="Records flagged during import requiring human review">Review</button>
-            <button id="tab-oncall-btn" onclick="globalThis.setTab('oncall')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="oncall-panel" title="On-call staffing">Staffing</button>
-            <button id="tab-archive-btn" onclick="globalThis.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="archive-panel">Archive</button>
+        <nav class="selection-underlay-target desktop-tab-nav px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" aria-label="Main Navigation" role="tablist">
+            <button id="tab-active-btn" onclick="globalThis.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="table-section">Census</button>
+            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="table-section" title="Shows records tagged as surgical by keyword match in Plan/Findings or by surgical status.">Surgical</button>
+            <button id="tab-calendar-btn" onclick="globalThis.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-section">Calendar</button>
+            <button id="tab-timeline-btn" onclick="globalThis.setTab('timeline')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="timeline-section">Timeline</button>
+            <button id="tab-analytics-btn" onclick="globalThis.setTab('analytics')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="analytics-section">Analytics</button>
+            <button id="tab-reports-btn" onclick="globalThis.setTab('reports')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="reports-section">Reports</button>
+            <button id="tab-audit-btn" onclick="globalThis.setTab('audit')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="audit-section">Audit</button>
+            <button id="tab-shift-report-btn" onclick="globalThis.setTab('shift-report')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="shift-report-section">Shifts</button>
+            <button id="tab-procedure-log-btn" onclick="globalThis.setTab('procedure-log')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedure-log-section">Procedures</button>
+            <button id="tab-review-btn" onclick="globalThis.setTab('review')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="review-section" title="Records flagged during import requiring human review">Review</button>
+            <button id="tab-oncall-btn" onclick="globalThis.setTab('oncall')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="oncall-section" title="On-call staffing">Staffing</button>
+            <button id="tab-archive-btn" onclick="globalThis.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="table-section">Archive</button>
         </nav>
 
         <!-- Content Area -->
@@ -10829,7 +10852,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <table class="w-full min-w-[72rem] border-collapse text-sm h-full table-fixed">
                         <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
-                                <th class="p-3 w-12 align-top"><input type="checkbox" data-select-all-checkbox onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer"></th>
+                                <th class="p-3 w-12 align-top"><label for="select-all-patients" class="sr-only">Select all patient rows</label><input id="select-all-patients" type="checkbox" data-select-all-checkbox onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer" aria-label="Select all patient rows" title="Select all patient rows"></th>
                                 <th class="p-3 w-20 align-top text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-28 align-top text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-48 align-top text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
@@ -10983,14 +11006,15 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <div class="pdf-generator">
                         <h3 class="font-bold mb-3">Generate Report</h3>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                            <select id="report-type" class="p-2 text-xs border rounded">
+                            <select id="report-type" class="p-2 text-xs border rounded" aria-label="Report type" title="Report type">
                                 <option value="daily">Daily Rounding</option>
                                 <option value="surgical">Surgical Procedures</option>
                                 <option value="patient-summary">Patient Summary</option>
                                 <option value="hospital-census">Hospital Census</option>
                             </select>
-                            <input type="date" id="report-date" class="p-2 text-xs border rounded" />
-                            <select id="report-hospital" class="p-2 text-xs border rounded">
+                            <label for="report-date" class="sr-only">Report date</label>
+                            <input type="date" id="report-date" class="p-2 text-xs border rounded" aria-label="Report date" title="Report date" />
+                            <select id="report-hospital" class="p-2 text-xs border rounded" aria-label="Report hospital" title="Report hospital">
                                 <option value="">All Hospitals</option>
                                 <option value="WGMC">WGMC</option>
                                 <option value="AWC">AWC</option>
@@ -11012,7 +11036,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <div class="mb-2 text-xs text-slate-500">Tip: create, update, delete, export, and auth events are captured. Apply filters and click Load Logs.</div>
                     <div class="mb-4">
                         <div class="grid grid-cols-2 md:grid-cols-5 gap-2 flex-shrink-0">
-                            <select id="audit-filter-action" class="p-2 text-xs border rounded">
+                            <select id="audit-filter-action" class="p-2 text-xs border rounded" aria-label="Audit action filter" title="Audit action filter">
                                 <option value="">All Actions</option>
                                 <option value="create">Create</option>
                                 <option value="update">Update</option>
@@ -11100,7 +11124,8 @@ const findHeaderIndex = (rows, sheetLog) => {
     <div id="handoff-modal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-end md:items-center justify-center p-4">
         <div class="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-2xl shadow-2xl max-h-[80vh] flex flex-col">
             <div class="p-4 border-b flex justify-between items-center flex-shrink-0"><h2 class="font-bold">Team Handoff</h2><button onclick="globalThis.closeHandoffModal()" class="text-2xl">×</button></div>
-            <textarea id="handoff-text-area" readonly class="flex-1 p-4 font-mono text-xs resize-none overflow-y-auto"></textarea>
+            <label for="handoff-text-area" class="sr-only">Team handoff text</label>
+            <textarea id="handoff-text-area" readonly class="flex-1 p-4 font-mono text-xs resize-none overflow-y-auto" aria-label="Team handoff text" title="Team handoff text"></textarea>
             <div class="p-4 border-t flex gap-2 flex-shrink-0"><button onclick="globalThis.copyHandoff()" class="flex-1 p-3 bg-blue-600 text-white font-bold rounded-lg">Copy</button></div>
         </div>
     </div>
@@ -11131,7 +11156,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             </div>
             <div class="p-4 space-y-3">
                 <p class="text-xs text-slate-500">Choose the new status for all selected records.</p>
-                <select id="batch-status-select" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm">
+                <select id="batch-status-select" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" aria-label="Batch status selection" title="Batch status selection">
                     <option value="">Select status</option>
                     <option value="NEW CONSULT">NEW CONSULT</option>
                     <option value="SURGICAL PATIENT (SAME DAY SURGERY)">SURGICAL PATIENT (SAME DAY SURGERY)</option>
@@ -11266,7 +11291,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">CBC auto (85027)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85027">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85027" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85027" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11274,7 +11299,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Blood smear (85007)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85007">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85007" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85007" placeholder="Results..." rows="1"></textarea>
                             </div>
                         </div>
                     </details>
@@ -11310,7 +11335,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">CMP (80053)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cmp-80053">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cmp-80053" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cmp-80053" placeholder="Results..." rows="1"></textarea>
                             </div>
                         </div>
                     </details>
@@ -11323,7 +11348,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Urine culture (87086)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87086">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87086" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87086" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11331,7 +11356,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">+ organism ID (87088)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87088">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87088" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87088" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11339,7 +11364,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Blood culture (87040)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87040">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87040" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87040" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11347,7 +11372,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Blood fungal (87103)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87103">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87103" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87103" placeholder="Results..." rows="1"></textarea>
                             </div>
                         </div>
                     </details>
@@ -11360,7 +11385,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Chest (71045-48)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-chest">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-chest" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-chest" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11368,7 +11393,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Spine (72020-110)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-spine">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-spine" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-spine" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11376,7 +11401,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Extremity (73000+)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-extremity">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-extremity" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-extremity" placeholder="Results..." rows="1"></textarea>
                             </div>
                         </div>
                     </details>
@@ -11389,7 +11414,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Abd complete (76700)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76700">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76700" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76700" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11397,7 +11422,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Abd limited (76705)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76705">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76705" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76705" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11405,7 +11430,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Echo (93306)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-93306">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-93306" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-93306" placeholder="Results..." rows="1"></textarea>
                             </div>
                         </div>
                     </details>
@@ -11418,7 +11443,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Head/Brain (70450-70)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-head">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-head" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-head" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11426,7 +11451,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Chest (71250-75)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-chest">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-chest" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-chest" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11434,7 +11459,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Abdomen (74150-78)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-abd">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-abd" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-abd" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11442,7 +11467,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Pelvis (72192-94)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-pelvis">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-pelvis" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-pelvis" placeholder="Results..." rows="1"></textarea>
                             </div>
                         </div>
                     </details>
@@ -11455,7 +11480,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Brain (70551-53)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-brain">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-brain" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-brain" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11463,7 +11488,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">C-Spine (72141-42)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-c-spine">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-c-spine" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-c-spine" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11471,7 +11496,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">L-Spine (72148-49)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-l-spine">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-l-spine" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-l-spine" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11479,7 +11504,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Abdomen (74181-83)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-abd">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-abd" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-abd" placeholder="Results..." rows="1"></textarea>
                             </div>
                         </div>
                     </details>
@@ -11492,7 +11517,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Bone scan (78306)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78306">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78306" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78306" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11500,7 +11525,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Cardiac perf (78451-54)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78451">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78451" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78451" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11508,7 +11533,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">PET scan (78815)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78815">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78815" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78815" placeholder="Results..." rows="1"></textarea>
                             </div>
                             <div class="border border-slate-200 rounded p-2 bg-white">
                                 <div class="flex items-center gap-2 mb-1.5">
@@ -11516,7 +11541,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <span class="flex-1 font-medium">Thyroid (78012-14)</span>
                                     <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-thyroid">
                                 </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-thyroid" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
+                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-thyroid" placeholder="Results..." rows="1"></textarea>
                             </div>
                         </div>
                     </details>
@@ -11551,7 +11576,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                         <span class="text-[10px] text-slate-400">Stored in SharePoint</span>
                     </div>
                     <div class="flex flex-col gap-2 md:flex-row md:items-center">
-                        <input id="patient-files-input" type="file" multiple class="w-full text-xs" />
+                        <label for="patient-files-input" class="sr-only">Patient file attachments</label>
+                        <input id="patient-files-input" type="file" multiple class="w-full text-xs" aria-label="Patient file attachments" title="Patient file attachments" />
                         <button id="patient-files-upload" type="button" onclick="globalThis.uploadPatientFiles()" class="px-3 py-2 text-xs font-bold bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">Upload</button>
                     </div>
                     <div id="patient-files-list" class="space-y-2 text-xs text-slate-600">
@@ -13719,6 +13745,776 @@ const findHeaderIndex = (rows, sheetLog) => {
         });
 
         console.log('✓ Phase 5: Advanced Features initialized (Timeline, Analytics, PDF, Audit, Procedures, Shift Reports)');
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         IMPORT ENGINE — load after main app so CSVImporter etc. are available
+    ════════════════════════════════════════════════════════════════════════ -->
+    <script src="import-engine.js"></script>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         IMPORT WIZARD — full-screen overlay, 5-step flow
+    ════════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Overlay backdrop + panel -->
+    <div id="import-wizard"
+         role="dialog" aria-modal="true" aria-labelledby="iw-title"
+         class="hidden fixed inset-0 z-[9999] flex items-stretch justify-center bg-black/60 backdrop-blur-sm">
+
+        <div class="relative flex flex-col w-full max-w-3xl mx-auto my-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
+
+            <!-- ── Header ── -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl" aria-hidden="true">📥</span>
+                    <h2 id="iw-title" class="text-lg font-bold text-slate-900">Bulk Import Wizard</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <!-- Step indicator -->
+                    <div id="iw-steps" class="hidden sm:flex items-center gap-1 text-xs font-semibold text-slate-400">
+                        <span id="iw-step-1" class="px-2 py-0.5 rounded-full">1 Select</span>
+                        <span class="text-slate-300">›</span>
+                        <span id="iw-step-2" class="px-2 py-0.5 rounded-full">2 Preview</span>
+                        <span class="text-slate-300">›</span>
+                        <span id="iw-step-3" class="px-2 py-0.5 rounded-full">3 Configure</span>
+                        <span class="text-slate-300">›</span>
+                        <span id="iw-step-4" class="px-2 py-0.5 rounded-full">4 Import</span>
+                        <span class="text-slate-300">›</span>
+                        <span id="iw-step-5" class="px-2 py-0.5 rounded-full">5 Done</span>
+                    </div>
+                    <button id="iw-close-btn"
+                            onclick="globalThis.closeImportWizard()"
+                            class="ml-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                            aria-label="Close import wizard">✕</button>
+                </div>
+            </div>
+
+            <!-- ── Body — steps swap in here ── -->
+            <div id="iw-body" class="flex-1 overflow-y-auto px-6 py-5"></div>
+
+            <!-- ── Footer ── -->
+            <div id="iw-footer" class="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 flex-shrink-0"></div>
+
+        </div>
+    </div>
+
+    <!-- ── Import Wizard Script ── -->
+    <script>
+    'use strict';
+    (() => {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STATE
+    // ─────────────────────────────────────────────────────────────────────────
+    let _iwStep    = 0;     // 1-5
+    let _iwPreview = null;
+    let _iwFiles   = null;
+    let _iwAction  = 'replace';
+    let _startMs   = null;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // OPEN / CLOSE
+    // ─────────────────────────────────────────────────────────────────────────
+
+    globalThis.openImportWizard = function () {
+        const el = document.getElementById('import-wizard');
+        if (!el) return;
+        el.classList.remove('hidden');
+        document.getElementById('csv-file-input').value = '';
+        _iwPreview = null;
+        _iwFiles   = null;
+        _iwAction  = 'replace';
+        _iwStep    = 0;
+        _iwRenderStep1();
+    };
+
+    globalThis.closeImportWizard = function () {
+        const el = document.getElementById('import-wizard');
+        if (!el) return;
+
+        // If import is running, confirm before closing
+        const eng = window.importEngine;
+        if (eng && eng.state === 'importing') {
+            if (!confirm('An import is in progress. Cancel it and close?')) return;
+            eng.cancel();
+        }
+        el.classList.add('hidden');
+        document.getElementById('csv-file-input').value = '';
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP INDICATOR
+    // ─────────────────────────────────────────────────────────────────────────
+    function _iwMarkStep(active) {
+        _iwStep = active;
+        for (let i = 1; i <= 5; i++) {
+            const el = document.getElementById(`iw-step-${i}`);
+            if (!el) continue;
+            el.className = 'px-2 py-0.5 rounded-full transition-colors ';
+            if (i < active)      el.className += 'text-green-600 bg-green-50';
+            else if (i === active) el.className += 'text-white bg-blue-600';
+            else                   el.className += 'text-slate-400';
+        }
+        document.getElementById('iw-steps').classList.remove('hidden');
+    }
+
+    function _iwSetBody(html)   { document.getElementById('iw-body').innerHTML   = html; }
+    function _iwSetFooter(html) { document.getElementById('iw-footer').innerHTML = html; }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 1 — File Selection
+    // ─────────────────────────────────────────────────────────────────────────
+    function _iwRenderStep1() {
+        _iwMarkStep(1);
+        document.getElementById('iw-close-btn').style.display = '';
+
+        _iwSetBody(`
+            <div class="space-y-5">
+                <div class="text-sm text-slate-600">
+                    Select one or more <strong>Excel workbooks (.xlsx)</strong> or CSV files.
+                    Multi-sheet workbooks are fully supported — all sheets are parsed automatically.
+                </div>
+
+                <!-- Drop zone -->
+                <label id="iw-dropzone"
+                       for="iw-file-input"
+                       class="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-blue-300 rounded-xl p-10 cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors text-center">
+                    <span class="text-4xl" aria-hidden="true">📂</span>
+                    <span class="text-sm font-semibold text-blue-700">Drag &amp; drop files here, or click to browse</span>
+                    <span class="text-xs text-blue-500">Accepts .xlsx · .xls · .csv · Multiple files OK</span>
+                    <input id="iw-file-input" type="file" accept=".csv,.xlsx,.xls" multiple class="sr-only"
+                           onchange="globalThis._iwFilesChosen(this.files)">
+                </label>
+
+                <div id="iw-file-list" class="space-y-1"></div>
+
+                <!-- Resume banner (shown only if a prior checkpoint exists) -->
+                <div id="iw-resume-banner" class="hidden border border-amber-300 bg-amber-50 rounded-lg p-3 text-sm">
+                    <div class="font-semibold text-amber-800 mb-1">⏸ Interrupted import detected</div>
+                    <div class="text-amber-700 text-xs mb-2">A previous import was paused or interrupted. You can resume it from where it left off.</div>
+                    <button onclick="globalThis._iwResumeCheckpoint()" class="px-3 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700">
+                        Resume Previous Import
+                    </button>
+                    <button onclick="globalThis._iwDismissResume()" class="ml-2 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-semibold rounded-lg hover:bg-amber-200">
+                        Dismiss
+                    </button>
+                </div>
+            </div>
+        `);
+
+        _iwSetFooter(`
+            <div class="text-xs text-slate-400">Import does not delete existing records — only adds or updates.</div>
+            <button onclick="globalThis.closeImportWizard()" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200">Cancel</button>
+        `);
+
+        // Wire up drag-and-drop
+        const dz = document.getElementById('iw-dropzone');
+        if (dz) {
+            dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('bg-blue-100'); });
+            dz.addEventListener('dragleave', ()=> { dz.classList.remove('bg-blue-100'); });
+            dz.addEventListener('drop',      e => {
+                e.preventDefault();
+                dz.classList.remove('bg-blue-100');
+                globalThis._iwFilesChosen(e.dataTransfer.files);
+            });
+        }
+
+        // Check for resume checkpoint
+        if (typeof ImportCheckpoint !== 'undefined') {
+            const pending = ImportCheckpoint.findPending();
+            if (pending) document.getElementById('iw-resume-banner').classList.remove('hidden');
+        }
+    }
+
+    globalThis._iwFilesChosen = function(files) {
+        if (!files || files.length === 0) return;
+        _iwFiles = files;
+        const list = document.getElementById('iw-file-list');
+        if (list) {
+            list.innerHTML = Array.from(files).map(f => {
+                const kb = (f.size / 1024).toFixed(0);
+                const warn = f.size > 10 * 1024 * 1024
+                    ? '<span class="text-amber-600 ml-1">⚠ Large file — may take a moment to parse</span>' : '';
+                return `<div class="flex items-center gap-2 text-xs text-slate-700 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                    <span class="text-base">📄</span>
+                    <span class="font-medium flex-1 truncate">${f.name}</span>
+                    <span class="text-slate-400">${kb} KB</span>${warn}
+                </div>`;
+            }).join('');
+        }
+        _iwSetFooter(`
+            <div class="text-xs text-slate-400">${files.length} file(s) selected</div>
+            <div class="flex gap-2">
+                <button onclick="globalThis.closeImportWizard()" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200">Cancel</button>
+                <button onclick="globalThis._iwAnalyse()" class="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">
+                    🔍 Analyse Files →
+                </button>
+            </div>
+        `);
+    };
+
+    globalThis._iwDismissResume = function() {
+        if (typeof ImportCheckpoint !== 'undefined') {
+            const cp = new ImportCheckpoint('__clear__');
+            cp.clear();
+        }
+        const b = document.getElementById('iw-resume-banner');
+        if (b) b.classList.add('hidden');
+    };
+
+    globalThis._iwResumeCheckpoint = function() {
+        // Step directly to execute with resume flag
+        _iwRenderStep4(true);
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 2 — Parse & Preview
+    // ─────────────────────────────────────────────────────────────────────────
+    globalThis._iwAnalyse = async function () {
+        _iwMarkStep(2);
+
+        _iwSetBody(`
+            <div class="flex flex-col items-center justify-center gap-4 py-16 text-center">
+                <div class="text-4xl animate-pulse">🔍</div>
+                <div class="text-sm font-semibold text-slate-700">Parsing files…</div>
+                <div id="iw-parse-status" class="text-xs text-slate-500">Reading workbooks and mapping columns</div>
+                <div class="w-64 h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div id="iw-parse-bar" class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width:0%"></div>
+                </div>
+            </div>
+        `);
+        _iwSetFooter('');
+
+        // Animate bar while parsing
+        let pct = 0;
+        const barTick = setInterval(() => {
+            pct = Math.min(pct + 8, 85);
+            const b = document.getElementById('iw-parse-bar');
+            if (b) b.style.width = pct + '%';
+        }, 300);
+
+        try {
+            // Create the engine singleton
+            window.importEngine = new ImportEngine({
+                savePatient: window.m365SavePatient || null,
+                saveOnCall:  window.m365SaveOnCallShift || null,
+                buildKey:    typeof buildImportIdentityKey === 'function' ? buildImportIdentityKey : null,
+                existingPatients: typeof patients !== 'undefined' ? patients : []
+            });
+
+            _iwPreview = await window.importEngine.parse(_iwFiles);
+
+            clearInterval(barTick);
+            const b = document.getElementById('iw-parse-bar');
+            if (b) b.style.width = '100%';
+
+            await new Promise(r => setTimeout(r, 300));
+            _iwRenderStep2Preview();
+        } catch (err) {
+            clearInterval(barTick);
+            _iwSetBody(`
+                <div class="flex flex-col items-center gap-4 py-12 text-center">
+                    <div class="text-4xl">❌</div>
+                    <div class="text-sm font-semibold text-red-700">Parse Failed</div>
+                    <div class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 max-w-md">${err.message}</div>
+                </div>
+            `);
+            _iwSetFooter(`<button onclick="globalThis._iwRenderStep1()" class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg">← Back</button>`);
+        }
+    };
+
+    globalThis._iwRenderStep1 = _iwRenderStep1;
+
+    function _iwRenderStep2Preview() {
+        _iwMarkStep(2);
+        const { totals, files, updates, missingFromFile, missingColumns, errors } = _iwPreview;
+
+        const filesHtml = files.map(f => `
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1">
+                <div class="font-semibold text-slate-800 truncate">${f.fileName}</div>
+                <div class="flex flex-wrap gap-3">
+                    ${f.counts.new       ? `<span class="text-green-700 font-semibold">➕ ${f.counts.new} new</span>` : ''}
+                    ${f.counts.updates   ? `<span class="text-amber-700 font-semibold">✏️ ${f.counts.updates} changed</span>` : ''}
+                    ${f.counts.unchanged ? `<span class="text-slate-400">✓ ${f.counts.unchanged} unchanged</span>` : ''}
+                    ${f.counts.intraDupe ? `<span class="text-purple-600">🔄 ${f.counts.intraDupe} within-file dupes</span>` : ''}
+                    ${f.counts.schedules ? `<span class="text-blue-600">📅 ${f.counts.schedules} schedules</span>` : ''}
+                    ${(!f.counts.new && !f.counts.updates && !f.counts.unchanged) ? '<span class="text-slate-400">No parseable patient rows</span>' : ''}
+                </div>
+            </div>
+        `).join('');
+
+        const updatesHtml = updates.length ? `
+            <details class="border border-amber-200 bg-amber-50 rounded-lg overflow-hidden">
+                <summary class="px-3 py-2 text-xs font-bold text-amber-800 cursor-pointer select-none">
+                    ✏️ ${updates.length} record(s) with field-level changes — click to review
+                </summary>
+                <div class="max-h-48 overflow-y-auto px-3 pb-3 space-y-2">
+                    ${updates.slice(0, 30).map(u => `
+                        <div class="text-xs border-l-2 border-amber-400 pl-2 py-0.5">
+                            <div class="font-semibold">${u.patient.name || u.existing.name || 'Unknown'}
+                                <span class="font-normal text-slate-500">· MRN:${u.patient.mrn} · ${u.patient.date}</span></div>
+                            ${u.changedFields.slice(0, 4).map(c => `
+                                <div class="text-slate-600"><span class="font-medium">${c.label}:</span>
+                                    <span class="line-through text-red-500 ml-1">${String(c.from).slice(0,40)}</span>
+                                    <span class="text-slate-400 mx-0.5">→</span>
+                                    <span class="text-green-700">${String(c.to).slice(0,40)}</span>
+                                </div>`).join('')}
+                            ${u.changedFields.length > 4 ? `<div class="text-slate-400 italic">+${u.changedFields.length - 4} more</div>` : ''}
+                        </div>`).join('')}
+                    ${updates.length > 30 ? `<div class="text-xs text-slate-500">…and ${updates.length - 30} more</div>` : ''}
+                </div>
+            </details>
+        ` : '';
+
+        const missingHtml = missingFromFile.length ? `
+            <div class="border border-red-200 bg-red-50 rounded-lg p-3">
+                <div class="text-xs font-bold text-red-800 mb-1">⚠ ${missingFromFile.length} record(s) in system not in this file</div>
+                <div class="text-xs text-red-700">These will <strong>NOT</strong> be deleted — confirm they are discharged or transferred.</div>
+            </div>
+        ` : '';
+
+        const errHtml = errors.length ? `
+            <div class="border border-red-300 bg-red-50 rounded-lg p-3">
+                <div class="text-xs font-bold text-red-900 mb-1">❌ ${errors.length} sheet(s) could not be parsed</div>
+                ${errors.slice(0,5).map(e => `<div class="text-xs text-red-800">· ${e}</div>`).join('')}
+            </div>
+        ` : '';
+
+        _iwSetBody(`
+            <div class="space-y-4">
+                <!-- Summary card -->
+                <div class="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
+                    <div class="text-sm font-bold text-blue-900 mb-2">Import Summary</div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                        <div class="bg-white rounded-lg p-2 border border-blue-100">
+                            <div class="text-2xl font-bold text-green-600">${totals.new}</div>
+                            <div class="text-xs text-slate-500">New records</div>
+                        </div>
+                        <div class="bg-white rounded-lg p-2 border border-blue-100">
+                            <div class="text-2xl font-bold text-amber-600">${totals.updates}</div>
+                            <div class="text-xs text-slate-500">Updated</div>
+                        </div>
+                        <div class="bg-white rounded-lg p-2 border border-blue-100">
+                            <div class="text-2xl font-bold text-slate-400">${totals.unchanged}</div>
+                            <div class="text-xs text-slate-500">Unchanged</div>
+                        </div>
+                        <div class="bg-white rounded-lg p-2 border border-blue-100">
+                            <div class="text-2xl font-bold text-blue-600">${totals.schedules || 0}</div>
+                            <div class="text-xs text-slate-500">Schedules</div>
+                        </div>
+                    </div>
+                </div>
+
+                ${missingHtml}
+                ${updatesHtml}
+                ${errHtml}
+
+                <!-- Per-file breakdown -->
+                <div>
+                    <div class="text-xs font-semibold text-slate-500 mb-2">Per-file breakdown</div>
+                    <div class="space-y-2">${filesHtml}</div>
+                </div>
+            </div>
+        `);
+
+        const hasRecords = (totals.new + totals.updates) > 0;
+        _iwSetFooter(`
+            <button onclick="globalThis._iwRenderStep1()" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200">← Back</button>
+            <div class="flex gap-2">
+                <button onclick="globalThis.closeImportWizard()" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200">Cancel</button>
+                ${hasRecords
+                    ? `<button onclick="globalThis._iwRenderStep3()" class="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">Configure →</button>`
+                    : `<div class="text-xs text-slate-500 self-center">No new or changed records — nothing to import.</div>`}
+            </div>
+        `);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 3 — Configure
+    // ─────────────────────────────────────────────────────────────────────────
+    globalThis._iwRenderStep3 = function () {
+        _iwMarkStep(3);
+        const { totals } = _iwPreview;
+        const total = totals.new + totals.updates;
+        // Estimate: ~1.5 s per record at 4 concurrent (accounts for token overhead)
+        const estSecs = Math.ceil(total * 1.5 / 4);
+        const estStr  = estSecs < 60 ? `~${estSecs}s` : `~${Math.ceil(estSecs/60)}m`;
+
+        _iwSetBody(`
+            <div class="space-y-5">
+                <!-- Action choice -->
+                <fieldset>
+                    <legend class="text-sm font-bold text-slate-800 mb-3">What to import</legend>
+                    <div class="space-y-2">
+                        <label class="flex items-start gap-3 border rounded-lg p-3 cursor-pointer hover:bg-slate-50 transition-colors
+                                      ${_iwAction==='replace'?'border-blue-500 bg-blue-50':'border-slate-200'}">
+                            <input type="radio" name="iw-action" value="replace" class="mt-0.5"
+                                   ${_iwAction==='replace'?'checked':''} onchange="globalThis._iwSetAction('replace')">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-800">Import All — <span class="text-green-700">+${totals.new} new</span> + <span class="text-amber-700">${totals.updates} update(s)</span></div>
+                                <div class="text-xs text-slate-500 mt-0.5">Adds new records and merges changes into existing ones. Blank fields in the file do not overwrite existing data.</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 border rounded-lg p-3 cursor-pointer hover:bg-slate-50 transition-colors
+                                      ${_iwAction==='newonly'?'border-green-500 bg-green-50':'border-slate-200'}">
+                            <input type="radio" name="iw-action" value="newonly" class="mt-0.5"
+                                   ${_iwAction==='newonly'?'checked':''} onchange="globalThis._iwSetAction('newonly')">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-800">New Records Only — <span class="text-green-700">+${totals.new} add(s)</span></div>
+                                <div class="text-xs text-slate-500 mt-0.5">Adds only new records. Existing records are left untouched even if the file contains changes.</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 border rounded-lg p-3 cursor-pointer hover:bg-slate-50 transition-colors
+                                      ${_iwAction==='updateonly'?'border-amber-500 bg-amber-50':'border-slate-200'}">
+                            <input type="radio" name="iw-action" value="updateonly" class="mt-0.5"
+                                   ${_iwAction==='updateonly'?'checked':''} onchange="globalThis._iwSetAction('updateonly')">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-800">Apply Changes Only — <span class="text-amber-700">${totals.updates} update(s)</span></div>
+                                <div class="text-xs text-slate-500 mt-0.5">Updates existing records only. No new records are created.</div>
+                            </div>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <!-- Estimate -->
+                <div class="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm">
+                    <span class="text-xl">⏱</span>
+                    <div>
+                        <span class="font-semibold text-slate-800">Estimated time: ${estStr}</span>
+                        <span class="text-slate-500 ml-1">for ${total} record(s)</span>
+                        <div class="text-xs text-slate-400 mt-0.5">Import runs in the background. Progress is shown live and auto-saves to recover from interruptions.</div>
+                    </div>
+                </div>
+            </div>
+        `);
+        _iwSetFooter(`
+            <button onclick="globalThis._iwAnalyse()" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200">← Back</button>
+            <div class="flex gap-2">
+                <button onclick="globalThis.closeImportWizard()" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200">Cancel</button>
+                <button onclick="globalThis._iwRenderStep4(false)" class="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">
+                    ▶ Start Import
+                </button>
+            </div>
+        `);
+    };
+
+    globalThis._iwSetAction = function (val) {
+        _iwAction = val;
+        globalThis._iwRenderStep3();
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 4 — Execute with live progress
+    // ─────────────────────────────────────────────────────────────────────────
+    globalThis._iwRenderStep4 = async function (resumeMode) {
+        _iwMarkStep(4);
+        // Prevent closing while running
+        document.getElementById('iw-close-btn').style.display = 'none';
+
+        _iwSetBody(`
+            <div class="space-y-4">
+                <!-- Top stats bar -->
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div class="bg-green-50 border border-green-100 rounded-lg p-2">
+                        <div id="iw-cnt-success" class="text-2xl font-bold text-green-600">0</div>
+                        <div class="text-xs text-slate-500">Saved</div>
+                    </div>
+                    <div class="bg-red-50 border border-red-100 rounded-lg p-2">
+                        <div id="iw-cnt-fail" class="text-2xl font-bold text-red-500">0</div>
+                        <div class="text-xs text-slate-500">Failed</div>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-2">
+                        <div id="iw-cnt-skip" class="text-2xl font-bold text-slate-400">0</div>
+                        <div class="text-xs text-slate-500">Skipped</div>
+                    </div>
+                </div>
+
+                <!-- Progress bar -->
+                <div>
+                    <div class="flex justify-between text-xs text-slate-500 mb-1">
+                        <span id="iw-pct-label">0 / 0 records</span>
+                        <span id="iw-eta-label"></span>
+                    </div>
+                    <div class="w-full h-4 bg-slate-200 rounded-full overflow-hidden">
+                        <div id="iw-progress-bar"
+                             class="h-full rounded-full transition-all duration-300 bg-blue-500"
+                             style="width:0%"></div>
+                    </div>
+                </div>
+
+                <!-- Live log -->
+                <div id="iw-log"
+                     class="h-64 overflow-y-auto bg-slate-900 text-slate-100 rounded-xl p-3 font-mono text-xs space-y-0.5 scroll-smooth">
+                    <div class="text-slate-400">Starting import…</div>
+                </div>
+            </div>
+        `);
+
+        _iwSetFooter(`
+            <div id="iw-status-text" class="text-xs text-slate-500">Initialising…</div>
+            <div class="flex gap-2">
+                <button id="iw-pause-btn" onclick="globalThis._iwTogglePause()"
+                        class="px-4 py-2 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600">
+                    ⏸ Pause
+                </button>
+                <button onclick="globalThis._iwCancelImport()"
+                        class="px-4 py-2 bg-red-100 text-red-700 text-sm font-semibold rounded-lg hover:bg-red-200">
+                    ✕ Cancel
+                </button>
+            </div>
+        `);
+
+        _startMs = Date.now();
+
+        // ── Wire engine events ──
+        const eng = window.importEngine;
+        if (!eng) { _iwLog('❌ ImportEngine not initialised'); return; }
+
+        eng.addEventListener('import-start', e => {
+            _iwLog(`📥 Starting: ${e.detail.total} records to import (action: ${e.detail.action})`);
+            _iwUpdateProgress(0, e.detail.total, 0, 0);
+        });
+
+        eng.addEventListener('record-complete', e => {
+            const { stats, record } = e.detail;
+            _iwUpdateProgress(stats.done, stats.total, stats.succeeded, stats.failed);
+            const tag = record.name
+                ? `${record.name}${record.mrn ? ' ('+record.mrn+')' : ''}${record.date ? ' · '+record.date : ''}`
+                : (record.mrn || 'unknown');
+            _iwLog(`<span class="text-green-400">✓</span> ${_iwEsc(tag)}`);
+        });
+
+        eng.addEventListener('record-error', e => {
+            const { stats, record, error } = e.detail;
+            _iwUpdateProgress(stats.done, stats.total, stats.succeeded, stats.failed);
+            const tag = record.name || record.mrn || 'unknown';
+            _iwLog(`<span class="text-red-400">✗</span> ${_iwEsc(tag)} — ${_iwEsc(error)}`);
+        });
+
+        eng.addEventListener('paused', () => {
+            document.getElementById('iw-pause-btn').textContent = '▶ Resume';
+            _iwStatusText('⏸ Paused — click Resume to continue');
+        });
+
+        eng.addEventListener('resumed', () => {
+            document.getElementById('iw-pause-btn').textContent = '⏸ Pause';
+            _iwStatusText('Importing…');
+        });
+
+        eng.addEventListener('circuit-open', e => {
+            _iwLog(`<span class="text-red-300">⚡ Circuit breaker: ${_iwEsc(e.detail.message)}</span>`);
+            _iwStatusText('⛔ Too many failures — import paused. Check connection then Resume.');
+        });
+
+        eng.addEventListener('import-complete', () => {
+            _iwRenderStep5();
+        });
+
+        // ── Start ──
+        try {
+            _iwStatusText('Importing…');
+            await eng.startImport(_iwAction, { resumeCheckpoint: resumeMode });
+        } catch (err) {
+            _iwLog(`<span class="text-red-300">❌ Fatal: ${_iwEsc(err.message)}</span>`);
+            _iwStatusText('Import failed — see log above');
+            document.getElementById('iw-close-btn').style.display = '';
+        }
+    };
+
+    function _iwUpdateProgress(done, total, succeeded, failed) {
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        const bar  = document.getElementById('iw-progress-bar');
+        if (bar) {
+            bar.style.width = pct + '%';
+            bar.className = 'h-full rounded-full transition-all duration-300 ' +
+                (failed > 0 && done === total ? 'bg-amber-500' : done === total ? 'bg-green-500' : 'bg-blue-500');
+        }
+        const pl = document.getElementById('iw-pct-label');
+        if (pl) pl.textContent = `${done} / ${total} records (${pct}%)`;
+
+        // ETA
+        if (_startMs && done > 0 && done < total) {
+            const elapsed = (Date.now() - _startMs) / 1000;
+            const rate    = done / elapsed;
+            const rem     = Math.round((total - done) / rate);
+            const etaEl   = document.getElementById('iw-eta-label');
+            if (etaEl) etaEl.textContent = rem < 60 ? `ETA ~${rem}s` : `ETA ~${Math.ceil(rem/60)}m`;
+        } else {
+            const etaEl = document.getElementById('iw-eta-label');
+            if (etaEl) etaEl.textContent = done === total ? '✓ Done' : '';
+        }
+
+        const cs = document.getElementById('iw-cnt-success');
+        const cf = document.getElementById('iw-cnt-fail');
+        if (cs) cs.textContent = succeeded;
+        if (cf) cf.textContent = failed;
+    }
+
+    function _iwLog(html) {
+        const log = document.getElementById('iw-log');
+        if (!log) return;
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function _iwStatusText(t) {
+        const el = document.getElementById('iw-status-text');
+        if (el) el.textContent = t;
+    }
+
+    function _iwEsc(s) {
+        return String(s || '')
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    globalThis._iwTogglePause = function () {
+        const eng = window.importEngine;
+        if (!eng) return;
+        if (eng.state === 'importing') { eng.pause(); }
+        else if (eng.state === 'paused') { eng.resume(); }
+    };
+
+    globalThis._iwCancelImport = function () {
+        if (!confirm('Cancel the import? Progress so far is saved as a checkpoint and can be resumed.')) return;
+        const eng = window.importEngine;
+        if (eng) eng.cancel();
+        document.getElementById('iw-close-btn').style.display = '';
+        _iwSetBody(`<div class="py-16 text-center text-slate-500 text-sm">Import cancelled.</div>`);
+        _iwSetFooter(`<button onclick="globalThis._iwRenderStep1()" class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg">← Start Over</button>`);
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 5 — Results
+    // ─────────────────────────────────────────────────────────────────────────
+    function _iwRenderStep5() {
+        _iwMarkStep(5);
+        document.getElementById('iw-close-btn').style.display = '';
+
+        const eng    = window.importEngine;
+        const stats  = eng ? eng.stats : { succeeded: 0, failed: 0, skipped: 0 };
+        const failed = eng ? eng._failedRecords : [];
+
+        const allOk = stats.failed === 0;
+        const icon  = allOk ? '🎉' : '⚠️';
+        const title = allOk ? 'Import Complete!' : 'Import Complete with Errors';
+        const colour= allOk ? 'green' : 'amber';
+
+        _iwSetBody(`
+            <div class="space-y-5">
+                <div class="flex flex-col items-center gap-3 py-6 text-center">
+                    <div class="text-5xl">${icon}</div>
+                    <div class="text-xl font-bold text-slate-900">${title}</div>
+                    <div class="flex gap-6 text-sm mt-2">
+                        <div class="text-center"><div class="text-2xl font-bold text-green-600">${stats.succeeded}</div><div class="text-xs text-slate-500">Saved</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-red-500">${stats.failed}</div><div class="text-xs text-slate-500">Failed</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-slate-400">${stats.skipped}</div><div class="text-xs text-slate-500">Skipped</div></div>
+                    </div>
+                </div>
+
+                ${failed.length > 0 ? `
+                <div class="border border-red-200 bg-red-50 rounded-lg p-3">
+                    <div class="text-xs font-bold text-red-900 mb-2">❌ Failed Records (${failed.length})</div>
+                    <div class="max-h-40 overflow-y-auto space-y-1">
+                        ${failed.slice(0,20).map(({record: r, error}) => `
+                            <div class="text-xs text-red-800">
+                                · <span class="font-medium">${_iwEsc(r.name||r.mrn||'unknown')}</span>
+                                ${r.date?'· '+_iwEsc(r.date):''} — ${_iwEsc(error)}
+                            </div>`).join('')}
+                        ${failed.length > 20 ? `<div class="text-xs text-red-500">…and ${failed.length-20} more. Download report below.</div>` : ''}
+                    </div>
+                    <button onclick="globalThis._iwDownloadErrors()" class="mt-2 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700">
+                        ⬇ Download Error Report (CSV)
+                    </button>
+                </div>` : ''}
+
+                <div class="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-xs text-green-800">
+                    ✓ Records are now visible in the patient list. The import log has been recorded in the audit trail.
+                </div>
+            </div>
+        `);
+
+        _iwSetFooter(`
+            <div class="text-xs text-slate-400">Import session complete</div>
+            <div class="flex gap-2">
+                ${failed.length > 0
+                    ? `<button onclick="globalThis._iwRetryFailed()" class="px-4 py-2 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600">🔄 Retry Failed (${failed.length})</button>`
+                    : ''}
+                <button onclick="globalThis._iwFinish()" class="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700">
+                    ✓ Close &amp; Refresh
+                </button>
+            </div>
+        `);
+
+        // Sync in-memory arrays now that import is done
+        _iwSyncMemory();
+    }
+
+    globalThis._iwDownloadErrors = function () {
+        const eng = window.importEngine;
+        if (!eng) return;
+        const blob = eng.buildErrorReport();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `import-errors-${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    };
+
+    globalThis._iwRetryFailed = async function () {
+        const eng = window.importEngine;
+        if (!eng || eng._failedRecords.length === 0) return;
+
+        // Rebuild a synthetic preview with only the failed records
+        const failedPatients = eng._failedRecords.map(f => f.record);
+        _iwPreview = {
+            allPatients: failedPatients,
+            allOnCall:   [],
+            totals:      { new: failedPatients.length, updates: 0, unchanged: 0, schedules: 0 },
+            files:       [{ fileName: 'retry', counts: { new: failedPatients.length } }],
+            updates:     [],
+            missingFromFile: [],
+            missingColumns:  [],
+            errors:          []
+        };
+        window.importEngine = new ImportEngine({
+            savePatient:      window.m365SavePatient || null,
+            saveOnCall:       window.m365SaveOnCallShift || null,
+            buildKey:         typeof buildImportIdentityKey === 'function' ? buildImportIdentityKey : null,
+            existingPatients: typeof patients !== 'undefined' ? patients : []
+        });
+        window.importEngine._preview = _iwPreview;
+        _iwAction = 'replace';
+        await globalThis._iwRenderStep4(false);
+    };
+
+    globalThis._iwFinish = function () {
+        globalThis.closeImportWizard();
+        // Refresh UI with updated in-memory patients
+        if (typeof renderUI       === 'function') renderUI();
+        if (typeof updateStats    === 'function') updateStats();
+    };
+
+    function _iwSyncMemory() {
+        // The engine already mutated the existingPatients reference (same array)
+        // so renderUI() picks up changes automatically on _iwFinish.
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // KEYBOARD — Escape closes (unless importing)
+    // ─────────────────────────────────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape') return;
+        const wiz = document.getElementById('import-wizard');
+        if (!wiz || wiz.classList.contains('hidden')) return;
+        const eng = window.importEngine;
+        if (eng && eng.state === 'importing') return;   // don't close mid-import
+        globalThis.closeImportWizard();
+    });
+
+    })(); // end IIFE
     </script>
 </body>
 </html>
