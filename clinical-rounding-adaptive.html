@@ -6467,11 +6467,21 @@
                 const visits = patients
                     .filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey)
                     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-                const rows = visits.map(v => {
+                const rows = visits.map((v, i) => {
                     const isCurrent = v.id === p.id;
                     const st = getSafeConfiguredStatus(getPatientStatus(v));
                     const stObj = STATUS_COLORS[st] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || {};
-                    return `<div class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[10px] text-slate-500 flex-1 truncate">${esc(v.hospital || '')}</span>\n                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : '<span class="text-[9px] text-blue-500 opacity-0 group-hover/hrow:opacity-100">open ↗</span>'}\n                    </div>`;
+                    const prevVisit = visits[i + 1];
+                    const prevSt = prevVisit ? getSafeConfiguredStatus(getPatientStatus(prevVisit)) : null;
+                    let delta = '';
+                    if (prevSt === null) {
+                        delta = '<span class="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-400">initial visit</span>';
+                    } else if (prevSt === st) {
+                        delta = '<span class="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-400">= unchanged</span>';
+                    } else {
+                        delta = `<span class="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">${esc(prevSt)} → ${esc(st)}</span>`;
+                    }
+                    return `<div class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[10px] text-slate-500 truncate flex-1 min-w-0">${esc(v.hospital || '')}</span>\n                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${delta}\n                        ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : ''}\n                    </div>`;
                 }).join('');
                 return `<div class="mt-2 border-t border-blue-100 pt-2">
                     <div class="text-[10px] font-bold text-slate-500 mb-1 px-1">📋 Visit history (${visits.length} total)</div>
@@ -6592,12 +6602,21 @@
                 const visits = patients
                     .filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey)
                     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-                const rows = visits.map(v => {
+                const rows = visits.map((v, i) => {
                     const isCurrent = v.id === patient.id;
                     const st = getSafeConfiguredStatus(getPatientStatus(v));
                     const stObj = STATUS_COLORS[st] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || {};
-                    return `<div class="flex items-center gap-2 px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 ml-auto">current</span>' : '<span class="text-[10px] text-blue-500 ml-auto">tap to open ↗</span>'}\n                    </div>`;
-                }).join('');
+                    const prevVisit = visits[i + 1];
+                    const prevSt = prevVisit ? getSafeConfiguredStatus(getPatientStatus(prevVisit)) : null;
+                    let delta = '';
+                    if (prevSt === null) {
+                        delta = '<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 ml-auto flex-shrink-0">initial visit</span>';
+                    } else if (prevSt === st) {
+                        delta = '<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 ml-auto flex-shrink-0">= status unchanged</span>';
+                    } else {
+                        delta = `<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold ml-auto flex-shrink-0">${esc(prevSt)} → ${esc(st)}</span>`;
+                    }
+                    return `<div class="flex items-center gap-2 px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${delta}\n                        ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                    </div>`;\n                }).join('');
                 return `<div class="border-t-2 border-blue-100 bg-slate-50">
                     <div class="text-[10px] font-bold text-slate-500 px-3 pt-2 pb-1">📋 Visit history (${visits.length} total)</div>
                     <div class="max-h-48 overflow-y-auto">${rows}</div>
@@ -9358,16 +9377,27 @@ const findHeaderIndex = (rows, sheetLog) => {
             const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const colCount = (visibleCols.includes('room') ? 1 : 0) + (visibleCols.includes('hospital') ? 1 : 0) +
                              (visibleCols.includes('findings') ? 1 : 0) + 4;
-            const rows = visits.map(v => {
+            const rows = visits.map((v, i) => {
                 const isCurrentVisit = v.id === currentPatient.id;
                 const st = getSafeConfiguredStatus(getPatientStatus(v));
                 const stObj = STATUS_COLORS[st] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || {};
                 const isArchived = v.archived === true || v.archived === 'true';
+                const prevVisit = visits[i + 1]; // visits are newest-first, so [i+1] is chronologically older
+                const prevSt = prevVisit ? getSafeConfiguredStatus(getPatientStatus(prevVisit)) : null;
+                let deltaPill = '';
+                if (prevSt === null) {
+                    deltaPill = '<span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 flex-shrink-0 font-medium">initial visit</span>';
+                } else if (prevSt === st) {
+                    deltaPill = '<span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 flex-shrink-0">= status unchanged</span>';
+                } else {
+                    deltaPill = `<span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0 font-semibold" title="Status changed from previous visit">${esc(prevSt)} → ${esc(st)}</span>`;
+                }
                 return `<div class="flex items-center gap-2 py-1.5 px-2 rounded-lg ${isCurrentVisit ? 'bg-blue-50 border border-blue-200' : 'hover:bg-white'} cursor-pointer group" onclick="globalThis.openModal('${esc(v.id)}')">
                     <span class="text-[10px] text-slate-400 w-20 flex-shrink-0 font-mono">${esc(v.date)}</span>
                     <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>
                     <span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">${esc(v.hospital || '')}</span>
                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0 whitespace-nowrap">${esc(st)}</span>
+                    ${deltaPill}
                     ${v.supervisingMd ? `<span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">👨‍⚕️&nbsp;${esc(v.supervisingMd)}</span>` : ''}
                     <span class="text-[10px] text-slate-600 flex-1 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '…' : ''}</span>
                     <span class="text-[9px] font-bold opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity flex-shrink-0">open ↗</span>
