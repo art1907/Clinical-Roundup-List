@@ -4500,6 +4500,7 @@
 
         // Global state for sorting and filtering
         let currentSort = { column: 'date', direction: 'asc' };
+        let expandedPatientMrns = new Set(); // tracks which MRN groups have inline history open
         let activeFilters = {};
         let activeProcedureFilter = null;
         let currentFilterPreset = null;
@@ -4696,12 +4697,17 @@
                 if (direction === 'asc') {
                     if (aVal < bVal) return -1;
                     if (aVal > bVal) return 1;
-                    return 0;
                 } else {
                     if (aVal > bVal) return -1;
                     if (aVal < bVal) return 1;
-                    return 0;
                 }
+                // Secondary sort: within same patient MRN group, show most recent visit first
+                const aMrn = (a.mrn || a.name || '').toLowerCase();
+                const bMrn = (b.mrn || b.name || '').toLowerCase();
+                if (aMrn === bMrn) {
+                    return (b.date || '').localeCompare(a.date || '');
+                }
+                return 0;
             });
             
             return list;
@@ -5387,6 +5393,114 @@
                     `${hosp}: ${perf.totalPatients} patients | ${perf.totalProcedures} procedures | ${perf.completedProcedures} completed (${perf.completionRate}%) | ${perf.inProgressProcedures} in-progress`
                 );
                 renderAnalyticsDetails('Hospital Performance Summary', perfRows);
+                return;
+            }
+
+            // ─── PRACTITIONER DETAIL REPORT ─────────────────────────────────────────────
+            if (preset === 'provider-detail') {
+                const mdMap = {};
+                data.activePatients.forEach(p => {
+                    const md = (p.supervisingMd || 'Unassigned').trim();
+                    if (!mdMap[md]) mdMap[md] = { patients: [], stat: 0, procedures: 0, pending: 0, billing: 0 };
+                    mdMap[md].patients.push(p);
+                    if (p.stat === true || p.stat === 'true') mdMap[md].stat++;
+                    if (isSurgicalCase(p)) mdMap[md].procedures++;
+                    if (p.pending && String(p.pending).trim()) mdMap[md].pending++;
+                    if (p.cptPrimary || p.icdPrimary) mdMap[md].billing++;
+                });
+                const mdSorted = Object.entries(mdMap).sort((a, b) => b[1].patients.length - a[1].patients.length);
+                renderAnalyticsCards([
+                    { title: 'Active Providers', value: mdSorted.length, subtitle: 'In current cohort' },
+                    { title: 'Top Provider', value: mdSorted[0]?.[0] || '—', subtitle: `${mdSorted[0]?.[1].patients.length || 0} patients` },
+                    { title: 'Avg Caseload', value: mdSorted.length ? Math.round(data.activePatients.length / mdSorted.length) : 0, subtitle: 'Patients per MD' },
+                    { title: 'Unbilled Cases', value: data.activePatients.filter(p => !p.cptPrimary && !p.icdPrimary).length, subtitle: 'No CPT/ICD coded' }
+                ]);
+                const detailRows = mdSorted.map(([md, info]) => {
+                    const ptList = info.patients.slice(0, 5).map(p => `${p.name || 'Anon'} (${p.date}, Rm ${p.room || '—'}, ${getSafeConfiguredStatus(getPatientStatus(p))})`).join(' | ');
+                    const more = info.patients.length > 5 ? ` +${info.patients.length - 5} more` : '';
+                    return `${md}: ${info.patients.length} pts | ${info.stat} STAT | ${info.procedures} proc | ${info.pending} pending | ${info.billing} billed → ${ptList}${more}`;
+                });
+                renderAnalyticsDetails('Practitioner Detail Report', detailRows);
+                return;
+            }
+
+            // ─── BILLING COMPLETENESS AUDIT ──────────────────────────────────────────────
+            if (preset === 'billing-complete') {
+                const total = data.activePatients.length;
+                const withCpt = data.activePatients.filter(p => p.cptPrimary && String(p.cptPrimary).trim()).length;
+                const withIcd = data.activePatients.filter(p => p.icdPrimary && String(p.icdPrimary).trim()).length;
+                const withBoth = data.activePatients.filter(p => p.cptPrimary && p.icdPrimary).length;
+                const unbilled = data.activePatients.filter(p => !p.cptPrimary && !p.icdPrimary);
+                const pctComplete = total > 0 ? Math.round((withBoth / total) * 100) : 0;
+                renderAnalyticsCards([
+                    { title: 'Billing Complete', value: `${pctComplete}%`, subtitle: `${withBoth} of ${total} have CPT+ICD` },
+                    { title: 'Has CPT Code', value: withCpt, subtitle: `${total > 0 ? Math.round((withCpt/total)*100) : 0}% coded` },
+                    { title: 'Has ICD Code', value: withIcd, subtitle: `${total > 0 ? Math.round((withIcd/total)*100) : 0}% coded` },
+                    { title: 'Unbilled Records', value: unbilled.length, subtitle: 'Needs billing review' }
+                ]);
+                const unbilledRows = unbilled.map(p =>
+                    `${p.name || 'Anon'} | ${p.date} | MD: ${p.supervisingMd || '—'} | Rm ${p.room || '—'} | ${p.hospital || '—'} | Status: ${getSafeConfiguredStatus(getPatientStatus(p))}`
+                );
+                renderAnalyticsDetails('Unbilled / Incompletely Coded Records', unbilledRows.length ? unbilledRows : ['✓ All records have billing codes']);
+                return;
+            }
+
+            // ─── DAILY CENSUS SUMMARY ────────────────────────────────────────────────────
+            if (preset === 'admin-daily') {
+                const byDate = {};
+                data.activePatients.forEach(p => {
+                    const d = p.date || 'Unknown';
+                    if (!byDate[d]) byDate[d] = { count: 0, stat: 0, proc: 0, hospitals: new Set() };
+                    byDate[d].count++;
+                    if (p.stat === true || p.stat === 'true') byDate[d].stat++;
+                    if (isSurgicalCase(p)) byDate[d].proc++;
+                    if (p.hospital) byDate[d].hospitals.add(p.hospital);
+                });
+                const dates = Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])); // newest first
+                const totalDays = dates.length;
+                const avgCensus = totalDays > 0 ? Math.round(dates.reduce((s, [, v]) => s + v.count, 0) / totalDays) : 0;
+                const peakDay = dates.reduce((a, b) => b[1].count > a[1].count ? b : a, dates[0] || ['—', { count: 0 }]);
+                renderAnalyticsCards([
+                    { title: 'Days Tracked', value: totalDays, subtitle: 'Unique visit dates' },
+                    { title: 'Avg Daily Census', value: avgCensus, subtitle: 'Patients per day' },
+                    { title: 'Peak Day', value: peakDay[0], subtitle: `${peakDay[1].count} patients` },
+                    { title: 'Total Admissions', value: data.activePatients.length, subtitle: 'All active records' }
+                ]);
+                const censusRows = dates.slice(0, 30).map(([d, v]) =>
+                    `${d}: ${v.count} patients | ${v.stat} STAT | ${v.proc} procedures | Hospitals: ${[...v.hospitals].join(', ') || '—'}`
+                );
+                renderAnalyticsDetails('Daily Census Summary (newest first)', censusRows.length ? censusRows : ['No data']);
+                return;
+            }
+
+            // ─── ACCOUNTS & CPT BREAKDOWN ────────────────────────────────────────────────
+            if (preset === 'accounts-summary') {
+                const cptMap = {};
+                const icdMap = {};
+                let totalBilled = 0;
+                data.activePatients.forEach(p => {
+                    if (p.cptPrimary && String(p.cptPrimary).trim()) {
+                        const code = String(p.cptPrimary).trim().toUpperCase();
+                        cptMap[code] = (cptMap[code] || 0) + 1;
+                        totalBilled++;
+                    }
+                    if (p.icdPrimary && String(p.icdPrimary).trim()) {
+                        const code = String(p.icdPrimary).trim().toUpperCase();
+                        icdMap[code] = (icdMap[code] || 0) + 1;
+                    }
+                });
+                const topCpt = Object.entries(cptMap).sort((a, b) => b[1] - a[1]);
+                const topIcd = Object.entries(icdMap).sort((a, b) => b[1] - a[1]);
+                renderAnalyticsCards([
+                    { title: 'Total Billed', value: totalBilled, subtitle: 'Records with CPT code' },
+                    { title: 'Unique CPT Codes', value: topCpt.length, subtitle: 'Distinct procedure codes' },
+                    { title: 'Top CPT Code', value: topCpt[0]?.[0] || '—', subtitle: `Used ${topCpt[0]?.[1] || 0}×` },
+                    { title: 'Top ICD Code', value: topIcd[0]?.[0] || '—', subtitle: `Used ${topIcd[0]?.[1] || 0}×` }
+                ]);
+                const cptRows = topCpt.map(([code, cnt]) => `CPT ${code}: ${cnt} procedures`);
+                const icdRows = topIcd.map(([code, cnt]) => `ICD ${code}: ${cnt} diagnoses`);
+                const divider = cptRows.length && icdRows.length ? ['──── ICD Diagnoses ────'] : [];
+                renderAnalyticsDetails('CPT & ICD Code Frequency', [...cptRows, ...divider, ...icdRows].length ? [...cptRows, ...divider, ...icdRows] : ['No billing codes recorded']);
                 return;
             }
         }
@@ -9117,6 +9231,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const crossedOutClass = isCrossedOut ? 'cross-out-target' : '';
                 
                 const isStat = (p.stat === true || p.stat === 'true');
+                const mrnKey = String(p.mrn || p.id || '').toLowerCase();
+                const isExpanded = expandedPatientMrns.has(mrnKey);
+                const visitCount = patients.filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey).length;
                 const statClass = isStat
                     ? 'bg-red-600 text-white border-4 border-red-800 shadow-lg shadow-red-500/50 hover:bg-red-700'
                     : (needsDateReview ? 'bg-amber-50 border-b border-amber-200 hover:bg-amber-100' : 'bg-white border-b border-slate-100 hover:bg-slate-50');
@@ -9129,7 +9246,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     ? `<div class="mt-1 inline-flex items-center rounded border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">Review date fields</div>`
                     : '';
                 
-                return `
+                const mainRow = `
                 <tr class="transition-colors ${statClass} ${isCrossedOut ? 'crossed-out-row' : ''}" oncontextmenu="globalThis.openContextMenu(event, '${p.id}')">
                     <td class="p-3 align-top"><input type="checkbox" data-patient-checkbox value="${p.id}" onchange="updateBatchOpCount()" class="w-5 h-5 rounded cursor-pointer" ${selectedPatientIds.has(p.id)?'checked':''}></td>
                     ${visibleCols.includes('room') ? `<td class="p-3 align-top w-20"><div class="font-bold text-sm ${textPrimary} ${crossedOutClass}">${p.room}</div></td>` : ''}
@@ -9137,6 +9254,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <td class="p-3 align-top w-48">
                         <div class="text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}">${p.name || 'Anon'}</div>
                         <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
+                        ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${mrnKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         ${reviewBadge}
                     </td>
                     ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
@@ -9155,6 +9273,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                         </div>
                     </td>
                 </tr>`;
+                const historyRow = isExpanded ? buildInlinePatientHistoryRow(p, mrnKey, visibleCols) : '';
+                return mainRow + historyRow;
             };
 
             const reviewPatients = filtered.filter(p => hasDateReviewIssues(getPatientDateReviewMeta(p)));
@@ -9185,6 +9305,51 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
             }, 10);
         }
+
+        // ─── Patient Inline History Expansion ────────────────────────────────────────
+        function buildInlinePatientHistoryRow(currentPatient, mrnKey, visibleCols) {
+            const visits = patients
+                .filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey)
+                .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const colCount = (visibleCols.includes('room') ? 1 : 0) + (visibleCols.includes('hospital') ? 1 : 0) +
+                             (visibleCols.includes('findings') ? 1 : 0) + 4;
+            const rows = visits.map(v => {
+                const isCurrentVisit = v.id === currentPatient.id;
+                const st = getSafeConfiguredStatus(getPatientStatus(v));
+                const stObj = STATUS_COLORS[st] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || {};
+                const isArchived = v.archived === true || v.archived === 'true';
+                return `<div class="flex items-center gap-2 py-1.5 px-2 rounded-lg ${isCurrentVisit ? 'bg-blue-50 border border-blue-200' : 'hover:bg-white'} cursor-pointer group" onclick="globalThis.openModal('${esc(v.id)}')">
+                    <span class="text-[10px] text-slate-400 w-20 flex-shrink-0 font-mono">${esc(v.date)}</span>
+                    <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>
+                    <span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">${esc(v.hospital || '')}</span>
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0 whitespace-nowrap">${esc(st)}</span>
+                    ${v.supervisingMd ? `<span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">👨‍⚕️&nbsp;${esc(v.supervisingMd)}</span>` : ''}
+                    <span class="text-[10px] text-slate-600 flex-1 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '…' : ''}</span>
+                    <span class="text-[9px] font-bold opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity flex-shrink-0">open ↗</span>
+                    ${isCurrentVisit ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded flex-shrink-0">current</span>' : ''}
+                    ${isArchived ? '<span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1 rounded flex-shrink-0">archived</span>' : ''}
+                </div>`;
+            }).join('');
+            return `<tr class="bg-slate-50/80 border-b-2 border-blue-100 history-expansion-row">
+                <td colspan="${colCount}" class="px-6 pt-1 pb-3">
+                    <div class="text-xs font-bold text-slate-600 mb-2 flex items-center gap-2">
+                        <span>📋 All visits — <span class="text-slate-900">${esc(currentPatient.name || currentPatient.mrn || 'Patient')}</span></span>
+                        <span class="text-[10px] font-normal text-slate-400">MRN: ${esc(currentPatient.mrn || '—')} · ${visits.length} total · click any row to open</span>
+                    </div>
+                    <div class="space-y-0.5 max-h-52 overflow-y-auto pr-1">${rows}</div>
+                </td>
+            </tr>`;
+        }
+
+        globalThis.togglePatientHistory = (mrnKey) => {
+            if (expandedPatientMrns.has(mrnKey)) {
+                expandedPatientMrns.delete(mrnKey);
+            } else {
+                expandedPatientMrns.add(mrnKey);
+            }
+            renderUI();
+        };
 
         function renderOnCallSchedule() {
             const list = document.getElementById('oc-schedule-list');
@@ -9782,6 +9947,67 @@ const findHeaderIndex = (rows, sheetLog) => {
                         }
                     });
                 }
+
+                // ── DETECT NAME-BASED DUPLICATES (same name, different MRNs or multiple entries) ──
+                const nameGroups = {};
+                const normName = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                // Group all import patients by normalized name
+                preview.allPatients.forEach(p => {
+                    const key = normName(p.name);
+                    if (!key) return;
+                    if (!nameGroups[key]) nameGroups[key] = [];
+                    nameGroups[key].push({ mrn: p.mrn, date: p.date, room: p.room, hospital: p.hospital, source: 'file' });
+                });
+                // Also include existing patients with matching names
+                patients.forEach(ep => {
+                    const key = normName(ep.name);
+                    if (!key) return;
+                    if (nameGroups[key]) { // only flag if this name also appears in import
+                        const alreadyAdded = nameGroups[key].some(e => e.source === 'existing' && e.mrn === ep.mrn && e.date === ep.date);
+                        if (!alreadyAdded) {
+                            nameGroups[key].push({ mrn: ep.mrn, date: ep.date, room: ep.room, hospital: ep.hospital, source: 'existing' });
+                        }
+                    }
+                });
+                // Flag groups where entries have different MRNs (possible patient confusion) or ≥3 entries total
+                preview.nameDuplicates = [];
+                Object.entries(nameGroups).forEach(([name, entries]) => {
+                    const mrns = new Set(entries.map(e => String(e.mrn || '').toLowerCase()));
+                    const hasMrnMismatch = mrns.size > 1;
+                    const hasMany = entries.length >= 3;
+                    if (hasMrnMismatch || hasMany) {
+                        preview.nameDuplicates.push({ name, entries, hasMrnMismatch, hasMany });
+                    }
+                });
+
+                // ── ROOM ORDERING WARNINGS ──────────────────────────────────────────────────────
+                // For same MRN: if the file contains an older date entry with a different room than
+                // a newer entry already in the system, warn that the "latest" room may be wrong.
+                preview.roomOrderWarnings = [];
+                const fileByMrn = {};
+                preview.allPatients.forEach(p => {
+                    const mrn = String(p.mrn || '').toLowerCase();
+                    if (!mrn) return;
+                    if (!fileByMrn[mrn]) fileByMrn[mrn] = [];
+                    fileByMrn[mrn].push(p);
+                });
+                Object.entries(fileByMrn).forEach(([mrn, fileEntries]) => {
+                    const latestFileEntry = fileEntries.reduce((a, b) => (a.date || '') > (b.date || '') ? a : b);
+                    const systemEntries = patients.filter(ep => String(ep.mrn || '').toLowerCase() === mrn);
+                    if (!systemEntries.length) return;
+                    const latestSystem = systemEntries.reduce((a, b) => (a.date || '') > (b.date || '') ? a : b);
+                    // Warn if system has a NEWER date than the file, and rooms differ
+                    if (latestSystem.date > latestFileEntry.date && latestSystem.room !== latestFileEntry.room) {
+                        preview.roomOrderWarnings.push({
+                            name: latestSystem.name || latestFileEntry.name || mrn,
+                            mrn: latestSystem.mrn || mrn,
+                            fileRoom: latestFileEntry.room,
+                            fileDate: latestFileEntry.date,
+                            systemRoom: latestSystem.room,
+                            systemDate: latestSystem.date
+                        });
+                    }
+                });
 
                 return preview;
             } catch (err) {
@@ -10979,6 +11205,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <option value="followup">📌 Follow-up Workload</option>
                                     <option value="complexity">🔴 Patient Complexity</option>
                                     <option value="performance">📊 Hospital Performance</option>
+                                    <optgroup label="── Practice Reports ──">
+                                    <option value="provider-detail">🩺 Practitioner Detail Report</option>
+                                    <option value="billing-complete">📋 Billing Completeness Audit</option>
+                                    <option value="admin-daily">🏥 Daily Census Summary</option>
+                                    <option value="accounts-summary">💳 Accounts & CPT Breakdown</option>
+                                    </optgroup>
                                 </select>
                             </div>
                             <div>
@@ -14027,7 +14259,8 @@ const findHeaderIndex = (rows, sheetLog) => {
 
     function _iwRenderStep2Preview() {
         _iwMarkStep(2);
-        const { totals, files, updates, missingFromFile, missingColumns, errors } = _iwPreview;
+        const { totals, files, updates, missingFromFile, missingColumns, errors,
+                nameDuplicates = [], roomOrderWarnings = [] } = _iwPreview;
 
         const filesHtml = files.map(f => `
             <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1">
@@ -14064,6 +14297,57 @@ const findHeaderIndex = (rows, sheetLog) => {
                     ${updates.length > 30 ? `<div class="text-xs text-slate-500">…and ${updates.length - 30} more</div>` : ''}
                 </div>
             </details>
+        ` : '';
+
+        const nameDupesHtml = nameDuplicates.length ? `
+            <details class="border border-orange-300 bg-orange-50 rounded-lg overflow-hidden" open>
+                <summary class="px-3 py-2 text-xs font-bold text-orange-800 cursor-pointer select-none">
+                    ⚠️ ${nameDuplicates.length} name conflict(s) — human review required before proceeding
+                </summary>
+                <div class="px-3 pb-3">
+                    <p class="text-xs text-orange-700 mb-2 mt-1">The following patient names appear with different MRNs or in high frequency. Verify these are not the same patient under different identifiers.</p>
+                    <div class="overflow-x-auto max-h-56 overflow-y-auto">
+                        <table class="text-[11px] w-full border-collapse">
+                            <thead><tr class="bg-orange-100 text-orange-900">
+                                <th class="px-2 py-1 text-left">Name</th><th class="px-2 py-1 text-left">MRN</th>
+                                <th class="px-2 py-1 text-left">Date</th><th class="px-2 py-1 text-left">Room</th>
+                                <th class="px-2 py-1 text-left">Hospital</th><th class="px-2 py-1 text-left">Source</th>
+                            </tr></thead>
+                            <tbody>
+                            ${nameDuplicates.slice(0, 15).flatMap(g => g.entries.map((e, i) => `
+                                <tr class="${e.source === 'file' ? 'bg-white' : 'bg-slate-50'} border-t border-orange-100">
+                                    <td class="px-2 py-1 font-semibold ${i === 0 ? '' : 'text-slate-400'}">${i === 0 ? g.name : ''}</td>
+                                    <td class="px-2 py-1 font-mono">${e.mrn || '—'}</td>
+                                    <td class="px-2 py-1">${e.date || '—'}</td>
+                                    <td class="px-2 py-1">${e.room || '—'}</td>
+                                    <td class="px-2 py-1">${e.hospital || '—'}</td>
+                                    <td class="px-2 py-1">
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${e.source === 'file' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}">${e.source}</span>
+                                    </td>
+                                </tr>`)).join('')}
+                            ${nameDuplicates.length > 15 ? `<tr><td colspan="6" class="px-2 py-1 text-orange-600 italic">…and ${nameDuplicates.length - 15} more</td></tr>` : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </details>
+        ` : '';
+
+        const roomWarningsHtml = roomOrderWarnings.length ? `
+            <div class="border border-yellow-300 bg-yellow-50 rounded-lg p-3">
+                <div class="text-xs font-bold text-yellow-800 mb-1">🛏️ ${roomOrderWarnings.length} room discrepancy(s) — file may be outdated</div>
+                <p class="text-xs text-yellow-700 mb-2">The system has a more recent entry for these patients with a different room number.</p>
+                <div class="space-y-1">
+                    ${roomOrderWarnings.slice(0, 8).map(w => `
+                        <div class="text-[11px] text-yellow-900 flex flex-wrap gap-x-4 gap-y-0.5">
+                            <span class="font-semibold">${w.name}</span>
+                            <span class="font-mono text-slate-500">MRN:${w.mrn}</span>
+                            <span>File: Rm <strong>${w.fileRoom}</strong> (${w.fileDate})</span>
+                            <span class="text-yellow-700">↔ System: Rm <strong>${w.systemRoom}</strong> (${w.systemDate}, newer)</span>
+                        </div>`).join('')}
+                    ${roomOrderWarnings.length > 8 ? `<div class="text-xs text-yellow-600 italic">…and ${roomOrderWarnings.length - 8} more</div>` : ''}
+                </div>
+            </div>
         ` : '';
 
         const missingHtml = missingFromFile.length ? `
@@ -14106,6 +14390,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                 </div>
 
                 ${missingHtml}
+                ${nameDupesHtml}
+                ${roomWarningsHtml}
                 ${updatesHtml}
                 ${errHtml}
 
