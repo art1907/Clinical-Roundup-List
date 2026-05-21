@@ -5056,7 +5056,7 @@
 
         // Render Status Distribution Pie Chart
         globalThis.renderStatusChart = () => {
-            const filtered = getFilteredData();
+            const filtered = getLatestPatientRows(getFilteredData());
             const statuses = STATUS_OPTIONS.map((option) => option.value);
             const counts = statuses.map((status) => filtered.filter((p) => getPatientStatus(p) === status).length);
             const colors = statuses.map((status) => getStatusAccentHex(status));
@@ -5111,7 +5111,7 @@
 
         // Render Quick Stats
         globalThis.renderQuickStats = () => {
-            const filtered = getFilteredData();
+            const filtered = getLatestPatientRows(getFilteredData());
             const stats = {
                 'Total Patients': filtered.length,
                 'STAT Priority': filtered.filter(p => p.stat === true || p.stat === 'true').length,
@@ -6813,7 +6813,7 @@
 
         // Render Card View
         globalThis.renderCardView = () => {
-            const filtered = getFilteredData();
+            const filtered = getLatestPatientRows(getFilteredData());
             const container = document.getElementById('card-view-container');
             const groupedContainer = document.getElementById('grouped-view-container');
 
@@ -6825,11 +6825,11 @@
                 return;
             }
             
-            const buildCardHistoryHTML = (p, mrnKey) => {
+            const buildCardHistoryHTML = (p, personKey) => {
                 const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const visits = patients
-                    .filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey)
-                    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                    .filter(v => getPatientPersonKey(v) === personKey)
+                    .sort(comparePatientVisitRecency);
                 const rows = visits.map((v, i) => {
                     const isCurrent = v.id === p.id;
                     const st = getSafeConfiguredStatus(getPatientStatus(v));
@@ -6861,9 +6861,9 @@
                 const crossedOutCardClass = isPatientCrossedOut(p.id) ? 'crossed-out' : '';
                 const findingsSegments = getFindingSegments(p);
                 const findingsLabel = findingsSegments.length ? `🔍 Findings · ${findingsSegments.length}` : '🔍 Findings';
-                const mrnKey = String(p.mrn || p.id || '').toLowerCase();
-                const visitCount = patients.filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey).length;
-                const isExpanded = expandedPatientMrns.has(mrnKey);
+                const personKey = getPatientPersonKey(p);
+                const visitCount = getPatientVisitCount(p);
+                const isExpanded = expandedPatientMrns.has(personKey);
                 
                 return `
                     <div class="patient-card ${statClass} ${crossedOutCardClass}">
@@ -6932,9 +6932,9 @@
                         <div class="card-actions">
                             <button class="card-action-btn card-edit" onclick="globalThis.openModal('${p.id}')">Edit</button>
                             <button class="card-action-btn card-print" onclick="globalThis.printPatientRecord('${p.id}')">Print</button>
-                            ${visitCount > 1 ? `<button class="card-action-btn" style="background:${isExpanded ? '#dbeafe' : '#f1f5f9'};color:${isExpanded ? '#1d4ed8' : '#64748b'};border:1px solid ${isExpanded ? '#bfdbfe' : '#e2e8f0'}" onclick="globalThis.togglePatientHistory('${mrnKey}')">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
+                            ${visitCount > 1 ? `<button class="card-action-btn" style="background:${isExpanded ? '#dbeafe' : '#f1f5f9'};color:${isExpanded ? '#1d4ed8' : '#64748b'};border:1px solid ${isExpanded ? '#bfdbfe' : '#e2e8f0'}" onclick="globalThis.togglePatientHistory('${personKey}')">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         </div>
-                        ${isExpanded ? buildCardHistoryHTML(p, mrnKey) : ''}
+                        ${isExpanded ? buildCardHistoryHTML(p, personKey) : ''}
                     </div>
                 `;
             }).join('');
@@ -6952,7 +6952,7 @@
                 return;
             }
 
-            const filtered = getFilteredData();
+            const filtered = getLatestPatientRows(getFilteredData());
             container.classList.add('active');
 
             if (filtered.length === 0) {
@@ -6960,11 +6960,11 @@
                 return;
             }
 
-            const buildMobileCardHistoryHTML = (patient, mrnKey) => {
+            const buildMobileCardHistoryHTML = (patient, personKey) => {
                 const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const visits = patients
-                    .filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey)
-                    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                    .filter(v => getPatientPersonKey(v) === personKey)
+                    .sort(comparePatientVisitRecency);
                 const rows = visits.map((v, i) => {
                     const isCurrent = v.id === patient.id;
                     const st = getSafeConfiguredStatus(getPatientStatus(v));
@@ -7002,9 +7002,9 @@
                 else if (isSurgical) kicker = 'Surgical Case';
                 const visitMeta = [patient.room || 'Room —', patient.hospital || 'Hospital —', patient.date || 'Date —'].join(' • ');
                 const planSummary = summarizeMobileText(patient.plan, 120);
-                const mrnKeyM = String(patient.mrn || patient.id || '').toLowerCase();
-                const visitCountM = patients.filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKeyM).length;
-                const isExpandedM = expandedPatientMrns.has(mrnKeyM);
+                const personKeyM = getPatientPersonKey(patient);
+                const visitCountM = getPatientVisitCount(patient);
+                const isExpandedM = expandedPatientMrns.has(personKeyM);
 
                 return `
                     <article class="mobile-patient-card ${isStat ? 'stat' : ''} ${isCrossedOut ? 'crossed-out-row' : ''}">
@@ -7030,9 +7030,9 @@
                         <div class="mobile-card-actions">
                             <button onclick="globalThis.openModal('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Edit</button>
                             <button onclick="globalThis.printPatientRecord('${patient.id}')" class="bg-slate-700 text-white hover:bg-slate-800">Print</button>
-                            ${visitCountM > 1 ? `<button onclick="globalThis.togglePatientHistory('${mrnKeyM}')" class="${isExpandedM ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}">${isExpandedM ? '▼' : '▶'} ${visitCountM} visits</button>` : ''}
+                            ${visitCountM > 1 ? `<button onclick="globalThis.togglePatientHistory('${personKeyM}')" class="${isExpandedM ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}">${isExpandedM ? '▼' : '▶'} ${visitCountM} visits</button>` : ''}
                         </div>
-                        ${isExpandedM ? buildMobileCardHistoryHTML(patient, mrnKeyM) : ''}
+                        ${isExpandedM ? buildMobileCardHistoryHTML(patient, personKeyM) : ''}
                     </article>
                 `;
             }).join('');
@@ -7040,7 +7040,7 @@
 
         // Render Grouped View (By Hospital)
         globalThis.renderGroupedView = () => {
-            const filtered = getFilteredData();
+            const filtered = getLatestPatientRows(getFilteredData());
             const container = document.getElementById('grouped-view-container');
             const cardContainer = document.getElementById('card-view-container');
 
@@ -7742,6 +7742,45 @@
 
         globalThis.getCurrentPatients = () => patients;
 
+        function getPatientPersonKey(patient = {}) {
+            const mrn = String(patient.mrn || '').trim().toLowerCase();
+            if (mrn) return `mrn:${mrn}`;
+            const name = String(patient.name || '').trim().toLowerCase();
+            const dob = String(patient.dob || '').trim().toLowerCase();
+            if (name || dob) return `demo:${name}|${dob}`;
+            return `id:${patient.id || ''}`;
+        }
+
+        function getPatientVisitTimestamp(patient = {}) {
+            const visitTime = patient.visitTime ? new Date(patient.visitTime).getTime() : Number.NaN;
+            if (Number.isFinite(visitTime)) return visitTime;
+            const visitDate = patient.date ? new Date(`${patient.date}T12:00:00`).getTime() : Number.NaN;
+            return Number.isFinite(visitDate) ? visitDate : 0;
+        }
+
+        function comparePatientVisitRecency(a, b) {
+            const timeDelta = getPatientVisitTimestamp(b) - getPatientVisitTimestamp(a);
+            if (timeDelta !== 0) return timeDelta;
+            return String(b.id || '').localeCompare(String(a.id || ''));
+        }
+
+        function getPatientVisitCount(patient = {}) {
+            const key = getPatientPersonKey(patient);
+            return patients.filter(visit => getPatientPersonKey(visit) === key).length;
+        }
+
+        function getLatestPatientRows(patientList = []) {
+            const latestByPatient = new Map();
+            patientList.forEach((patient) => {
+                const key = getPatientPersonKey(patient);
+                const current = latestByPatient.get(key);
+                if (!current || comparePatientVisitRecency(patient, current) < 0) {
+                    latestByPatient.set(key, patient);
+                }
+            });
+            return Array.from(latestByPatient.values());
+        }
+
         const PROC_KEYWORDS = /\b(cysto(?:scopy)?|stent|turbt|litho(?:tripsy)?|laser|surgery|bx|biopsy|procedure|scheduled|urology|pcn|urs|nephrectomy|robotic)\b/i;
         const SURGICAL_STATUSES = new Set(['In-Progress', 'Completed', 'Post-Op', 'Scheduled', 'Pre-Op', 'SURGICAL PATIENT (SAME DAY SURGERY)', 'NEW SURGICAL PATIENT (AM ADMIT)', 'FOLLOW UP (POST OP)']);
 
@@ -8128,6 +8167,15 @@
             return text;
         };
 
+        const getVisitDateFromSheetName = (sheetName = '') => {
+            const name = String(sheetName || '').trim();
+            if (!name) return '';
+            const candidate = name.match(/(?:^|\D)(\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4})(?:\D|$)/)?.[1] || '';
+            if (!candidate) return '';
+            const normalized = normalizeImportedDateValue(candidate);
+            return isValidIsoDateString(normalized) ? normalized : '';
+        };
+
         const buildImportIdentityKey = (patient = {}) => {
             const normalizedDate = normalizeImportedDateValue(patient.date || '').trim();
             const normalizedMrn = String(patient.mrn || '').trim().toLowerCase();
@@ -8229,6 +8277,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
 
                 const result = { onCall: [], patients: [], hospitals: [], columnWarnings: [], validationLog, stats: { skipped: 0, parsed: 0, errors: [] } };
+                const sheetVisitDate = getVisitDateFromSheetName(sheetName);
+                if (sheetVisitDate) {
+                    log(`Sheet tab date detected: ${sheetVisitDate}; using it as the visit date for patient rows`, 'info');
+                }
 
                 let onCallFound = 0;
                 for (let i = 0; i < Math.min(8, rows.length); i++) {
@@ -8318,9 +8370,16 @@ const findHeaderIndex = (rows, sheetLog) => {
                         continue;
                     }
 
-                    const dateValue = colMap.dateService >= 0 ? normalizeImportedDateValue(parts[colMap.dateService] || '') : '';
+                    const rowDateValue = colMap.dateService >= 0 ? normalizeImportedDateValue(parts[colMap.dateService] || '') : '';
+                    const dateValue = sheetVisitDate || rowDateValue;
                     const roomValue = colMap.room >= 0 ? (parts[colMap.room] || '') : first;
                     const mrnValue = colMap.mrn >= 0 ? (parts[colMap.mrn] || '') : '';
+
+                    if (sheetVisitDate && rowDateValue && rowDateValue !== sheetVisitDate) {
+                        const message = `Row ${i + 1}: Date of Service ${rowDateValue} differs from sheet date ${sheetVisitDate}; using sheet date for visit identity.`;
+                        result.columnWarnings.push(message);
+                        log(message, 'warn');
+                    }
 
                     if (!dateValue && !roomValue && !mrnValue) {
                         result.stats.skipped++;
@@ -8359,6 +8418,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                             findingsValues: {},
                             findingsDates: normalizedDates.findingsDates
                         };
+
+                        if (sheetVisitDate) {
+                            patient.sourceSheetName = sheetName;
+                            patient.sourceDateOfService = rowDateValue;
+                        }
 
                         patient.visitKey = buildImportIdentityKey(patient);
                         result.patients.push(patient);
@@ -9784,7 +9848,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         function renderMainTable() {
             const container = document.getElementById('table-body');
             if (!container) return;
-            const filtered = getFilteredData();
+            const filtered = getLatestPatientRows(getFilteredData());
             
             if (filtered.length === 0) {
                 container.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 text-sm">No entries</td></tr>`;
@@ -9810,9 +9874,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const crossedOutClass = isCrossedOut ? 'cross-out-target' : '';
                 
                 const isStat = (p.stat === true || p.stat === 'true');
-                const mrnKey = String(p.mrn || p.id || '').toLowerCase();
-                const isExpanded = expandedPatientMrns.has(mrnKey);
-                const visitCount = patients.filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey).length;
+                const personKey = getPatientPersonKey(p);
+                const isExpanded = expandedPatientMrns.has(personKey);
+                const visitCount = getPatientVisitCount(p);
                 const statClass = isStat
                     ? 'bg-red-600 text-white border-4 border-red-800 shadow-lg shadow-red-500/50 hover:bg-red-700'
                     : (needsDateReview ? 'bg-amber-50 border-b border-amber-200 hover:bg-amber-100' : 'bg-white border-b border-slate-100 hover:bg-slate-50');
@@ -9833,7 +9897,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <td class="p-3 align-top w-48">
                         <div class="text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}">${p.name || 'Anon'}</div>
                         <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
-                        ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${mrnKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
+                        ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${personKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         ${reviewBadge}
                     </td>
                     ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
@@ -9852,7 +9916,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         </div>
                     </td>
                 </tr>`;
-                const historyRow = isExpanded ? buildInlinePatientHistoryRow(p, mrnKey, visibleCols) : '';
+                const historyRow = isExpanded ? buildInlinePatientHistoryRow(p, personKey, visibleCols) : '';
                 return mainRow + historyRow;
             };
 
@@ -9886,10 +9950,10 @@ const findHeaderIndex = (rows, sheetLog) => {
         }
 
         // ─── Patient Inline History Expansion ────────────────────────────────────────
-        function buildInlinePatientHistoryRow(currentPatient, mrnKey, visibleCols) {
+        function buildInlinePatientHistoryRow(currentPatient, personKey, visibleCols) {
             const visits = patients
-                .filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey)
-                .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            .filter(v => getPatientPersonKey(v) === personKey)
+            .sort(comparePatientVisitRecency);
             const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const colCount = (visibleCols.includes('room') ? 1 : 0) + (visibleCols.includes('hospital') ? 1 : 0) +
                              (visibleCols.includes('findings') ? 1 : 0) + 4;
@@ -10423,11 +10487,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                     try {
                         if (lowerFileName.endsWith('.xlsx') || lowerFileName.endsWith('.xls')) {
                             const arrayBuffer = await file.arrayBuffer();
-                            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                            const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
                             console.log(`📊 Processing workbook "${fileName}" with ${workbook.SheetNames.length} sheet(s):`, workbook.SheetNames);
                             for (const sheetName of workbook.SheetNames) {
                                 const sheet = workbook.Sheets[sheetName];
-                                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+                                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
                                 try {
                                     const parsed = CSVImporter.parseRows3Pass(rows, sheetName);
                                     console.log(`  ✅ Sheet "${sheetName}": ${parsed.patients.length} patients, ${parsed.onCall.length} on-call, ${parsed.stats.skipped} rows skipped`);
@@ -10856,11 +10920,11 @@ const findHeaderIndex = (rows, sheetLog) => {
 
                         if (lowerFileName.endsWith('.xlsx') || lowerFileName.endsWith('.xls')) {
                             const arrayBuffer = await file.arrayBuffer();
-                            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                            const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
                             console.log(`📊 Importing workbook "${fileName}" with ${workbook.SheetNames.length} sheet(s)`);
                             for (const sheetName of workbook.SheetNames) {
                                 const sheet = workbook.Sheets[sheetName];
-                                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+                                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
                                 try {
                                     const parsed = CSVImporter.parseRows3Pass(rows, sheetName);
                                     console.log(`  ✅ Sheet "${sheetName}": importing ${parsed.patients.length} patients`);
