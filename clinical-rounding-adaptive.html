@@ -8220,7 +8220,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         function toggleAuthUIElements() {
             console.log('🔄 toggleAuthUIElements called, isAuthenticated:', isAuthenticated);
             
-            const importBtn = document.querySelector('button[onclick*="csv-file-input"]');
+            const importButtons = document.querySelectorAll('[data-import-files-btn]');
             const addBtn = document.querySelector('button[onclick*="openModal"]');
             const loginBtn = document.getElementById('m365-login-btn');
             const mobileAuthBtn = document.getElementById('mobile-auth-btn');
@@ -8229,7 +8229,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             const tabNav = document.querySelector('.desktop-tab-nav');
             
             console.log('🔍 Elements found:', {
-                importBtn: !!importBtn,
+                importBtn: importButtons.length > 0,
                 addBtn: !!addBtn,
                 loginBtn: !!loginBtn,
                 contentArea: !!contentArea,
@@ -8241,7 +8241,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             
             if (hasAppAccess) {
                 // Show import and add buttons
-                if (importBtn) importBtn.style.display = '';
+                importButtons.forEach(btn => { btn.style.display = ''; });
                 if (addBtn) addBtn.style.display = '';
                 if (loginBtn) {
                     if (isLocalModeActive()) {
@@ -8278,7 +8278,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 console.log('✅ Hidden: login prompt, login button');
             } else {
                 // Hide import and add buttons
-                if (importBtn) importBtn.style.display = 'none';
+                importButtons.forEach(btn => { btn.style.display = 'none'; });
                 if (addBtn) addBtn.style.display = 'none';
                 if (loginBtn) {
                     loginBtn.style.display = '';
@@ -10581,6 +10581,14 @@ const findHeaderIndex = (rows, sheetLog) => {
         // BULK IMPORT HANDLER (Multiple files: CSV + XLSX)
         // Routing: Excel files or >20 parsed records → full Import Wizard
         //          Single small CSV (≤20 records) → existing inline preview
+        globalThis.startImportFlow = () => {
+            if (typeof globalThis.openImportWizard === 'function') {
+                globalThis.openImportWizard();
+                return;
+            }
+            document.getElementById('csv-file-input')?.click();
+        };
+
         globalThis.handleBulkImport = async (event) => {
             const files = event.target.files;
             if (!files || files.length === 0) return;
@@ -10812,7 +10820,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <button id="m365-login-btn" onclick="globalThis.m365Login && globalThis.m365Login()" class="top-action-btn flex-shrink-0 bg-purple-600 text-white hover:bg-purple-700">
                         <span class="top-action-icon" aria-hidden="true">🔐</span><span>Login</span>
                     </button>
-                    <button onclick="document.getElementById('csv-file-input').click()" class="top-action-btn flex-shrink-0 bg-green-600 text-white hover:bg-green-700">
+                    <button data-import-files-btn onclick="globalThis.startImportFlow()" class="top-action-btn flex-shrink-0 bg-green-600 text-white hover:bg-green-700">
                         <span class="top-action-icon" aria-hidden="true">📥</span><span>Import Files</span>
                     </button>
                     <button onclick="globalThis.openModal()" class="top-action-btn flex-shrink-0 bg-blue-600 text-white hover:bg-blue-700">
@@ -11183,7 +11191,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 </div>
                 <div class="grid grid-cols-2 gap-2 mb-3">
                     <button id="mobile-auth-btn" onclick="globalThis.m365Login && globalThis.m365Login(); globalThis.closeMobileMoreMenu();" class="px-3 py-3 rounded-xl bg-purple-600 text-white text-sm font-bold">Login</button>
-                    <button onclick="document.getElementById('csv-file-input').click(); globalThis.closeMobileMoreMenu();" class="px-3 py-3 rounded-xl bg-green-600 text-white text-sm font-bold">Import</button>
+                    <button data-import-files-btn onclick="globalThis.startImportFlow(); globalThis.closeMobileMoreMenu();" class="px-3 py-3 rounded-xl bg-green-600 text-white text-sm font-bold">Import</button>
                     <button onclick="globalThis.toggleSettings(); globalThis.closeMobileMoreMenu();" class="px-3 py-3 rounded-xl bg-slate-800 text-white text-sm font-bold">Settings</button>
                     <button onclick="globalThis.showShortcutsHelp(); globalThis.closeMobileMoreMenu();" class="px-3 py-3 rounded-xl bg-slate-700 text-white text-sm font-bold">Help</button>
                 </div>
