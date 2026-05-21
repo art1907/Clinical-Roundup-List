@@ -67,7 +67,13 @@ const M365_CONFIG = {
         patientDocumentsFields: {
             patientId: 'PatientId',
             mrn: 'MRN',
-            visitKey: 'Visitkey'
+            visitKey: 'Visitkey',
+            patientName: 'PatientName',
+            uploadedBy: 'UploadedBy',
+            uploadedAt: 'UploadedAt',
+            originalName: 'OriginalName',
+            fileSize: 'FileSize',
+            contentType: 'ContentType'
         },
         fields: {
             visitTime: 'VisitTime'
@@ -1386,12 +1392,52 @@ async function resolvePatientDocsDriveId() {
     return patientDocsDriveIdCache;
 }
 
+function sanitizeDrivePathSegment(value) {
+    return String(value || '')
+        .replace(/["*:<>?\\|]/g, '_')
+        .replace(/[#%&]/g, '_')
+        .replace(/[\u0000-\u001f]/g, '')
+        .trim()
+        .slice(0, 180) || 'attachment';
+}
+
+async function updatePatientFileMetadata(driveId, driveItemId, meta = {}, file = null) {
+    const fieldsMap = M365_CONFIG.sharepoint?.patientDocumentsFields || {};
+    const metadata = {
+        [fieldsMap.patientId || 'PatientId']: meta.patientId || meta.id || '',
+        [fieldsMap.mrn || 'MRN']: meta.mrn || '',
+        [fieldsMap.visitKey || 'Visitkey']: meta.visitKey || '',
+        [fieldsMap.patientName || 'PatientName']: meta.patientName || '',
+        [fieldsMap.uploadedBy || 'UploadedBy']: meta.uploadedBy || currentAccount?.username || '',
+        [fieldsMap.uploadedAt || 'UploadedAt']: meta.uploadedAt || new Date().toISOString(),
+        [fieldsMap.originalName || 'OriginalName']: file?.name || meta.originalName || '',
+        [fieldsMap.fileSize || 'FileSize']: file?.size || meta.fileSize || 0,
+        [fieldsMap.contentType || 'ContentType']: file?.type || meta.contentType || ''
+    };
+    const cleaned = Object.fromEntries(Object.entries(metadata).filter(([, value]) => value !== undefined && value !== null && value !== ''));
+    if (!Object.keys(cleaned).length) return;
+
+    try {
+        await graphRequest(`/sites/${M365_CONFIG.sharepoint.siteId}/drives/${driveId}/items/${driveItemId}/listItem/fields`, 'PATCH', cleaned);
+    } catch (err) {
+        console.warn('Patient file metadata batch update skipped; retrying supported columns only:', err?.message || err);
+        for (const [fieldName, value] of Object.entries(cleaned)) {
+            try {
+                await graphRequest(`/sites/${M365_CONFIG.sharepoint.siteId}/drives/${driveId}/items/${driveItemId}/listItem/fields`, 'PATCH', { [fieldName]: value });
+            } catch (fieldErr) {
+                console.warn(`Patient file metadata column skipped (${fieldName}):`, fieldErr?.message || fieldErr);
+            }
+        }
+    }
+}
+
 async function api_uploadPatientFile(patientId, file, meta = {}) {
     const siteId = M365_CONFIG.sharepoint.siteId;
     const driveId = await resolvePatientDocsDriveId();
 
-    const safeName = file.name.replace(/[#%?&]/g, '_');
-    const uploadPath = `/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${patientId}/${safeName}:/content`;
+    const safePatientFolder = sanitizeDrivePathSegment(patientId);
+    const safeName = sanitizeDrivePathSegment(file.name);
+    const uploadPath = `/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${safePatientFolder}/${safeName}:/content`;
     const token = await getAccessToken();
 
     const uploadResponse = await fetch(`${M365_CONFIG.graphBaseUrl}${uploadPath}`, {
@@ -1409,13 +1455,14 @@ async function api_uploadPatientFile(patientId, file, meta = {}) {
     }
 
     const driveItem = await uploadResponse.json();
+    await updatePatientFileMetadata(driveId, driveItem.id, { ...meta, patientId }, file);
     return driveItem;
 }
 
 async function api_fetchPatientFiles(patientId) {
     const siteId = M365_CONFIG.sharepoint.siteId;
     const driveId = await resolvePatientDocsDriveId();
-    const endpoint = `${M365_CONFIG.graphBaseUrl}/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${patientId}:/children`;
+    const endpoint = `${M365_CONFIG.graphBaseUrl}/sites/${siteId}/drives/${driveId}/root:/PatientDocuments/${sanitizeDrivePathSegment(patientId)}:/children?$expand=listItem`;
 
     const token = await getAccessToken();
     const response = await fetch(endpoint, {
@@ -1433,12 +1480,18 @@ async function api_fetchPatientFiles(patientId) {
     }
 
     const data = await response.json();
+    const fieldsMap = M365_CONFIG.sharepoint?.patientDocumentsFields || {};
     return data.value.map(item => ({
+        fields: item.listItem?.fields || {},
         id: item.id,
         driveItemId: item.id,
         name: item.name || 'Attachment',
         webUrl: item.webUrl || '#',
-        uploadedAt: item.createdDateTime || ''
+        size: item.size || 0,
+        uploadedAt: item.listItem?.fields?.[fieldsMap.uploadedAt || 'UploadedAt'] || item.createdDateTime || '',
+        uploadedBy: item.listItem?.fields?.[fieldsMap.uploadedBy || 'UploadedBy'] || item.createdBy?.user?.displayName || item.createdBy?.user?.email || '',
+        mrn: item.listItem?.fields?.[fieldsMap.mrn || 'MRN'] || '',
+        visitKey: item.listItem?.fields?.[fieldsMap.visitKey || 'Visitkey'] || ''
     }));
 }
 

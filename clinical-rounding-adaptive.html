@@ -6,12 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Clinical Rounding List - Adaptive Platform</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230f172a'/%3E%3Cpath d='M50 22v56M22 50h56' stroke='white' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://alcdn.msauth.net/browser/2.32.2/js/msal-browser.min.js"></script>
+    <script src="https://cdn.tailwindcss.com" integrity="sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js" integrity="sha384-6kRQDsV2kVYRSENnw7WnekWKCx8/Lmv7rFKpDuR2AoIbjlBShlYcs3x0QlE3kuRh" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js" integrity="sha384-GbQVk5KsTZEMJtvSbtmGpderuiERKpKVVFucxROOKnIXvtg03h3pORjyyGlPD6UO" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+    <script src="https://alcdn.msauth.net/browser/2.32.2/js/msal-browser.min.js" integrity="sha384-y1IcCD+XmMR+nTJWafnzQJt1pwQU6CT7CvoixQpAYX2LlSu0NG7KmE5KXnarCJLy" crossorigin="anonymous"></script>
 
     <style>
         * { -webkit-tap-highlight-color: transparent; }
@@ -2869,17 +2869,17 @@
     </style>
     
     <script>
-        var patients = [];
-        var onCallSchedule = [];
-        var selectedPatientIds = new Set();
-        var currentUser = null;
-        var globalSettings = { onCall: "", hospitals: "" };
-        var currentTab = 'active';
-        var flaggedRecords = []; // Records flagged during import for human review
-        var rawImportData = null;
-        var calDate = new Date();
-        var isConnected = false;
-        var isAuthenticated = false;
+        let patients = [];
+        let onCallSchedule = [];
+        let selectedPatientIds = new Set();
+        let currentUser = null;
+        let globalSettings = { onCall: "", hospitals: "" };
+        let currentTab = 'active';
+        let flaggedRecords = []; // Records flagged during import for human review
+        let rawImportData = null;
+        let calDate = new Date();
+        let isConnected = false;
+        let isAuthenticated = false;
 
         const STATUS_OPTIONS = [
             { value: 'NEW CONSULT', badge: 'NC' },
@@ -3336,10 +3336,19 @@
                         'baa_enforcement': policyResolver.requireBAA(),
                         'financial_dual_approval': policyResolver.requireDualApproval('financial'),
                         'field_encryption': policyResolver.shouldEncryptFields(),
+                        'fieldEncryption': policyResolver.shouldEncryptFields(),
+                        'dualApproval': policyResolver.requireDualApproval('financial'),
                         'session_timeout': policyResolver.getSessionTimeout() !== null
                     };
                     return gateMap[featureName] || false;
                 }
+            };
+
+            const setMode = (mode) => {
+                if (!modes[mode]) throw new Error(`Invalid compliance mode: ${mode}`);
+                config.mode = mode;
+                validateOnStartup();
+                return config;
             };
 
             const enforce = (policy, context) => {
@@ -3361,6 +3370,7 @@
                 policyResolver,
                 featureGate,
                 enforce,
+                setMode,
                 validateOnStartup
             };
         })();
@@ -3368,26 +3378,33 @@
         // ========== Phase 1: Identity, Sessions, Authorization ==========
         const SessionManager = (() => {
             const sessions = new Map();
-            const sessionTimeout = ComplianceEngine.policyResolver.getSessionTimeout() || 60; // minutes
+            const getSessionTimeoutMinutes = () => ComplianceEngine.policyResolver.getSessionTimeout() || 60;
 
             return {
-                createSession: (userId) => {
+                createSession: (userId, role = '') => {
                     const sessionId = 'sess_' + Math.random().toString(36).substr(2, 9);
                     const now = Date.now();
-                    sessions.set(sessionId, {
+                    const idleTimeoutMs = getSessionTimeoutMinutes() * 60 * 1000;
+                    const session = {
+                        sessionId,
+                        status: 'active',
                         userId,
+                        role,
                         createdAt: now,
                         lastActivity: now,
                         absoluteExpiry: now + (24 * 60 * 60 * 1000), // 24 hour absolute limit
-                        idleTimeout: sessionTimeout * 60 * 1000,
+                        idleTimeout: idleTimeoutMs,
+                        idleTimeoutMs,
                         isActive: true
-                    });
+                    };
+                    sessions.set(sessionId, session);
                     console.log(`[Session] Created session ${sessionId} for user ${userId}`);
-                    return sessionId;
+                    return session;
                 },
                 
                 validateSession: (sessionId) => {
-                    const session = sessions.get(sessionId);
+                    const key = typeof sessionId === 'object' ? sessionId.sessionId : sessionId;
+                    const session = sessions.get(key);
                     if (!session) return { valid: false, reason: 'Session not found' };
                     if (!session.isActive) return { valid: false, reason: 'Session inactive' };
                     
@@ -3403,10 +3420,19 @@
                     session.lastActivity = now;
                     return { valid: true };
                 },
+
+                isSessionValid: (sessionId) => {
+                    return SessionManager.validateSession(sessionId).valid;
+                },
                 
                 destroySession: (sessionId) => {
-                    sessions.delete(sessionId);
+                    const key = typeof sessionId === 'object' ? sessionId.sessionId : sessionId;
+                    sessions.delete(key);
                     console.log(`[Session] Destroyed session ${sessionId}`);
+                },
+
+                resetSessions: () => {
+                    sessions.clear();
                 }
             };
         })();
@@ -3420,6 +3446,12 @@
 
             const userRoles = new Map(); // userId -> role
 
+            const hasPermission = (userId, permission) => {
+                const role = userRoles.get(userId);
+                if (!role) return false;
+                return roles[role].permissions.includes(permission);
+            };
+
             return {
                 assignRole: (userId, role) => {
                     if (!roles[role]) throw new Error(`Invalid role: ${role}`);
@@ -3427,14 +3459,10 @@
                     console.log(`[RBAC] Assigned role ${role} to user ${userId}`);
                 },
 
-                hasPermission: (userId, permission) => {
-                    const role = userRoles.get(userId);
-                    if (!role) return false;
-                    return roles[role].permissions.includes(permission);
-                },
+                hasPermission,
 
                 checkAccess: (userId, permission, context = {}) => {
-                    if (!this.hasPermission(userId, permission)) {
+                    if (!hasPermission(userId, permission)) {
                         const event = {
                             timestamp: new Date().toISOString(),
                             userId,
@@ -3552,6 +3580,25 @@
                         action: actionType,
                         oldValue: oldValue ? '[REDACTED]' : null,
                         newValue: newValue ? '[REDACTED]' : null,
+                        timestamp: new Date().toISOString()
+                    });
+                    appendImmutable(logEntry);
+                },
+
+                logFileAttachment: (userId, patientId, action, fileMeta = {}) => {
+                    if (!shouldLog('data_change')) return;
+                    const logEntry = createLogEntry('data_change', {
+                        userId,
+                        patientId,
+                        fieldChanged: action === 'delete' ? 'file_delete' : 'file_upload',
+                        action: 'update',
+                        fileName: fileMeta.name || fileMeta.fileName || '',
+                        fileSize: fileMeta.size || fileMeta.fileSize || 0,
+                        contentType: fileMeta.type || fileMeta.contentType || '',
+                        driveItemId: fileMeta.driveItemId || fileMeta.id || '',
+                        webUrl: fileMeta.webUrl || '',
+                        visitKey: fileMeta.visitKey || '',
+                        mrn: fileMeta.mrn || '',
                         timestamp: new Date().toISOString()
                     });
                     appendImmutable(logEntry);
@@ -3784,25 +3831,27 @@
             const retentionMetadata = new Map(); // patientId -> { createdAt, retentionDays, retentionCategory, markedForDeletion, deleteAt }
             const defaultRetentionDays = 2555; // 7 years for healthcare records
 
+            const setRetentionPolicy = (patientId, retentionDays, category = 'standard') => {
+                const now = new Date();
+                retentionMetadata.set(patientId, {
+                    patientId,
+                    createdAt: now,
+                    retentionDays,
+                    retentionCategory: category,
+                    markedForDeletion: false,
+                    deleteAt: null,
+                    lastModified: now
+                });
+                console.log(`[Lifecycle] Set retention for ${patientId}: ${retentionDays} days (${category})`);
+            };
+
             return {
-                setRetentionPolicy: (patientId, retentionDays, category = 'standard') => {
-                    const now = new Date();
-                    retentionMetadata.set(patientId, {
-                        patientId,
-                        createdAt: now,
-                        retentionDays,
-                        retentionCategory: category,
-                        markedForDeletion: false,
-                        deleteAt: null,
-                        lastModified: now
-                    });
-                    console.log(`[Lifecycle] Set retention for ${patientId}: ${retentionDays} days (${category})`);
-                },
+                setRetentionPolicy,
 
                 markForDeletion: (patientId) => {
                     const metadata = retentionMetadata.get(patientId);
                     if (!metadata) {
-                        this.setRetentionPolicy(patientId, defaultRetentionDays);
+                        setRetentionPolicy(patientId, defaultRetentionDays);
                     }
                     const metadata2 = retentionMetadata.get(patientId);
                     metadata2.markedForDeletion = true;
@@ -3833,6 +3882,8 @@
                     return {
                         status: metadata.markedForDeletion ? 'marked_for_deletion' : 'active',
                         days_remaining: Math.max(0, daysRemaining),
+                        daysRemaining: Math.max(0, daysRemaining),
+                        markedForDeletion: metadata.markedForDeletion,
                         category: metadata.retentionCategory,
                         deleteAt: metadata.deleteAt ? metadata.deleteAt.toISOString() : null
                     };
@@ -3863,11 +3914,17 @@
                         metadata[key] = value;
                     });
                     return metadata;
+                },
+
+                resetData: () => {
+                    retentionMetadata.clear();
                 }
             };
         })();
 
         const ExternalExportService = (() => {
+            const exportHistory = [];
+
             const redactPII = (text) => {
                 if (!text) return text;
                 // Redact common PII patterns
@@ -3899,6 +3956,7 @@
 
                         const timestamp = new Date().toISOString().split('T')[0];
                         const filename = sanitizeFilename(`clinical_export_${timestamp}.json`);
+                        const exportId = 'EXP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
                         
                         // Prepare encrypted export
                         const exportData = {
@@ -3914,10 +3972,12 @@
 
                         // Log export
                         AuditLogger.logExport(userId, 'OneDrive', patientIds.length, 'enterprise_onedrive');
+                        exportHistory.push({ exportId, userId, destination: 'OneDrive', filename, patientCount: patientIds.length, timestamp: new Date().toISOString() });
                         console.log(`[Export] Exported ${patientIds.length} patients to OneDrive as ${filename}`);
                         
                         return {
                             success: true,
+                            exportId,
                             filename,
                             destination: 'OneDrive',
                             patientCount: patientIds.length,
@@ -3942,6 +4002,7 @@
 
                         const timestamp = new Date().toISOString().split('T')[0];
                         const filename = sanitizeFilename(`clinical_export_${timestamp}.json`);
+                        const exportId = 'EXP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
                         
                         const exportData = {
                             exportedAt: new Date().toISOString(),
@@ -3955,10 +4016,12 @@
                         };
 
                         AuditLogger.logExport(userId, 'GoogleDrive', patientIds.length, 'enterprise_google_drive');
+                        exportHistory.push({ exportId, userId, destination: 'GoogleDrive', filename, patientCount: patientIds.length, timestamp: new Date().toISOString() });
                         console.log(`[Export] Exported ${patientIds.length} patients to Google Drive as ${filename}`);
                         
                         return {
                             success: true,
+                            exportId,
                             filename,
                             destination: 'GoogleDrive',
                             patientCount: patientIds.length,
@@ -3975,12 +4038,15 @@
                     try {
                         const timestamp = new Date().toISOString().split('T')[0];
                         const filename = sanitizeFilename(`clinical_export_${timestamp}.pdf`);
+                        const exportId = 'EXP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
                         
                         AuditLogger.logExport(userId, 'PDF', patientIds.length, 'local_storage');
+                        exportHistory.push({ exportId, userId, destination: 'Local', filename, patientCount: patientIds.length, timestamp: new Date().toISOString() });
                         console.log(`[Export] Generated PDF export as ${filename}`);
                         
                         return {
                             success: true,
+                            exportId,
                             filename,
                             destination: 'Local',
                             patientCount: patientIds.length,
@@ -3994,7 +4060,11 @@
                 },
 
                 redactPII,
-                sanitizeFilename
+                sanitizeFilename,
+                getExportHistory: () => [...exportHistory],
+                resetExports: () => {
+                    exportHistory.length = 0;
+                }
             };
         })();
 
@@ -4154,14 +4224,22 @@
 
         // Show Shortcuts Help
         globalThis.showShortcutsHelp = () => {
-            document.getElementById('shortcuts-modal').classList.add('active');
+            const modal = document.getElementById('shortcuts-modal');
+            if (!modal) return;
+            modal.classList.add('active');
+            if (typeof modal.showModal === 'function' && !modal.open) modal.showModal();
+            else modal.setAttribute('open', '');
             document.body.classList.add('no-scroll');
             setTimeout(() => globalThis.initScrollHints?.(), 0);
         };
 
         // Close Shortcuts Help
         globalThis.closeShortcutsHelp = () => {
-            document.getElementById('shortcuts-modal').classList.remove('active');
+            const modal = document.getElementById('shortcuts-modal');
+            if (!modal) return;
+            modal.classList.remove('active');
+            if (typeof modal.close === 'function' && modal.open) modal.close();
+            else modal.removeAttribute('open');
             document.body.classList.remove('no-scroll');
         };
 
@@ -7320,12 +7398,64 @@
         };
 
         const localPatientFiles = new Map();
+        const PATIENT_FILE_MAX_BYTES = 25 * 1024 * 1024;
+        const PATIENT_FILE_TOTAL_MAX_BYTES = 100 * 1024 * 1024;
+
+        function formatFileSize(bytes) {
+            const value = Number(bytes) || 0;
+            if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+            if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+            return `${value} B`;
+        }
+
+        function getAttachmentAuditUser() {
+            return (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
+        }
+
+        function getSelectedPatientFileValidation(files) {
+            const selected = Array.from(files || []);
+            const totalSize = selected.reduce((sum, file) => sum + (file.size || 0), 0);
+            const oversized = selected.filter(file => (file.size || 0) > PATIENT_FILE_MAX_BYTES);
+            const messages = [];
+            if (oversized.length) {
+                messages.push(`Each file must be ${formatFileSize(PATIENT_FILE_MAX_BYTES)} or smaller: ${oversized.map(f => f.name).join(', ')}`);
+            }
+            if (totalSize > PATIENT_FILE_TOTAL_MAX_BYTES) {
+                messages.push(`Selected files total ${formatFileSize(totalSize)}; max per upload is ${formatFileSize(PATIENT_FILE_TOTAL_MAX_BYTES)}.`);
+            }
+            return { valid: messages.length === 0, messages, totalSize, files: selected };
+        }
+
+        globalThis.updatePatientFileSelectionNotice = () => {
+            const input = document.getElementById('patient-files-input');
+            const notice = document.getElementById('patient-files-notice');
+            const uploadBtn = document.getElementById('patient-files-upload');
+            if (!notice || !input) return;
+            const selected = Array.from(input.files || []);
+            if (!selected.length) {
+                notice.textContent = `Max ${formatFileSize(PATIENT_FILE_MAX_BYTES)} per file, ${formatFileSize(PATIENT_FILE_TOTAL_MAX_BYTES)} per upload. Files are stored in the SharePoint PatientDocuments library when connected.`;
+                notice.className = 'text-[11px] text-slate-500';
+                if (uploadBtn) uploadBtn.disabled = false;
+                return;
+            }
+            const validation = getSelectedPatientFileValidation(selected);
+            if (!validation.valid) {
+                notice.textContent = validation.messages.join(' ');
+                notice.className = 'text-[11px] font-semibold text-red-600';
+                if (uploadBtn) uploadBtn.disabled = true;
+                return;
+            }
+            notice.textContent = `${selected.length} file${pluralSuffix(selected.length)} selected (${formatFileSize(validation.totalSize)}). Upload is audited with user, patient, MRN, VisitKey, file size, and SharePoint link.`;
+            notice.className = 'text-[11px] text-emerald-700';
+            if (uploadBtn) uploadBtn.disabled = false;
+        };
 
         globalThis.clearPatientFiles = () => {
             const list = document.getElementById('patient-files-list');
             if (list) list.innerHTML = '<div class="text-slate-400">No files uploaded.</div>';
             const input = document.getElementById('patient-files-input');
             if (input) input.value = '';
+            globalThis.updatePatientFileSelectionNotice?.();
         };
 
         globalThis.refreshPatientFiles = async (patientId) => {
@@ -7342,7 +7472,10 @@
                 }
                 list.innerHTML = items.map(item => `
                     <div class="flex items-center justify-between bg-white border border-slate-200 rounded p-2">
-                        <a class="text-blue-700 font-bold" href="${item.url}" target="_blank">${item.name}</a>
+                        <div class="min-w-0">
+                            <a class="text-blue-700 font-bold break-all" href="${escapeInlineHtml(item.url)}" target="_blank">${escapeInlineHtml(item.name)}</a>
+                            <div class="text-[10px] text-amber-600">Local preview only - not persisted to SharePoint</div>
+                        </div>
                         <button class="text-red-600 font-bold" onclick="globalThis.deletePatientFile('${item.id}', true)">Delete</button>
                     </div>
                 `).join('');
@@ -7358,7 +7491,10 @@
                     }
                     list.innerHTML = files.map(item => `
                         <div class="flex items-center justify-between bg-white border border-slate-200 rounded p-2">
-                            <a class="text-blue-700 font-bold" href="${item.webUrl}" target="_blank">${item.name}</a>
+                            <div class="min-w-0">
+                                <a class="text-blue-700 font-bold break-all" href="${escapeInlineHtml(item.webUrl)}" target="_blank">${escapeInlineHtml(item.name)}</a>
+                                <div class="text-[10px] text-slate-500">${formatFileSize(item.size || 0)}${item.uploadedBy ? ' - uploaded by ' + escapeInlineHtml(item.uploadedBy) : ''}${item.uploadedAt ? ' - ' + escapeInlineHtml(new Date(item.uploadedAt).toLocaleString()) : ''}</div>
+                            </div>
                             <button class="text-red-600 font-bold" onclick="globalThis.deletePatientFile('${item.driveItemId}')">Delete</button>
                         </div>
                     `).join('');
@@ -7386,17 +7522,32 @@
             }
 
             const files = Array.from(input.files);
+            const validation = getSelectedPatientFileValidation(files);
+            if (!validation.valid) {
+                showToast(validation.messages[0]);
+                globalThis.updatePatientFileSelectionNotice?.();
+                return;
+            }
+            const auditUser = getAttachmentAuditUser();
+            const baseMeta = {
+                mrn: document.getElementById('f-mrn')?.value || '',
+                visitKey: document.getElementById('f-visit-key')?.value || '',
+                patientName: document.getElementById('f-name')?.value || '',
+                uploadedBy: auditUser,
+                uploadedAt: new Date().toISOString()
+            };
 
             if (!isConnected || !useM365) {
                 const items = localPatientFiles.get(editId) || [];
                 files.forEach((file) => {
                     const url = URL.createObjectURL(file);
-                    items.push({ id: `local-${Date.now()}-${file.name}`, name: file.name, url });
-                    const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                    AuditLogger.logDataChange(auditUser, editId, 'file_upload', null, file.name);
+                    const localItem = { id: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`, name: file.name, url, size: file.size, type: file.type, ...baseMeta };
+                    items.push(localItem);
+                    AuditLogger.logFileAttachment?.(auditUser, editId, 'upload', localItem);
                 });
                 localPatientFiles.set(editId, items);
                 input.value = '';
+                globalThis.updatePatientFileSelectionNotice?.();
                 globalThis.refreshPatientFiles(editId);
                 showToast('✓ Files added (Local)');
                 return;
@@ -7405,14 +7556,18 @@
             try {
                 if (typeof globalThis.m365UploadPatientFile === 'function') {
                     for (const file of files) {
-                        await globalThis.m365UploadPatientFile(editId, file, {
-                            mrn: document.getElementById('f-mrn')?.value || '',
-                            visitKey: document.getElementById('f-visit-key')?.value || ''
+                        const driveItem = await globalThis.m365UploadPatientFile(editId, file, baseMeta);
+                        AuditLogger.logFileAttachment?.(auditUser, editId, 'upload', {
+                            ...baseMeta,
+                            name: file.name,
+                            size: file.size,
+                            type: file.type,
+                            driveItemId: driveItem?.id || '',
+                            webUrl: driveItem?.webUrl || ''
                         });
-                        const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                        AuditLogger.logDataChange(auditUser, editId, 'file_upload', null, file.name);
                     }
                     input.value = '';
+                    globalThis.updatePatientFileSelectionNotice?.();
                     globalThis.refreshPatientFiles(editId);
                     showToast('✓ File(s) uploaded');
                 } else {
@@ -7428,10 +7583,11 @@
             const editId = document.getElementById('edit-id')?.value;
             if (!editId) return;
             if (isLocal) {
-                const items = (localPatientFiles.get(editId) || []).filter(item => item.id !== fileId);
+                const existingItems = localPatientFiles.get(editId) || [];
+                const deletedItem = existingItems.find(item => item.id === fileId) || { id: fileId };
+                const items = existingItems.filter(item => item.id !== fileId);
                 localPatientFiles.set(editId, items);
-                const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                AuditLogger.logDataChange(auditUser, editId, 'file_delete', fileId, null);
+                AuditLogger.logFileAttachment?.(getAttachmentAuditUser(), editId, 'delete', deletedItem);
                 globalThis.refreshPatientFiles(editId);
                 showToast('✓ File deleted');
                 return;
@@ -7439,8 +7595,7 @@
             try {
                 if (typeof globalThis.m365DeletePatientFile === 'function') {
                     await globalThis.m365DeletePatientFile(fileId);
-                    const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                    AuditLogger.logDataChange(auditUser, editId, 'file_delete', fileId, null);
+                    AuditLogger.logFileAttachment?.(getAttachmentAuditUser(), editId, 'delete', { driveItemId: fileId });
                     globalThis.refreshPatientFiles(editId);
                     showToast('✓ File deleted');
                 } else {
@@ -11211,8 +11366,8 @@ const findHeaderIndex = (rows, sheetLog) => {
         </div>
 
         <!-- Shortcuts Help Modal -->
-        <div id="shortcuts-modal" class="shortcuts-modal">
-            <div class="shortcuts-content" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+        <dialog id="shortcuts-modal" class="shortcuts-modal" aria-labelledby="shortcuts-title">
+            <div class="shortcuts-content">
                 <div class="shortcuts-header">
                     <div class="shortcuts-title-wrap">
                         <h2 id="shortcuts-title" class="text-xl font-bold flex items-center gap-2">⌨️ Keyboard Shortcuts</h2>
@@ -11282,7 +11437,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 <button onclick="globalThis.closeShortcutsHelp()" class="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">Got It</button>
                 </div>
             </div>
-        </div>
+        </dialog>
 
         <!-- Advanced Filter Panel -->
         <div id="advanced-filter-panel" class="advanced-filter-panel">
@@ -11497,7 +11652,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         <div class="swipe-hint">👆 Swipe left/right to navigate tabs on mobile</div>
 
         <!-- Tabs: Business Flow Order (Census→Surgical→Calendar→Timeline→Analytics→Reports→Audit→Shifts→Procedures→Review→Archive) -->
-        <nav class="selection-underlay-target desktop-tab-nav px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" aria-label="Main Navigation" role="tablist">
+        <div class="selection-underlay-target desktop-tab-nav px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" aria-label="Main Navigation" role="tablist">
             <button id="tab-active-btn" onclick="globalThis.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="table-section">Census</button>
             <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="table-section" title="Shows records tagged as surgical by keyword match in Plan/Findings or by surgical status.">Surgical</button>
             <button id="tab-calendar-btn" onclick="globalThis.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-section">Calendar</button>
@@ -11510,7 +11665,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             <button id="tab-review-btn" onclick="globalThis.setTab('review')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="review-section" title="Records flagged during import requiring human review">Review</button>
             <button id="tab-oncall-btn" onclick="globalThis.setTab('oncall')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="oncall-section" title="On-call staffing">Staffing</button>
             <button id="tab-archive-btn" onclick="globalThis.setTab('archive')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="table-section">Archive</button>
-        </nav>
+        </div>
 
         <!-- Content Area -->
         <div id="main-content" class="content-area" tabindex="-1">
@@ -11658,7 +11813,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
                                     <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="BTMC">
-                                    <span class="text-sm">Boswell Medical Center (BTMC)</span>
+                                    <span class="text-sm">Banner Thunderbird Medical Center (BTMC)</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded">
                                     <input type="checkbox" class="oc-hospital-checkbox w-4 h-4" value="Westgate">
@@ -11963,7 +12118,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         <option value="">Select Hospital</option>
                         <option value="WGMC">Westgate Medical Center (WGMC)</option>
                         <option value="AWC">Abrazo West Campus (AWC)</option>
-                        <option value="BTMC">Boswell Medical Center (BTMC)</option>
+                        <option value="BTMC">Banner Thunderbird Medical Center (BTMC)</option>
                         <option value="Westgate">Westgate</option>
                         <option value="CRMC">CRMC</option>
                         <option value="AHD">AHD</option>
@@ -12333,9 +12488,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                     </div>
                     <div class="flex flex-col gap-2 md:flex-row md:items-center">
                         <label for="patient-files-input" class="sr-only">Patient file attachments</label>
-                        <input id="patient-files-input" type="file" multiple class="w-full text-xs" aria-label="Patient file attachments" title="Patient file attachments" />
+                        <input id="patient-files-input" type="file" multiple class="w-full text-xs" aria-label="Patient file attachments" title="Patient file attachments" onchange="globalThis.updatePatientFileSelectionNotice()" />
                         <button id="patient-files-upload" type="button" onclick="globalThis.uploadPatientFiles()" class="px-3 py-2 text-xs font-bold bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">Upload</button>
                     </div>
+                    <div id="patient-files-notice" class="text-[11px] text-slate-500">Max 25 MB per file, 100 MB per upload. Files are stored in the SharePoint PatientDocuments library when connected.</div>
                     <div id="patient-files-list" class="space-y-2 text-xs text-slate-600">
                         <div class="text-slate-400">No files uploaded.</div>
                     </div>
@@ -14068,7 +14224,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
                 
                 // Step 3: RBAC check - clinician accessing patient data
-                const canAccess = RBACEngine.checkAccess('dr_smith', 'clinician', 'view_patient_records');
+                RBACEngine.assignRole('dr_smith', 'clinician');
+                const canAccess = RBACEngine.checkAccess('dr_smith', 'read_patients', { action: 'view_patient_records' });
+                AuditLogger.logDataAccess('dr_smith', 'patient_001', 'view_patient_records');
                 if (!canAccess) {
                     return { pass: false, msg: 'Clinician should have view_patient_records permission' };
                 }
@@ -14086,7 +14244,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             }
         };
 
-        globalThis.testExportAndRetentionFlow = () => {
+        globalThis.testExportAndRetentionFlow = async () => {
             try {
                 // Scenario: User exports patient data with lifecycle management
                 ComplianceEngine.setMode('hipaa_strict');
@@ -14095,7 +14253,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 ExternalExportService.resetExports && ExternalExportService.resetExports();
                 
                 // Step 1: Set retention policy
-                DataLifecycleManager.setRetentionPolicy('patient_001', 'patient_records', 7 * 365 * 24 * 60 * 60 * 1000);
+                DataLifecycleManager.setRetentionPolicy('patient_001', 2555, 'patient_records');
                 const retention = DataLifecycleManager.getRetentionStatus('patient_001');
                 if (!retention || retention.daysRemaining === undefined) {
                     return { pass: false, msg: 'Retention policy should track days remaining' };
@@ -14110,10 +14268,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                     records: ['findings', 'plan']
                 };
                 
-                const oneDriveExport = ExternalExportService.exportToOneDrive(
+                const oneDriveExport = await ExternalExportService.exportToOneDrive(
                     'user1',
-                    [exportData],
-                    true // encrypt
+                    [exportData.patientId],
+                    { accountType: 'enterprise' }
                 );
                 
                 if (!oneDriveExport || !oneDriveExport.exportId) {
@@ -14259,18 +14417,19 @@ const findHeaderIndex = (rows, sheetLog) => {
         };
 
         // Integration test runner - Phase 9 end-to-end tests
-        globalThis.runIntegrationTests = () => {
+        globalThis.runIntegrationTests = async () => {
             const tests = [
                 { name: 'E2E Flow 1: Auth→Access→Audit', fn: globalThis.testAuthToAccessFlow },
                 { name: 'E2E Flow 2: Export→Retention→Lifecycle', fn: globalThis.testExportAndRetentionFlow },
                 { name: 'E2E Flow 3: Anomaly→Incident→Investigation', fn: globalThis.testAnomalyToIncidentFlow },
                 { name: 'E2E Validation: Compliance Mode Consistency', fn: globalThis.testComplianceModeConsistency }
             ];
-            const results = tests.map(t => {
-                const result = t.fn();
+            const results = [];
+            for (const t of tests) {
+                const result = await t.fn();
                 console.log(`[${t.name}] ${result.pass ? '✓' : '✗'} ${result.msg}`);
-                return { name: t.name, ...result };
-            });
+                results.push({ name: t.name, ...result });
+            }
             const allPass = results.every(r => r.pass);
             console.log(`\n=== FINAL CHECKPOINT ===`);
             console.log(`Overall Status: ${allPass ? '✓ ALL TESTS PASS' : '✗ SOME TESTS FAIL'}`);
@@ -14513,8 +14672,8 @@ const findHeaderIndex = (rows, sheetLog) => {
     ════════════════════════════════════════════════════════════════════════ -->
 
     <!-- Overlay backdrop + panel -->
-    <div id="import-wizard"
-         role="dialog" aria-modal="true" aria-labelledby="iw-title"
+        <dialog id="import-wizard"
+            aria-labelledby="iw-title"
          class="hidden fixed inset-0 z-[9999] flex items-stretch justify-center bg-black/60 backdrop-blur-sm">
 
         <div class="relative flex flex-col w-full max-w-3xl mx-auto my-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
@@ -14552,7 +14711,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             <div id="iw-footer" class="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 flex-shrink-0"></div>
 
         </div>
-    </div>
+    </dialog>
 
     <!-- ── Import Wizard Script ── -->
     <script>
@@ -14576,6 +14735,8 @@ const findHeaderIndex = (rows, sheetLog) => {
         const el = document.getElementById('import-wizard');
         if (!el) return;
         el.classList.remove('hidden');
+        if (typeof el.showModal === 'function' && !el.open) el.showModal();
+        else el.setAttribute('open', '');
         document.getElementById('csv-file-input').value = '';
         _iwPreview = null;
         _iwFiles   = null;
@@ -14595,6 +14756,8 @@ const findHeaderIndex = (rows, sheetLog) => {
             eng.cancel();
         }
         el.classList.add('hidden');
+        if (typeof el.close === 'function' && el.open) el.close();
+        else el.removeAttribute('open');
         document.getElementById('csv-file-input').value = '';
     };
 
