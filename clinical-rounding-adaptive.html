@@ -6322,6 +6322,288 @@
             }
         }
 
+        const PRACTICE_REPORT_TYPES = new Set([
+            'provider-detail',
+            'code-utilization',
+            'billing-readiness',
+            'procedure-pipeline',
+            'followup-worklist',
+            'practice-opportunities'
+        ]);
+
+        function getReportTitle(reportType) {
+            return {
+                daily: 'Daily Rounding',
+                surgical: 'Surgical Procedures',
+                'patient-summary': 'Patient Summary',
+                'hospital-census': 'Hospital Census',
+                'shift-handoff': 'Shift Handoff',
+                'provider-detail': 'Practice by Doctor',
+                'code-utilization': 'Practice by Code',
+                'billing-readiness': 'Billing Readiness Audit',
+                'procedure-pipeline': 'Procedure Pipeline',
+                'followup-worklist': 'Follow-up Worklist',
+                'practice-opportunities': 'Practice Enhancement Opportunities'
+            }[reportType] || 'Report';
+        }
+
+        function getReportRows(reportType, reportDate, reportHosp) {
+            let data = patients.filter(p => !p.archived);
+            if (reportDate) data = data.filter(p => p.date === reportDate);
+            if (reportHosp) data = data.filter(p => p.hospital === reportHosp);
+            if (reportType === 'surgical') data = data.filter(p => isSurgicalCase(p));
+            return data;
+        }
+
+        function getReportCodes(patient, fieldName) {
+            const codes = [];
+            const pushCode = (value) => {
+                const text = String(value || '').trim().toUpperCase();
+                if (text) codes.push(text);
+            };
+            pushCode(patient[fieldName]);
+            if (fieldName === 'cptPrimary' && patient.chargeCodesSecondary) {
+                try {
+                    const raw = Array.isArray(patient.chargeCodesSecondary)
+                        ? patient.chargeCodesSecondary
+                        : JSON.parse(patient.chargeCodesSecondary);
+                    (Array.isArray(raw) ? raw : Object.values(raw || {})).forEach(pushCode);
+                } catch (err) {
+                    console.debug('Skipping malformed secondary charge codes:', err?.message || err);
+                }
+            }
+            return [...new Set(codes)];
+        }
+
+        function buildPracticeReport(reportType, data) {
+            const byKey = (records, keyFn, seedFn, updateFn) => {
+                const map = {};
+                records.forEach((record) => {
+                    const key = keyFn(record) || 'Unassigned';
+                    if (!map[key]) map[key] = seedFn(key);
+                    updateFn(map[key], record);
+                });
+                return Object.entries(map).sort((a, b) => (b[1].visits || b[1].count || 0) - (a[1].visits || a[1].count || 0));
+            };
+            const pct = (part, total) => total ? `${Math.round((part / total) * 100)}%` : '0%';
+            const hasText = value => String(value || '').trim().length > 0;
+            const card = (title, value, subtitle) => ({ title, value, subtitle });
+            const section = (title, headers, rows) => ({ title, headers, rows });
+            const topCode = (map) => Object.entries(map).sort((a, b) => b[1] - a[1])[0] || ['-', 0];
+
+            if (reportType === 'provider-detail') {
+                const providerRows = byKey(
+                    data,
+                    p => String(p.supervisingMd || p.md || '').trim() || 'Unassigned',
+                    () => ({ visits: 0, uniqueMrns: new Set(), procedures: 0, stat: 0, pending: 0, followups: 0, coded: 0, cpt: {} }),
+                    (row, p) => {
+                        row.visits++;
+                        if (p.mrn) row.uniqueMrns.add(p.mrn);
+                        if (isSurgicalCase(p)) row.procedures++;
+                        if (p.stat === true || p.stat === 'true') row.stat++;
+                        if (hasText(p.pending)) row.pending++;
+                        if (hasText(p.followUp)) row.followups++;
+                        if (hasText(p.cptPrimary) && hasText(p.icdPrimary)) row.coded++;
+                        getReportCodes(p, 'cptPrimary').forEach(code => { row.cpt[code] = (row.cpt[code] || 0) + 1; });
+                    }
+                );
+                const topProvider = providerRows[0];
+                return {
+                    cards: [
+                        card('Doctors', providerRows.length, 'With active records'),
+                        card('Top Caseload', topProvider?.[0] || '-', `${topProvider?.[1].visits || 0} visits`),
+                        card('Avg Visits / Doctor', providerRows.length ? Math.round(data.length / providerRows.length) : 0, 'Current filtered cohort'),
+                        card('Billing Complete', pct(data.filter(p => hasText(p.cptPrimary) && hasText(p.icdPrimary)).length, data.length), 'CPT + ICD present')
+                    ],
+                    sections: [section('Doctor Workload and Coding', ['Doctor', 'Visits', 'Unique MRNs', 'Procedures', 'STAT', 'Pending', 'Follow-up', 'Coded', 'Top CPT'], providerRows.map(([name, row]) => {
+                        const [code, count] = topCode(row.cpt);
+                        return [name, row.visits, row.uniqueMrns.size, row.procedures, row.stat, row.pending, row.followups, `${row.coded} (${pct(row.coded, row.visits)})`, code === '-' ? '-' : `${code} (${count})`];
+                    }))]
+                };
+            }
+
+            if (reportType === 'code-utilization') {
+                const cpt = {};
+                const icd = {};
+                const byProviderCode = {};
+                data.forEach((p) => {
+                    const md = String(p.supervisingMd || p.md || 'Unassigned').trim() || 'Unassigned';
+                    getReportCodes(p, 'cptPrimary').forEach(code => {
+                        cpt[code] = (cpt[code] || 0) + 1;
+                        const key = `${md} | CPT ${code}`;
+                        byProviderCode[key] = (byProviderCode[key] || 0) + 1;
+                    });
+                    getReportCodes(p, 'icdPrimary').forEach(code => { icd[code] = (icd[code] || 0) + 1; });
+                });
+                const cptRows = Object.entries(cpt).sort((a, b) => b[1] - a[1]);
+                const icdRows = Object.entries(icd).sort((a, b) => b[1] - a[1]);
+                const [topCpt, topCptCount] = cptRows[0] || ['-', 0];
+                const [topIcd, topIcdCount] = icdRows[0] || ['-', 0];
+                return {
+                    cards: [
+                        card('Unique CPT', cptRows.length, 'Procedure code variety'),
+                        card('Top CPT', topCpt, `${topCptCount} uses`),
+                        card('Unique ICD', icdRows.length, 'Diagnosis code variety'),
+                        card('Top ICD', topIcd, `${topIcdCount} uses`)
+                    ],
+                    sections: [
+                        section('CPT Utilization', ['CPT Code', 'Cases', 'Share'], cptRows.map(([code, count]) => [code, count, pct(count, data.length)])),
+                        section('ICD Utilization', ['ICD Code', 'Cases', 'Share'], icdRows.map(([code, count]) => [code, count, pct(count, data.length)])),
+                        section('Doctor / CPT Mix', ['Doctor + CPT', 'Cases'], Object.entries(byProviderCode).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([key, count]) => [key, count]))
+                    ]
+                };
+            }
+
+            if (reportType === 'billing-readiness') {
+                const complete = data.filter(p => hasText(p.cptPrimary) && hasText(p.icdPrimary));
+                const missingCpt = data.filter(p => !hasText(p.cptPrimary));
+                const missingIcd = data.filter(p => !hasText(p.icdPrimary));
+                const needsReview = data.filter(p => !hasText(p.cptPrimary) || !hasText(p.icdPrimary));
+                return {
+                    cards: [
+                        card('Ready to Bill', complete.length, `${pct(complete.length, data.length)} complete`),
+                        card('Missing CPT', missingCpt.length, 'Procedure code gap'),
+                        card('Missing ICD', missingIcd.length, 'Diagnosis code gap'),
+                        card('Needs Review', needsReview.length, 'Before export')
+                    ],
+                    sections: [section('Billing Gaps by Record', ['Patient', 'Date', 'Doctor', 'Hospital', 'Missing', 'Status'], needsReview.map(p => {
+                        const missing = [];
+                        if (hasText(p.cptPrimary) === false) missing.push('CPT');
+                        if (hasText(p.icdPrimary) === false) missing.push('ICD');
+                        return [p.name || '-', p.date || '-', p.supervisingMd || p.md || '-', p.hospital || '-', missing.join(' + '), getSafeConfiguredStatus(getPatientStatus(p))];
+                    }))]
+                };
+            }
+
+            if (reportType === 'procedure-pipeline') {
+                const procedures = data.filter(p => isSurgicalCase(p));
+                const statusRows = byKey(
+                    procedures,
+                    p => getSafeConfiguredStatus(getPatientStatus(p)),
+                    () => ({ visits: 0, stat: 0, pending: 0, hospitals: new Set() }),
+                    (row, p) => {
+                        row.visits++;
+                        if (p.stat === true || p.stat === 'true') row.stat++;
+                        if (hasText(p.pending)) row.pending++;
+                        if (p.hospital) row.hospitals.add(p.hospital);
+                    }
+                );
+                const active = procedures.filter(p => isActiveSurgicalWorkflowStatus(getPatientStatus(p))).length;
+                const downstream = procedures.filter(p => isDownstreamSurgicalWorkflowStatus(getPatientStatus(p))).length;
+                return {
+                    cards: [
+                        card('Procedures', procedures.length, 'Surgical/procedure records'),
+                        card('Active Pipeline', active, 'To-do or in progress'),
+                        card('Completed / Post-op', downstream, `${pct(downstream, procedures.length)} downstream`),
+                        card('Pending Results', procedures.filter(p => hasText(p.pending)).length, 'Procedure cases with pending items')
+                    ],
+                    sections: [
+                        section('Procedure Status Pipeline', ['Status', 'Cases', 'STAT', 'Pending', 'Hospitals'], statusRows.map(([status, row]) => [status, row.visits, row.stat, row.pending, [...row.hospitals].join(', ') || '-'])),
+                        section('Procedure Cases Needing Attention', ['Patient', 'Date', 'Doctor', 'Hospital', 'Status', 'Pending'], procedures.filter(p => hasText(p.pending) || p.stat === true || p.stat === 'true').map(p => [p.name || '-', p.date || '-', p.supervisingMd || p.md || '-', p.hospital || '-', getSafeConfiguredStatus(getPatientStatus(p)), String(p.pending || '').slice(0, 80)]))
+                    ]
+                };
+            }
+
+            if (reportType === 'followup-worklist') {
+                const followups = data.filter(p => hasText(p.followUp));
+                const pending = data.filter(p => hasText(p.pending));
+                const both = data.filter(p => hasText(p.followUp) && hasText(p.pending));
+                const aged = data.filter(p => (globalThis.calculateLOS(p.date) || 0) >= 7);
+                return {
+                    cards: [
+                        card('Follow-up Items', followups.length, 'Clinic / post-discharge work'),
+                        card('Pending Tests', pending.length, 'Results to chase'),
+                        card('Both', both.length, 'Highest coordination need'),
+                        card('Aged 7d+', aged.length, 'Older records still active')
+                    ],
+                    sections: [section('Coordination Worklist', ['Patient', 'Date', 'LOS', 'Doctor', 'Hospital', 'Pending', 'Follow-up'], data.filter(p => hasText(p.followUp) || hasText(p.pending) || (globalThis.calculateLOS(p.date) || 0) >= 7).map(p => [
+                        p.name || '-', p.date || '-', `${globalThis.calculateLOS(p.date) || 0}d`, p.supervisingMd || p.md || '-', p.hospital || '-', String(p.pending || '').slice(0, 80), String(p.followUp || '').slice(0, 80)
+                    ]))]
+                };
+            }
+
+            const unbilledProcedure = data.filter(p => isSurgicalCase(p) && (!hasText(p.cptPrimary) || !hasText(p.icdPrimary)));
+            const postOpNoFollowup = data.filter(p => isDownstreamSurgicalWorkflowStatus(getPatientStatus(p)) && !hasText(p.followUp));
+            const highTouch = data.filter(p => (p.stat === true || p.stat === 'true') || hasText(p.pending) || (globalThis.calculateLOS(p.date) || 0) >= 7);
+            const hospitalRows = byKey(
+                data,
+                p => p.hospital || 'Unassigned',
+                () => ({ visits: 0, procedures: 0, unbilled: 0, pending: 0, providers: new Set() }),
+                (row, p) => {
+                    row.visits++;
+                    if (isSurgicalCase(p)) row.procedures++;
+                    if (hasText(p.cptPrimary) === false || hasText(p.icdPrimary) === false) row.unbilled++;
+                    if (hasText(p.pending)) row.pending++;
+                    if (p.supervisingMd || p.md) row.providers.add(p.supervisingMd || p.md);
+                }
+            );
+            return {
+                cards: [
+                    card('Unbilled Procedures', unbilledProcedure.length, 'Procedure revenue capture'),
+                    card('Post-op No Follow-up', postOpNoFollowup.length, 'Continuity opportunity'),
+                    card('High-touch Records', highTouch.length, 'STAT, pending, or aged'),
+                    card('Hospitals', hospitalRows.length, 'Current footprint')
+                ],
+                sections: [
+                    section('Practice Opportunities by Hospital', ['Hospital', 'Visits', 'Procedures', 'Unbilled / Incomplete', 'Pending', 'Doctors'], hospitalRows.map(([hospital, row]) => [hospital, row.visits, row.procedures, row.unbilled, row.pending, [...row.providers].join(', ') || '-'])),
+                    section('Actionable Opportunity Records', ['Patient', 'Date', 'Doctor', 'Hospital', 'Opportunity'], [...unbilledProcedure, ...postOpNoFollowup, ...highTouch].filter((p, idx, arr) => arr.findIndex(x => x.id === p.id) === idx).slice(0, 50).map(p => [
+                        p.name || '-', p.date || '-', p.supervisingMd || p.md || '-', p.hospital || '-',
+                        [isSurgicalCase(p) && (!hasText(p.cptPrimary) || !hasText(p.icdPrimary)) ? 'complete billing' : '', isDownstreamSurgicalWorkflowStatus(getPatientStatus(p)) && !hasText(p.followUp) ? 'add follow-up' : '', hasText(p.pending) ? 'resolve pending' : '', (globalThis.calculateLOS(p.date) || 0) >= 7 ? 'aged record' : ''].filter(Boolean).join('; ')
+                    ]))
+                ]
+            };
+        }
+
+        function renderPracticeReportPreview(reportType, data, reportDate, reportHosp, preview) {
+            const title = getReportTitle(reportType);
+            const esc = v => String(v == null ? '' : v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+            const report = buildPracticeReport(reportType, data);
+            const cardsHtml = report.cards.map(item => `
+                <div class="bg-white border border-slate-200 rounded-lg p-3">
+                    <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500">${esc(item.title)}</div>
+                    <div class="text-2xl font-black text-slate-900 mt-1">${esc(item.value)}</div>
+                    <div class="text-xs text-slate-500 mt-1">${esc(item.subtitle)}</div>
+                </div>`).join('');
+            const sectionsHtml = report.sections.map((part) => {
+                const rows = part.rows.length ? part.rows.map(row => `<tr>${row.map(cell => `<td class="px-2 py-2 align-top">${esc(cell)}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${part.headers.length}" class="px-2 py-6 text-center text-slate-500">No matching records.</td></tr>`;
+                return `
+                    <section class="mt-4 bg-white border border-slate-200 rounded-lg overflow-hidden">
+                        <div class="px-3 py-2 bg-slate-50 border-b border-slate-200 font-bold text-sm text-slate-700">${esc(part.title)}</div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs border-collapse">
+                                <thead><tr class="bg-slate-100 text-slate-600">${part.headers.map(h => `<th class="px-2 py-2 text-left">${esc(h)}</th>`).join('')}</tr></thead>
+                                <tbody class="divide-y divide-slate-100">${rows}</tbody>
+                            </table>
+                        </div>
+                    </section>`;
+            }).join('');
+            preview.innerHTML = `
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+                    <div>
+                        <div class="font-bold text-slate-800">${esc(title)} - ${data.length} record${pluralSuffix(data.length)}</div>
+                        <div class="text-xs text-slate-500">${reportDate ? 'Date: ' + esc(reportDate) : 'All dates'} | ${reportHosp ? 'Hospital: ' + esc(reportHosp) : 'All hospitals'}</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="globalThis.print()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded">Print</button>
+                        <button onclick="globalThis._downloadPDF()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">Download PDF</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">${cardsHtml}</div>
+                ${sectionsHtml}`;
+            const pdfRows = [];
+            report.sections.forEach(part => {
+                part.rows.forEach(row => pdfRows.push([part.title, ...row]));
+            });
+            globalThis._pdfPayload = {
+                reportType,
+                reportDate,
+                reportHosp,
+                data,
+                pdfColumns: ['Section', 'Metric', 'Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5', 'Value 6', 'Value 7', 'Value 8'],
+                pdfRows: pdfRows.map(row => row.slice(0, 10))
+            };
+        }
+
         globalThis.generatePDFReport = () => {
             const reportType = document.getElementById('report-type')?.value || 'daily';
             const reportDate = document.getElementById('report-date')?.value || '';
@@ -6329,10 +6611,7 @@
             const preview    = document.getElementById('pdf-preview');
 
             // Determine data set
-            let data = patients.filter(p => !p.archived);
-            if (reportDate) data = data.filter(p => p.date === reportDate);
-            if (reportHosp) data = data.filter(p => p.hospital === reportHosp);
-            if (reportType === 'surgical') data = data.filter(p => isSurgicalCase(p));
+            let data = getReportRows(reportType, reportDate, reportHosp);
 
             if (!data.length) {
                 if (preview) preview.innerHTML = `<div class="text-center text-slate-500 py-8">No matching records for the selected filters.<br><span class="text-xs">Try changing the date, hospital, or report type.</span></div>`;
@@ -6340,9 +6619,15 @@
                 return;
             }
 
+            if (PRACTICE_REPORT_TYPES.has(reportType)) {
+                if (preview) renderPracticeReportPreview(reportType, data, reportDate, reportHosp, preview);
+                showToast('Practice report ready');
+                return;
+            }
+
             // Show print preview in the page
             if (preview) {
-                const title = { daily: 'Daily Rounding', surgical: 'Surgical Procedures', 'patient-summary': 'Patient Summary', 'hospital-census': 'Hospital Census', 'shift-handoff': 'Shift Handoff' }[reportType] || 'Report';
+                const title = getReportTitle(reportType);
                 const esc = v => String(v == null ? '' : v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
                 const rows = data.map(p => `
                     <tr>
@@ -6390,8 +6675,8 @@
                 const jsPDF = globalThis.jspdf?.jsPDF || globalThis.jsPDF;
                 if (!jsPDF) { showToast('PDF library not loaded — use Print instead'); globalThis.print(); return; }
 
-                const { reportType, reportDate, reportHosp, data } = payload;
-                const title = { daily: 'Daily Rounding', surgical: 'Surgical Procedures', 'patient-summary': 'Patient Summary', 'hospital-census': 'Hospital Census', 'shift-handoff': 'Shift Handoff' }[reportType] || 'Report';
+                const { reportType, reportDate, reportHosp, data, pdfColumns, pdfRows } = payload;
+                const title = getReportTitle(reportType);
 
                 const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
@@ -6410,8 +6695,8 @@
                 doc.text(subLine, 14, 22);
 
                 // Table
-                const cols = ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Progress Notes', 'Pending', 'MD'];
-                const rows = data.map(p => [
+                const cols = pdfColumns || ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Progress Notes', 'Pending', 'MD'];
+                const rows = pdfRows || data.map(p => [
                     p.date || '', p.name || '—', p.room || '', p.mrn || '',
                     p.hospital || '', getPatientStatus(p),
                     (p.plan || '').slice(0, 50), (getVisibleProgressNotes(p) || '').slice(0, 50), (p.pending || '').slice(0, 35),
@@ -11463,15 +11748,25 @@ const findHeaderIndex = (rows, sheetLog) => {
             <!-- PDF Reports Section -->
             <div id="reports-section" class="selection-underlay-target hidden h-full p-4 overflow-y-auto">
                 <div>
-                    <div class="text-2xl font-bold mb-4">📄 PDF Reports</div>
+                    <div class="text-2xl font-bold mb-4">📄 Practice Reports</div>
                     <div class="pdf-generator">
                         <h3 class="font-bold mb-3">Generate Report</h3>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
                             <select id="report-type" class="p-2 text-xs border rounded" aria-label="Report type" title="Report type">
+                                <optgroup label="Practice Enhancement">
+                                    <option value="provider-detail">Practice by Doctor</option>
+                                    <option value="code-utilization">Practice by Code</option>
+                                    <option value="billing-readiness">Billing Readiness Audit</option>
+                                    <option value="procedure-pipeline">Procedure Pipeline</option>
+                                    <option value="followup-worklist">Follow-up Worklist</option>
+                                    <option value="practice-opportunities">Enhancement Opportunities</option>
+                                </optgroup>
+                                <optgroup label="Patient Lists">
                                 <option value="daily">Daily Rounding</option>
                                 <option value="surgical">Surgical Procedures</option>
                                 <option value="patient-summary">Patient Summary</option>
                                 <option value="hospital-census">Hospital Census</option>
+                                </optgroup>
                             </select>
                             <label for="report-date" class="sr-only">Report date</label>
                             <input type="date" id="report-date" class="p-2 text-xs border rounded" aria-label="Report date" title="Report date" />
@@ -11481,11 +11776,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <option value="AWC">AWC</option>
                                 <option value="BTMC">BTMC</option>
                             </select>
-                            <button onclick="globalThis.generatePDFReport()" class="p-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Generate PDF</button>
+                            <button onclick="globalThis.generatePDFReport()" class="p-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">Generate Report</button>
                         </div>
                     </div>
                     <div id="pdf-preview" class="pdf-preview">
-                        <p class="text-center text-slate-500">PDF preview will appear here...</p>
+                        <p class="text-center text-slate-500">Choose a practice report to see doctor, code, billing, pipeline, and follow-up insights.</p>
                     </div>
                 </div>
             </div>
