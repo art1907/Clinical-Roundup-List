@@ -6462,6 +6462,23 @@
                 return;
             }
             
+            const buildCardHistoryHTML = (p, mrnKey) => {
+                const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const visits = patients
+                    .filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey)
+                    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                const rows = visits.map(v => {
+                    const isCurrent = v.id === p.id;
+                    const st = getSafeConfiguredStatus(getPatientStatus(v));
+                    const stObj = STATUS_COLORS[st] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || {};
+                    return `<div class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[10px] text-slate-500 flex-1 truncate">${esc(v.hospital || '')}</span>\n                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : '<span class="text-[9px] text-blue-500 opacity-0 group-hover/hrow:opacity-100">open ↗</span>'}\n                    </div>`;
+                }).join('');
+                return `<div class="mt-2 border-t border-blue-100 pt-2">
+                    <div class="text-[10px] font-bold text-slate-500 mb-1 px-1">📋 Visit history (${visits.length} total)</div>
+                    <div class="space-y-0.5 max-h-36 overflow-y-auto">${rows}</div>
+                </div>`;
+            };
+
             container.innerHTML = filtered.map(p => {
                 const age = globalThis.calculateAge(p.dob);
                 const los = globalThis.calculateLOS(p.date);
@@ -6471,6 +6488,9 @@
                 const crossedOutCardClass = isPatientCrossedOut(p.id) ? 'crossed-out' : '';
                 const findingsSegments = getFindingSegments(p);
                 const findingsLabel = findingsSegments.length ? `🔍 Findings · ${findingsSegments.length}` : '🔍 Findings';
+                const mrnKey = String(p.mrn || p.id || '').toLowerCase();
+                const visitCount = patients.filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey).length;
+                const isExpanded = expandedPatientMrns.has(mrnKey);
                 
                 return `
                     <div class="patient-card ${statClass} ${crossedOutCardClass}">
@@ -6539,7 +6559,9 @@
                         <div class="card-actions">
                             <button class="card-action-btn card-edit" onclick="globalThis.openModal('${p.id}')">Edit</button>
                             <button class="card-action-btn card-print" onclick="globalThis.printPatientRecord('${p.id}')">Print</button>
+                            ${visitCount > 1 ? `<button class="card-action-btn" style="background:${isExpanded ? '#dbeafe' : '#f1f5f9'};color:${isExpanded ? '#1d4ed8' : '#64748b'};border:1px solid ${isExpanded ? '#bfdbfe' : '#e2e8f0'}" onclick="globalThis.togglePatientHistory('${mrnKey}')">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         </div>
+                        ${isExpanded ? buildCardHistoryHTML(p, mrnKey) : ''}
                     </div>
                 `;
             }).join('');
@@ -6565,6 +6587,23 @@
                 return;
             }
 
+            const buildMobileCardHistoryHTML = (patient, mrnKey) => {
+                const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const visits = patients
+                    .filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKey)
+                    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                const rows = visits.map(v => {
+                    const isCurrent = v.id === patient.id;
+                    const st = getSafeConfiguredStatus(getPatientStatus(v));
+                    const stObj = STATUS_COLORS[st] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || {};
+                    return `<div class="flex items-center gap-2 px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 ml-auto">current</span>' : '<span class="text-[10px] text-blue-500 ml-auto">tap to open ↗</span>'}\n                    </div>`;
+                }).join('');
+                return `<div class="border-t-2 border-blue-100 bg-slate-50">
+                    <div class="text-[10px] font-bold text-slate-500 px-3 pt-2 pb-1">📋 Visit history (${visits.length} total)</div>
+                    <div class="max-h-48 overflow-y-auto">${rows}</div>
+                </div>`;
+            };
+
             container.innerHTML = filtered.map((patient) => {
                 const status = getSafeConfiguredStatus(getPatientStatus(patient));
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || STATUS_COLORS['To-Do'];
@@ -6580,6 +6619,9 @@
                 else if (isSurgical) kicker = 'Surgical Case';
                 const visitMeta = [patient.room || 'Room —', patient.hospital || 'Hospital —', patient.date || 'Date —'].join(' • ');
                 const planSummary = summarizeMobileText(patient.plan, 120);
+                const mrnKeyM = String(patient.mrn || patient.id || '').toLowerCase();
+                const visitCountM = patients.filter(v => String(v.mrn || v.id || '').toLowerCase() === mrnKeyM).length;
+                const isExpandedM = expandedPatientMrns.has(mrnKeyM);
 
                 return `
                     <article class="mobile-patient-card ${isStat ? 'stat' : ''} ${isCrossedOut ? 'crossed-out-row' : ''}">
@@ -6605,7 +6647,9 @@
                         <div class="mobile-card-actions">
                             <button onclick="globalThis.openModal('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Edit</button>
                             <button onclick="globalThis.printPatientRecord('${patient.id}')" class="bg-slate-700 text-white hover:bg-slate-800">Print</button>
+                            ${visitCountM > 1 ? `<button onclick="globalThis.togglePatientHistory('${mrnKeyM}')" class="${isExpandedM ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}">${isExpandedM ? '▼' : '▶'} ${visitCountM} visits</button>` : ''}
                         </div>
+                        ${isExpandedM ? buildMobileCardHistoryHTML(patient, mrnKeyM) : ''}
                     </article>
                 `;
             }).join('');
