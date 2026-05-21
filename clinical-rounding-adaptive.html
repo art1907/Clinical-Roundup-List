@@ -6616,7 +6616,8 @@
                     } else {
                         delta = `<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold ml-auto flex-shrink-0">${esc(prevSt)} → ${esc(st)}</span>`;
                     }
-                    return `<div class="flex items-center gap-2 px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${delta}\n                        ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                    </div>`;\n                }).join('');
+                    return `<div class="flex items-center gap-2 px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${delta}\n                        ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                    </div>`;
+                }).join('');
                 return `<div class="border-t-2 border-blue-100 bg-slate-50">
                     <div class="text-[10px] font-bold text-slate-500 px-3 pt-2 pb-1">📋 Visit history (${visits.length} total)</div>
                     <div class="max-h-48 overflow-y-auto">${rows}</div>
@@ -7646,15 +7647,56 @@
             banner.innerHTML = summaryLines.map(line => `<div>${escapeInlineHtml(line)}</div>`).join('');
         }
 
+        const normalizeImportedDateValue = (value) => {
+            if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                const year = value.getFullYear();
+                const month = String(value.getMonth() + 1).padStart(2, '0');
+                const day = String(value.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+
+            const text = String(value ?? '').replaceAll('\u00A0', ' ').trim();
+            if (!text) return '';
+            if (isValidIsoDateString(text)) return text;
+
+            const numeric = Number(text);
+            if (Number.isFinite(numeric) && numeric > 25000 && numeric < 80000) {
+                const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                excelEpoch.setUTCDate(excelEpoch.getUTCDate() + Math.floor(numeric));
+                return excelEpoch.toISOString().split('T')[0];
+            }
+
+            const slashMatch = text.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/);
+            if (slashMatch) {
+                const month = Number(slashMatch[1]);
+                const day = Number(slashMatch[2]);
+                let year = Number(slashMatch[3]);
+                if (year < 100) year += year >= 70 ? 1900 : 2000;
+                const normalized = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                if (isValidIsoDateString(normalized)) return normalized;
+            }
+
+            const parsed = new Date(text);
+            if (!Number.isNaN(parsed.getTime())) {
+                const year = parsed.getFullYear();
+                const month = String(parsed.getMonth() + 1).padStart(2, '0');
+                const day = String(parsed.getDate()).padStart(2, '0');
+                const normalized = `${year}-${month}-${day}`;
+                if (isValidIsoDateString(normalized)) return normalized;
+            }
+
+            return text;
+        };
+
         const buildImportIdentityKey = (patient = {}) => {
-            const normalizedDate = String(patient.date || '').trim();
+            const normalizedDate = normalizeImportedDateValue(patient.date || '').trim();
             const normalizedMrn = String(patient.mrn || '').trim().toLowerCase();
             const normalizedHospital = String(patient.hospital || '').trim().toLowerCase();
             const normalizedRoom = String(patient.room || '').trim().toLowerCase();
             const normalizedName = String(patient.name || '').trim().toLowerCase();
 
             if (normalizedMrn && normalizedDate) {
-                return `mrn|${normalizedMrn}|${normalizedDate}`;
+                return `${normalizedMrn}|${normalizedDate}`;
             }
 
             return `fallback|${normalizedDate}|${normalizedHospital || 'unknown-hospital'}|${normalizedRoom || 'unknown-room'}|${normalizedName || 'unknown-name'}`;
@@ -7689,6 +7731,18 @@
             };
 
             const normalizeHeader = (header) => normalizeCell(header).toLowerCase().replaceAll(/[^a-z0-9]+/g, '');
+
+            const firstNonEmptyIndex = (row) => (row || []).findIndex(cell => normalizeCell(cell));
+
+            const firstNonEmptyCell = (row) => {
+                const index = firstNonEmptyIndex(row);
+                return index >= 0 ? normalizeCell(row[index]) : '';
+            };
+
+            const nextNonEmptyCells = (row, startIndex) => (row || [])
+                .slice(startIndex)
+                .map(normalizeCell)
+                .filter(Boolean);
 
             const findCol = (normalizedHeaders, aliases) => {
                 const normalizedAliases = aliases.map(a => normalizeHeader(a));
@@ -7734,19 +7788,28 @@ const findHeaderIndex = (rows, sheetLog) => {
                     throw err;
                 }
 
-                const result = { onCall: [], patients: [], hospitals: [], validationLog, stats: { skipped: 0, parsed: 0, errors: [] } };
+                const result = { onCall: [], patients: [], hospitals: [], columnWarnings: [], validationLog, stats: { skipped: 0, parsed: 0, errors: [] } };
 
                 let onCallFound = 0;
                 for (let i = 0; i < Math.min(8, rows.length); i++) {
                     const parts = rows[i];
-                    const lead = (parts[0] || '').toLowerCase().replaceAll(':', '').trim();
-                    if ((lead === 'physician on-call' || lead === 'physician on call') && parts.length >= 4) {
+                    const labelIdx = parts.findIndex(cell => {
+                        const normalized = normalizeCell(cell).toLowerCase().replaceAll(':', '').trim();
+                        return normalized === 'physician on-call' || normalized === 'physician on call';
+                    });
+                    if (labelIdx >= 0) {
+                        const cells = nextNonEmptyCells(parts, labelIdx + 1);
+                        if (cells.length < 3) {
+                            result.columnWarnings.push(`Row ${i + 1}: Physician on-call row found but date/provider/hospitals are incomplete.`);
+                            log(`Row ${i}: On-call label found but needed date/provider/hospitals after it`, 'warn');
+                            continue;
+                        }
                         result.onCall.push({
-                            date: parts[1],
-                            provider: parts[2],
-                            hospitals: parts[3]
+                            date: normalizeImportedDateValue(cells[0]),
+                            provider: cells[1],
+                            hospitals: cells.slice(2).join(', ')
                         });
-                        log(`Row ${i}: Found on-call entry - ${parts[2]} on ${parts[1]}`, 'success');
+                        log(`Row ${i}: Found on-call entry - ${cells[1]} on ${normalizeImportedDateValue(cells[0])}`, 'success');
                         onCallFound++;
                     }
                 }
@@ -7765,7 +7828,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const headerRow = rows[headerIdx];
                 const normalizedHeaders = headerRow.map(normalizeHeader);
                 const colMap = {
-                    hospital: findCol(normalizedHeaders, ['Hospital', 'Hospital/Room #', 'Facility']),
+                    hospital: findCol(normalizedHeaders, ['Hospital', 'Facility']),
                     room: findCol(normalizedHeaders, ['Room', 'Bed', 'Hospital/Room #']),
                     dateService: findCol(normalizedHeaders, ['Date of Service', 'Date']),
                     name: findCol(normalizedHeaders, ['Name', 'Patient']),
@@ -7782,10 +7845,23 @@ const findHeaderIndex = (rows, sheetLog) => {
                     throw new Error('Header mapping failed: missing Date/Date of Service column');
                 }
 
+                if (colMap.room === -1) {
+                    result.columnWarnings.push('Room column was not found. Rows without MRN may not maintain stable identity.');
+                }
+                if (colMap.mrn === -1) {
+                    result.columnWarnings.push('MRN column was not found. Duplicate detection will fall back to date + hospital + room + name.');
+                }
+                if (colMap.hospital === -1) {
+                    result.columnWarnings.push('Hospital column was not found. Hospital section headers will be used when available.');
+                }
+                if (normalizedHeaders.includes(normalizeHeader('Hospital/Room #')) && colMap.hospital === -1) {
+                    result.columnWarnings.push('Detected "Hospital/Room #" as a room column, not a hospital column. Hospital names must come from section headers or a separate Hospital column.');
+                }
+
                 let currentHospital = '';
                 for (let i = headerIdx + 1; i < rows.length; i++) {
                     const parts = rows[i];
-                    const first = parts[0] || '';
+                    const first = firstNonEmptyCell(parts);
                     const nonEmptyCount = parts.filter(Boolean).length;
                     const isHospitalHeader = first && nonEmptyCount === 1;
 
@@ -7802,7 +7878,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         continue;
                     }
 
-                    const dateValue = colMap.dateService >= 0 ? (parts[colMap.dateService] || '') : '';
+                    const dateValue = colMap.dateService >= 0 ? normalizeImportedDateValue(parts[colMap.dateService] || '') : '';
                     const roomValue = colMap.room >= 0 ? (parts[colMap.room] || '') : first;
                     const mrnValue = colMap.mrn >= 0 ? (parts[colMap.mrn] || '') : '';
 
@@ -9884,8 +9960,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                 files: [],
                 totals: { new: 0, updates: 0, unchanged: 0, intraFileDupes: 0, schedules: 0 },
                 updates: [],          // { patient, existing, changedFields, fileName }
+                intraFileDuplicateRows: [],
                 missingFromFile: [],  // Existing records for same dates NOT in new file
                 missingColumns: [],   // Expected column names absent from import
+                columnWarnings: [],
                 errors: [],
                 allPatients: [],
                 allSchedules: []
@@ -9897,12 +9975,13 @@ const findHeaderIndex = (rows, sheetLog) => {
 
                 for (const file of files) {
                     const fileName = file.name;
+                    const lowerFileName = fileName.toLowerCase();
                     let fileOnCall = [];
                     let filePatients = [];
                     let fileHospitals = [];
 
                     try {
-                        if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                        if (lowerFileName.endsWith('.xlsx') || lowerFileName.endsWith('.xls')) {
                             const arrayBuffer = await file.arrayBuffer();
                             const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                             console.log(`📊 Processing workbook "${fileName}" with ${workbook.SheetNames.length} sheet(s):`, workbook.SheetNames);
@@ -9918,6 +9997,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     fileOnCall = fileOnCall.concat(parsed.onCall);
                                     filePatients = filePatients.concat(parsed.patients);
                                     fileHospitals = [...new Set([...fileHospitals, ...parsed.hospitals])];
+                                    if (Array.isArray(parsed.columnWarnings)) {
+                                        parsed.columnWarnings.forEach(w => preview.columnWarnings.push(`${fileName} / ${sheetName}: ${w}`));
+                                    }
                                 } catch (sheetErr) {
                                     const message = `FAILED: Sheet "${sheetName}" — ${sheetErr.message}`;
                                     console.error(`  ❌ Sheet "${sheetName}" failed:`, sheetErr);
@@ -9928,12 +10010,15 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 }
                             }
                             console.log(`📁 File "${fileName}" total: ${filePatients.length} patients, ${fileOnCall.length} on-call`);
-                        } else if (fileName.endsWith('.csv')) {
+                        } else if (lowerFileName.endsWith('.csv')) {
                             const csvText = await file.text();
                             const parsed = CSVImporter.parse3Pass(csvText);
                             fileOnCall = parsed.onCall;
                             filePatients = parsed.patients;
                             fileHospitals = parsed.hospitals || [];
+                            if (Array.isArray(parsed.columnWarnings)) {
+                                parsed.columnWarnings.forEach(w => preview.columnWarnings.push(`${fileName}: ${w}`));
+                            }
                         }
 
                         if (filePatients.length === 0 && fileOnCall.length === 0) {
@@ -9948,7 +10033,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                             const key = buildImportIdentityKey(p);
                             if (seenKeysGlobal.has(key)) {
                                 fileIntraDupe++;
-                                fileDetails.push({ status: 'intra-dupe', mrn: p.mrn, date: p.date, name: p.name });
+                                const duplicateDetail = { status: 'intra-dupe', mrn: p.mrn, date: p.date, name: p.name, room: p.room, hospital: p.hospital, fileName, key };
+                                fileDetails.push(duplicateDetail);
+                                preview.intraFileDuplicateRows.push({ patient: p, fileName, key });
                                 return;
                             }
                             seenKeysGlobal.add(key);
@@ -10092,7 +10179,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
         // SHOW BULK IMPORT PREVIEW MODAL
         globalThis.showBulkImportPreview = (preview) => {
-            const { totals, updates, missingFromFile, missingColumns, errors, files } = preview;
+                const { totals, updates, missingFromFile, missingColumns, columnWarnings = [], errors, files, intraFileDuplicateRows = [] } = preview;
 
             // ── FILE SUMMARIES ──────────────────────────────────────────────────
             const filesHtml = files.map(f => `
@@ -10151,6 +10238,30 @@ const findHeaderIndex = (rows, sheetLog) => {
                 </div>
             ` : '';
 
+            const columnWarningsHtml = columnWarnings.length ? `
+                <div class="border border-orange-300 bg-orange-50 rounded p-3">
+                    <div class="text-xs font-bold text-orange-800 mb-1">⚠️ Column mapping warning(s)</div>
+                    <div class="text-xs text-orange-700 mb-2">Review these before applying updates. Blank or missing fields are preserved during updates.</div>
+                    <div class="max-h-24 overflow-y-auto space-y-0.5">
+                        ${columnWarnings.slice(0, 12).map(w => `<div class="text-xs text-orange-800">· ${w}</div>`).join('')}
+                        ${columnWarnings.length > 12 ? `<div class="text-xs text-orange-500 mt-1">…and ${columnWarnings.length - 12} more</div>` : ''}
+                    </div>
+                </div>
+            ` : '';
+
+            const intraDupesHtml = intraFileDuplicateRows.length ? `
+                <div class="border border-purple-300 bg-purple-50 rounded p-3">
+                    <div class="text-xs font-bold text-purple-800 mb-1">🔄 ${intraFileDuplicateRows.length} repeated visit key row(s) need review</div>
+                    <div class="text-xs text-purple-700 mb-2">These rows share the same MRN + visit date as another imported row. They are not deleted, but importing all will merge them into one visit record. Use the Review queue if they represent separate encounters.</div>
+                    <div class="max-h-28 overflow-y-auto space-y-0.5">
+                        ${intraFileDuplicateRows.slice(0, 15).map(({ patient, fileName }) =>
+                            `<div class="text-xs text-purple-900">· ${patient.name || patient.mrn || 'Unknown'} · MRN:${patient.mrn || '-'} · ${patient.date || '-'} · Rm ${patient.room || '-'} · ${fileName}</div>`
+                        ).join('')}
+                        ${intraFileDuplicateRows.length > 15 ? `<div class="text-xs text-purple-500 mt-1">…and ${intraFileDuplicateRows.length - 15} more</div>` : ''}
+                    </div>
+                </div>
+            ` : '';
+
             // ── PARSE ERRORS ────────────────────────────────────────────────────
             const errorsHtml = errors.length ? `
                 <div class="border border-red-400 bg-red-50 rounded p-3">
@@ -10159,7 +10270,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 </div>
             ` : '';
 
-            const hasWarnings = missingFromFile.length > 0 || missingColumns.length > 0 || errors.length > 0;
+            const hasWarnings = missingFromFile.length > 0 || missingColumns.length > 0 || columnWarnings.length > 0 || intraFileDuplicateRows.length > 0 || errors.length > 0;
 
             // ── ACTION BUTTONS (only shown if relevant) ─────────────────────────
             const btnAll = (totals.new > 0 || totals.updates > 0) ? `
@@ -10193,6 +10304,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                     ${hasWarnings ? `<div class="text-xs font-bold text-red-700">⚠️ WARNINGS — Review carefully before proceeding:</div>` : ''}
                     ${missingHtml}
                     ${missingColsHtml}
+                    ${columnWarningsHtml}
+                    ${intraDupesHtml}
                     ${updatesHtml}
                     <div class="border-t border-slate-200 pt-2">
                         <div class="text-xs font-semibold text-slate-500 mb-1">Per-file breakdown:</div>
@@ -10205,6 +10318,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     ${btnAll}
                     ${btnNewOnly}
                     ${btnUpdateOnly}
+                    ${intraFileDuplicateRows.length ? `<button onclick="globalThis.queueImportDuplicateRowsForReview()" class="w-full px-4 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700">Send repeated-key rows to Review Queue</button>` : ''}
                     <button onclick="globalThis.closeModal('bulk-preview-modal')" class="w-full px-4 py-2.5 bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-300">
                         ✗ Cancel — Do nothing
                     </button>
@@ -10214,7 +10328,38 @@ const findHeaderIndex = (rows, sheetLog) => {
             const modal = document.getElementById('patient-modal');
             modal.innerHTML = html;
             modal.style.display = 'flex';
+            globalThis._lastBulkImportPreview = preview;
         };
+
+        globalThis.queueImportDuplicateRowsForReview = () => {
+            const preview = globalThis._lastBulkImportPreview;
+            const duplicates = preview?.intraFileDuplicateRows || [];
+            if (!duplicates.length) return showToast('No repeated-key rows to review');
+            duplicates.forEach(({ patient, fileName, key }) => {
+                globalThis.flagRecordForReview(
+                    patient,
+                    [patient.hospital, patient.room, patient.date, patient.name || patient.mrn || 'unknown-patient'].filter(Boolean).join(' | '),
+                    `Repeated MRN + visit date in import (${key}) from ${fileName}. Confirm whether this is a separate encounter or an update to the same visit.`,
+                    'merge_conflict'
+                );
+            });
+            showToast(`✓ Sent ${duplicates.length} row(s) to Review`);
+        };
+
+        function clearPatientDisplayFiltersAfterImport() {
+            globalThis._quickFilterType = null;
+            globalThis._quickFilterDate = null;
+            globalThis._searchQueryText = '';
+            activeFilters = {};
+            activeProcedureFilter = null;
+            currentFilterPreset = null;
+            ['filter-date', 'filter-hospital', 'filter-room', 'filter-patient'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (input) input.value = '';
+            });
+            syncAdvancedFilterPanel();
+            currentTab = 'active';
+        }
 
         // EXECUTE BULK IMPORT with chosen action
         globalThis.proceedBulkImport = async (action) => {
@@ -10262,13 +10407,14 @@ const findHeaderIndex = (rows, sheetLog) => {
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     const fileName = file.name;
+                    const lowerFileName = fileName.toLowerCase();
 
                     try {
                         let fileOnCall = [];
                         let filePatients = [];
                         let fileHospitals = [];
 
-                        if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                        if (lowerFileName.endsWith('.xlsx') || lowerFileName.endsWith('.xls')) {
                             const arrayBuffer = await file.arrayBuffer();
                             const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                             console.log(`📊 Importing workbook "${fileName}" with ${workbook.SheetNames.length} sheet(s)`);
@@ -10294,7 +10440,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 }
                             }
                             console.log(`📁 File "${fileName}" importing: ${filePatients.length} total patients`);
-                        } else if (fileName.endsWith('.csv')) {
+                        } else if (lowerFileName.endsWith('.csv')) {
                             const csvText = await file.text();
                             const parsed = CSVImporter.parse3Pass(csvText);
                             fileOnCall = parsed.onCall;
@@ -10412,10 +10558,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                     }
                 }
 
+                clearPatientDisplayFiltersAfterImport();
                 renderUI();
                 updateStats();
 
-                const actionText = action === 'replace' ? 'All' : 'New Only';
+                const actionText = action === 'replace' ? 'All' : action === 'updateonly' ? 'Changes Only' : 'New Only';
                 showToast(`✅ Import complete (${actionText}): ${fileCount} file(s), ${totalPatients} record(s)`);
 
                 if (errors.length > 0) {
@@ -10439,7 +10586,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             if (!files || files.length === 0) return;
 
             // Determine whether to use the full wizard
-            const hasExcel    = Array.from(files).some(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
+            const hasExcel    = Array.from(files).some(f => String(f.name || '').toLowerCase().endsWith('.xlsx') || String(f.name || '').toLowerCase().endsWith('.xls'));
             const multiFile   = files.length > 1;
             const useWizard   = hasExcel || multiFile;
 
@@ -14309,6 +14456,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             });
 
             _iwPreview = await window.importEngine.parse(_iwFiles);
+            globalThis._lastBulkImportPreview = _iwPreview;
 
             clearInterval(barTick);
             const b = document.getElementById('iw-parse-bar');
@@ -14333,8 +14481,8 @@ const findHeaderIndex = (rows, sheetLog) => {
 
     function _iwRenderStep2Preview() {
         _iwMarkStep(2);
-        const { totals, files, updates, missingFromFile, missingColumns, errors,
-                nameDuplicates = [], roomOrderWarnings = [] } = _iwPreview;
+        const { totals, files, updates, missingFromFile, missingColumns, columnWarnings = [], errors,
+            nameDuplicates = [], roomOrderWarnings = [], intraFileDuplicateRows = [] } = _iwPreview;
 
         const filesHtml = files.map(f => `
             <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1">
@@ -14424,6 +14572,36 @@ const findHeaderIndex = (rows, sheetLog) => {
             </div>
         ` : '';
 
+        const columnWarningsHtml = columnWarnings.length ? `
+            <details class="border border-orange-300 bg-orange-50 rounded-lg overflow-hidden" open>
+                <summary class="px-3 py-2 text-xs font-bold text-orange-800 cursor-pointer select-none">
+                    ⚠️ ${columnWarnings.length} column mapping warning(s) — review before importing
+                </summary>
+                <div class="px-3 pb-3 text-xs text-orange-800 space-y-1 max-h-36 overflow-y-auto">
+                    ${columnWarnings.slice(0, 20).map(w => `<div>· ${_iwEsc(w)}</div>`).join('')}
+                    ${columnWarnings.length > 20 ? `<div class="text-orange-500 italic">…and ${columnWarnings.length - 20} more</div>` : ''}
+                </div>
+            </details>
+        ` : '';
+
+        const intraDupesHtml = intraFileDuplicateRows.length ? `
+            <details class="border border-purple-300 bg-purple-50 rounded-lg overflow-hidden" open>
+                <summary class="px-3 py-2 text-xs font-bold text-purple-800 cursor-pointer select-none">
+                    🔄 ${intraFileDuplicateRows.length} repeated MRN + date row(s) — human review recommended
+                </summary>
+                <div class="px-3 pb-3">
+                    <p class="text-xs text-purple-700 mb-2 mt-1">These rows share a visit identity with another row in the selected files. If they are separate encounters, send them to Review before importing.</p>
+                    <div class="max-h-40 overflow-y-auto space-y-1">
+                        ${intraFileDuplicateRows.slice(0, 20).map(({ patient, fileName, key }) => `
+                            <div class="text-[11px] text-purple-900">· ${_iwEsc(patient.name || patient.mrn || 'Unknown')} · MRN:${_iwEsc(patient.mrn || '-')} · ${_iwEsc(patient.date || '-')} · Rm ${_iwEsc(patient.room || '-')} · ${_iwEsc(fileName)} · ${_iwEsc(key)}</div>
+                        `).join('')}
+                        ${intraFileDuplicateRows.length > 20 ? `<div class="text-xs text-purple-500 italic">…and ${intraFileDuplicateRows.length - 20} more</div>` : ''}
+                    </div>
+                    <button onclick="globalThis.queueImportDuplicateRowsForReview()" class="mt-2 px-3 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700">Send repeated-key rows to Review Queue</button>
+                </div>
+            </details>
+        ` : '';
+
         const missingHtml = missingFromFile.length ? `
             <div class="border border-red-200 bg-red-50 rounded-lg p-3">
                 <div class="text-xs font-bold text-red-800 mb-1">⚠ ${missingFromFile.length} record(s) in system not in this file</div>
@@ -14464,6 +14642,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                 </div>
 
                 ${missingHtml}
+                ${columnWarningsHtml}
+                ${intraDupesHtml}
                 ${nameDupesHtml}
                 ${roomWarningsHtml}
                 ${updatesHtml}
@@ -14852,6 +15032,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
     globalThis._iwFinish = function () {
         globalThis.closeImportWizard();
+        if (typeof clearPatientDisplayFiltersAfterImport === 'function') clearPatientDisplayFiltersAfterImport();
         // Refresh UI with updated in-memory patients
         if (typeof renderUI       === 'function') renderUI();
         if (typeof updateStats    === 'function') updateStats();

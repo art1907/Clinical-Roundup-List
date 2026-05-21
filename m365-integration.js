@@ -108,6 +108,16 @@ function parseBoolish(value) {
     return false;
 }
 
+function safeJsonParse(value, fallback, contextLabel = 'JSON field') {
+    if (value === null || value === undefined || value === '') return fallback;
+    try {
+        return JSON.parse(value);
+    } catch (err) {
+        console.warn(`Unable to parse ${contextLabel}; using fallback`, err?.message || err);
+        return fallback;
+    }
+}
+
 function normalizeDateFromSharePoint(value) {
     if (!value) return '';
     const text = String(value).trim();
@@ -696,11 +706,11 @@ async function api_fetchPatients(dateFilter = null) {
             hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
             visitTime: item.fields[VISIT_TIME_FIELD] || item.fields.Visit_x0020_Time || '',
             visitKey: item.fields.VisitKey || '',
-            findingsValues: item.fields.FindingsData ? JSON.parse(item.fields.FindingsData) : {},
-            findingsDates: item.fields.FindingsDates ? JSON.parse(item.fields.FindingsDates) : {},
+            findingsValues: safeJsonParse(item.fields.FindingsData, {}, `FindingsData for item ${item.id}`),
+            findingsDates: safeJsonParse(item.fields.FindingsDates, {}, `FindingsDates for item ${item.id}`),
             findingsCodes: item.fields.FindingsCodes
                 ? item.fields.FindingsCodes.split(',').map(c => c.trim())
-                : (item.fields.FindingsData ? Object.keys(JSON.parse(item.fields.FindingsData)) : []),
+                : Object.keys(safeJsonParse(item.fields.FindingsData, {}, `FindingsData codes for item ${item.id}`)),
             findingsText: item.fields.FindingsText || '',
             plan: item.fields.Plan || '',
             progressNotes: item.fields.ProgressNotes || item.fields.Progress_x0020_Notes || '',
@@ -710,11 +720,11 @@ async function api_fetchPatients(dateFilter = null) {
             procedureStatus: item.fields.ProcedureStatus || 'NEW CONSULT',
             cptPrimary: item.fields.CPTPrimary || '',
             icdPrimary: item.fields.ICDPrimary || '',
-            chargeCodesSecondary: item.fields.ChargeCodesSecondary ? JSON.parse(item.fields.ChargeCodesSecondary) : [],
+            chargeCodesSecondary: safeJsonParse(item.fields.ChargeCodesSecondary, [], `ChargeCodesSecondary for item ${item.id}`),
             archived: parseBoolish(item.fields.Archived),
             notesHistory: item.fields.ChangeNotesHistory
-                ? JSON.parse(item.fields.ChangeNotesHistory)
-                : (item.fields.NotesHistory ? JSON.parse(item.fields.NotesHistory) : []),
+                ? safeJsonParse(item.fields.ChangeNotesHistory, [], `ChangeNotesHistory for item ${item.id}`)
+                : safeJsonParse(item.fields.NotesHistory, [], `NotesHistory for item ${item.id}`),
             lastUpdated: item.fields.Modified || item.fields.Created
         });
         });
@@ -1125,7 +1135,7 @@ async function api_getBackfeedData(mrn) {
                 supervisingMd: item.fields.SupervisingMD || '',
                 cptPrimary: item.fields.CPTPrimary || '',
                 icdPrimary: item.fields.ICDPrimary || '',
-                chargeCodesSecondary: item.fields.ChargeCodesSecondary ? JSON.parse(item.fields.ChargeCodesSecondary) : []
+                chargeCodesSecondary: safeJsonParse(item.fields.ChargeCodesSecondary, [], `Backfeed ChargeCodesSecondary for item ${item.id}`)
                 // Note: Exclude findings, pending, followUp per backfeed logic
             };
         }
