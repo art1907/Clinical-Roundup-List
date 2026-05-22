@@ -6863,7 +6863,9 @@
                     } else {
                         delta = `<span class="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">${esc(prevSt)} → ${esc(st)}</span>`;
                     }
-                    return `<div class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[10px] text-slate-500 truncate flex-1 min-w-0">${esc(v.hospital || '')}</span>\n                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${delta}\n                        ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : ''}\n                    </div>`;
+                    const findingsDisplay = getFindingsDisplay(v);
+                    const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
+                    return `<div class="px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[10px] text-slate-500 truncate flex-1 min-w-0">${esc(v.hospital || '')}</span>\n                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 pl-20 text-[10px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 110))}${findingsSummary.length > 110 ? '...' : ''}</div>` : ''}\n                    </div>`;
                 }).join('');
                 return `<div class="mt-2 border-t border-blue-100 pt-2">
                     <div class="text-[10px] font-bold text-slate-500 mb-1 px-1">📋 Visit history (${visits.length} total)</div>
@@ -6998,7 +7000,9 @@
                     } else {
                         delta = `<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold ml-auto flex-shrink-0">${esc(prevSt)} → ${esc(st)}</span>`;
                     }
-                    return `<div class="flex items-center gap-2 px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                        <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                        <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                        ${delta}\n                        ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                    </div>`;
+                    const findingsDisplay = getFindingsDisplay(v);
+                    const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
+                    return `<div class="px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 ml-24 text-[11px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 120))}${findingsSummary.length > 120 ? '...' : ''}</div>` : ''}\n                    </div>`;
                 }).join('');
                 return `<div class="border-t-2 border-blue-100 bg-slate-50">
                     <div class="text-[10px] font-bold text-slate-500 px-3 pt-2 pb-1">📋 Visit history (${visits.length} total)</div>
@@ -8215,6 +8219,76 @@
             return `fallback|${normalizedDate}|${normalizedHospital || 'unknown-hospital'}|${normalizedRoom || 'unknown-room'}|${normalizedName || 'unknown-name'}`;
         };
 
+        const isMeaningfulImportValue = (value) => {
+            if (value === '' || value === null || value === undefined) return false;
+            if (Array.isArray(value)) return value.length > 0;
+            if (typeof value === 'object') return Object.keys(value).length > 0;
+            return String(value).trim() !== '';
+        };
+
+        const scoreImportedPatientCompleteness = (patient = {}) => {
+            const weightedFields = [
+                'mrn', 'date', 'name', 'dob', 'room', 'hospital', 'findingsText', 'plan',
+                'supervisingMd', 'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary'
+            ];
+            return weightedFields.reduce((score, field) => score + (isMeaningfulImportValue(patient[field]) ? 1 : 0), 0);
+        };
+
+        const mergeImportedPatientRows = (basePatient = {}, incomingPatient = {}) => {
+            const merged = { ...basePatient };
+            Object.entries(incomingPatient).forEach(([key, value]) => {
+                if (key === 'id') return;
+                if (!isMeaningfulImportValue(value)) return;
+                merged[key] = value;
+            });
+            return merged;
+        };
+
+        const dedupeImportedPatients = (patientList = [], sourceLabel = 'import') => {
+            const uniquePatients = [];
+            const duplicateRows = [];
+            const byKey = new Map();
+
+            patientList.forEach((patient, index) => {
+                const key = buildImportIdentityKey(patient);
+                patient.visitKey = patient.visitKey || key;
+                const existing = byKey.get(key);
+
+                if (!existing) {
+                    byKey.set(key, {
+                        key,
+                        patient,
+                        sourceLabel,
+                        firstIndex: index,
+                        uniqueIndex: uniquePatients.length,
+                        score: scoreImportedPatientCompleteness(patient)
+                    });
+                    uniquePatients.push(patient);
+                    return;
+                }
+
+                duplicateRows.push({
+                    patient,
+                    keptPatient: existing.patient,
+                    sourceLabel,
+                    key,
+                    firstIndex: existing.firstIndex,
+                    duplicateIndex: index
+                });
+
+                const incomingScore = scoreImportedPatientCompleteness(patient);
+                const mergedPatient = incomingScore >= existing.score
+                    ? mergeImportedPatientRows(existing.patient, patient)
+                    : mergeImportedPatientRows(patient, existing.patient);
+
+                mergedPatient.visitKey = key;
+                uniquePatients[existing.uniqueIndex] = mergedPatient;
+                byKey.set(key, { ...existing, patient: mergedPatient, score: Math.max(existing.score, incomingScore) });
+            });
+
+            return { uniquePatients, duplicateRows };
+        };
+
         // CSV IMPORT ENGINE
         const CSVImporter = (() => {
             const normalizeCell = (value) => String(value ?? '').replaceAll('\u00A0', ' ').trim();
@@ -8304,7 +8378,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const result = { onCall: [], patients: [], hospitals: [], columnWarnings: [], validationLog, stats: { skipped: 0, parsed: 0, errors: [] } };
                 const sheetVisitDate = getVisitDateFromSheetName(sheetName);
                 if (sheetVisitDate) {
-                    log(`Sheet tab date detected: ${sheetVisitDate}; using it as the visit date for patient rows`, 'info');
+                    log(`Sheet tab date detected: ${sheetVisitDate}; row Date of Service values will be normalized to this visit date`, 'info');
                 }
 
                 let onCallFound = 0;
@@ -8395,16 +8469,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                         continue;
                     }
 
-                    const rowDateValue = colMap.dateService >= 0 ? normalizeImportedDateValue(parts[colMap.dateService] || '') : '';
-                    const dateValue = sheetVisitDate || rowDateValue;
+                    const originalRowDateValue = colMap.dateService >= 0 ? normalizeImportedDateValue(parts[colMap.dateService] || '') : '';
+                    const dateValue = sheetVisitDate || originalRowDateValue;
                     const roomValue = colMap.room >= 0 ? (parts[colMap.room] || '') : first;
                     const mrnValue = colMap.mrn >= 0 ? (parts[colMap.mrn] || '') : '';
-
-                    if (sheetVisitDate && rowDateValue && rowDateValue !== sheetVisitDate) {
-                        const message = `Row ${i + 1}: Date of Service ${rowDateValue} differs from sheet date ${sheetVisitDate}; using sheet date for visit identity.`;
-                        result.columnWarnings.push(message);
-                        log(message, 'warn');
-                    }
 
                     if (!dateValue && !roomValue && !mrnValue) {
                         result.stats.skipped++;
@@ -8446,7 +8514,8 @@ const findHeaderIndex = (rows, sheetLog) => {
 
                         if (sheetVisitDate) {
                             patient.sourceSheetName = sheetName;
-                            patient.sourceDateOfService = rowDateValue;
+                            patient.sourceTabDate = sheetVisitDate;
+                            patient.sourceOriginalDateOfService = originalRowDateValue && originalRowDateValue !== sheetVisitDate ? originalRowDateValue : '';
                         }
 
                         patient.visitKey = buildImportIdentityKey(patient);
@@ -10007,6 +10076,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                 } else {
                     deltaPill = `<span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0 font-semibold" title="Status changed from previous visit">${esc(prevSt)} → ${esc(st)}</span>`;
                 }
+                const findingsDisplay = getFindingsDisplay(v);
+                const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
                 return `<div class="flex items-center gap-2 py-1.5 px-2 rounded-lg ${isCurrentVisit ? 'bg-blue-50 border border-blue-200' : 'hover:bg-white'} cursor-pointer group" onclick="globalThis.openModal('${esc(v.id)}')">
                     <span class="text-[10px] text-slate-400 w-20 flex-shrink-0 font-mono">${esc(v.date)}</span>
                     <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>
@@ -10014,7 +10085,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0 whitespace-nowrap">${esc(st)}</span>
                     ${deltaPill}
                     ${v.supervisingMd ? `<span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">👨‍⚕️&nbsp;${esc(v.supervisingMd)}</span>` : ''}
-                    <span class="text-[10px] text-slate-600 flex-1 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '…' : ''}</span>
+                    <span class="text-[10px] text-slate-600 flex-1 min-w-0 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '...' : ''}${findingsSummary ? `<span class="text-slate-400 mx-1">|</span><span class="text-slate-700">Findings: ${esc(findingsSummary.slice(0, 90))}${findingsSummary.length > 90 ? '...' : ''}</span>` : ''}</span>
                     <span class="text-[9px] font-bold opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity flex-shrink-0">open ↗</span>
                     ${isCurrentVisit ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded flex-shrink-0">current</span>' : ''}
                     ${isArchived ? '<span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1 rounded flex-shrink-0">archived</span>' : ''}
@@ -10510,7 +10581,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             try {
                 showToast(`🔍 Analyzing ${files.length} file(s)...`);
-                const seenKeysGlobal = new Set();
+                const selectedBatchPatients = [];
 
                 for (const file of files) {
                     const fileName = file.name;
@@ -10564,20 +10635,22 @@ const findHeaderIndex = (rows, sheetLog) => {
                             preview.errors.push(`${fileName}: No recognizable patient or schedule rows found`);
                         }
 
+                        const beforeDedupeCount = selectedBatchPatients.length;
+                        selectedBatchPatients.push(...filePatients);
+                        const batchDedupe = dedupeImportedPatients(selectedBatchPatients, fileName);
+                        const fileDuplicateRows = batchDedupe.duplicateRows
+                            .filter(d => d.duplicateIndex >= beforeDedupeCount)
+                            .map(d => ({ patient: d.patient, keptPatient: d.keptPatient, fileName, key: d.key }));
+                        preview.intraFileDuplicateRows.push(...fileDuplicateRows);
+                        const duplicatePatientObjects = new Set(fileDuplicateRows.map(d => d.patient));
+                        filePatients = filePatients.filter(p => !duplicatePatientObjects.has(p));
+
                         // ── CLASSIFY EACH ROW ───────────────────────────────────────────
-                        let fileNew = 0, fileUpdates = 0, fileUnchanged = 0, fileIntraDupe = 0;
+                        let fileNew = 0, fileUpdates = 0, fileUnchanged = 0;
                         const fileDetails = [];
 
                         filePatients.forEach(p => {
                             const key = buildImportIdentityKey(p);
-                            if (seenKeysGlobal.has(key)) {
-                                fileIntraDupe++;
-                                const duplicateDetail = { status: 'intra-dupe', mrn: p.mrn, date: p.date, name: p.name, room: p.room, hospital: p.hospital, fileName, key };
-                                fileDetails.push(duplicateDetail);
-                                preview.intraFileDuplicateRows.push({ patient: p, fileName, key });
-                                return;
-                            }
-                            seenKeysGlobal.add(key);
 
                             const existingIdx = patients.findIndex(e => buildImportIdentityKey(e) === key);
                             if (existingIdx < 0) {
@@ -10597,15 +10670,19 @@ const findHeaderIndex = (rows, sheetLog) => {
                             }
                         });
 
+                        fileDuplicateRows.forEach(({ patient, key }) => {
+                            fileDetails.push({ status: 'intra-dupe', mrn: patient.mrn, date: patient.date, name: patient.name, room: patient.room, hospital: patient.hospital, fileName, key });
+                        });
+
                         preview.files.push({
                             fileName,
-                            counts: { new: fileNew, updates: fileUpdates, unchanged: fileUnchanged, intraDupe: fileIntraDupe, schedules: fileOnCall.length },
+                            counts: { new: fileNew, updates: fileUpdates, unchanged: fileUnchanged, intraDupe: fileDuplicateRows.length, schedules: fileOnCall.length },
                             details: fileDetails
                         });
                         preview.totals.new      += fileNew;
                         preview.totals.updates  += fileUpdates;
                         preview.totals.unchanged += fileUnchanged;
-                        preview.totals.intraFileDupes += fileIntraDupe;
+                        preview.totals.intraFileDupes += fileDuplicateRows.length;
                         preview.totals.schedules += fileOnCall.length;
                         preview.allPatients  = preview.allPatients.concat(filePatients);
                         preview.allSchedules = preview.allSchedules.concat(fileOnCall);
@@ -10936,8 +11013,10 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             let totalPatients = 0;
             let totalOnCall = 0;
+            let totalDedupedPatients = 0;
             let fileCount = 0;
             const errors = [];
+            const importBatchKeys = new Set();
 
             try {
                 const actionLabel = action === 'newonly' ? 'adding new records only' : action === 'updateonly' ? 'applying updates only' : 'adding new + applying updates';
@@ -10985,6 +11064,21 @@ const findHeaderIndex = (rows, sheetLog) => {
                             fileOnCall = parsed.onCall;
                             filePatients = parsed.patients;
                             fileHospitals = parsed.hospitals;
+                        }
+
+                        const fileDedupe = dedupeImportedPatients(filePatients, fileName);
+                        totalDedupedPatients += fileDedupe.duplicateRows.length;
+                        filePatients = fileDedupe.uniquePatients.filter((p) => {
+                            const key = buildImportIdentityKey(p);
+                            if (importBatchKeys.has(key)) {
+                                totalDedupedPatients++;
+                                return false;
+                            }
+                            importBatchKeys.add(key);
+                            return true;
+                        });
+                        if (fileDedupe.duplicateRows.length > 0) {
+                            console.warn(`Import de-duped ${fileDedupe.duplicateRows.length} repeated row(s) inside ${fileName}`, fileDedupe.duplicateRows);
                         }
 
                         // Import schedules
@@ -11102,7 +11196,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                 updateStats();
 
                 const actionText = action === 'replace' ? 'All' : action === 'updateonly' ? 'Changes Only' : 'New Only';
-                showToast(`✅ Import complete (${actionText}): ${fileCount} file(s), ${totalPatients} record(s)`);
+                const dedupeText = totalDedupedPatients ? `, ${totalDedupedPatients} duplicate row(s) skipped` : '';
+                showToast(`✅ Import complete (${actionText}): ${fileCount} file(s), ${totalPatients} record(s)${dedupeText}`);
 
                 if (errors.length > 0) {
                     console.warn('Import errors:', errors);
