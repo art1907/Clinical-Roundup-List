@@ -4372,19 +4372,36 @@
 
         // Batch Archive
         globalThis.batchArchiveSelected = async () => {
-            if (!confirm(`Archive ${selectedPatientIds.size} selected records?`)) return;
+            const selectedPatients = [...selectedPatientIds]
+                .map(id => patients.find(patient => patient.id === id))
+                .filter(Boolean);
+            const targets = [];
+            const seenTargetIds = new Set();
+            selectedPatients.forEach((patient) => {
+                getPatientVisitGroup(patient).forEach((visit) => {
+                    if (!seenTargetIds.has(visit.id) && !isArchivedRecord(visit)) {
+                        seenTargetIds.add(visit.id);
+                        targets.push(visit);
+                    }
+                });
+            });
+
+            if (!targets.length) {
+                showToast('No active visits to archive');
+                return;
+            }
+
+            if (!confirm(`Archive ${targets.length} visit(s) for ${selectedPatients.length} selected patient(s)?`)) return;
             const changeNote = await getRequiredChangeNote('batch archive');
             if (!changeNote) return;
 
-            const ids = [...selectedPatientIds];
             let archived = 0;
             let failed = 0;
             const useCloud = isConnected && useM365 && typeof globalThis.m365SavePatient === 'function';
-            if (useCloud) showToast(`⏳ Archiving ${ids.length} records…`);
+            if (useCloud) showToast(`⏳ Archiving ${targets.length} visit(s)…`);
 
-            for (const id of ids) {
-                const p = patients.find(x => x.id === id);
-                if (!p) continue;
+            for (const p of targets) {
+                const id = p.id;
                 const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                 AuditLogger.logDataChange(auditUser, id, 'archived', p.archived, true);
                 p.archived = true;
@@ -4400,6 +4417,7 @@
                 }
             }
 
+            selectedPatientIds.clear();
             hideArchivedFromCensus();
             renderUI();
             updateBatchOpCount();
@@ -4531,10 +4549,11 @@
             const menu = document.getElementById('context-menu');
             const p = patients.find(x => x.id === patientId);
             if (!p) return;
+            const isArchived = isArchivedRecord(p);
             
             menu.innerHTML = `
                 <div class="context-menu-item" onclick="globalThis.openModal('${patientId}'); closeContextMenu();">✏️ Edit</div>
-                <div class="context-menu-item" onclick="globalThis.toggleArchive('${patientId}', ${!p.archived}); closeContextMenu();">${p.archived ? '↩️ Restore' : '📦 Archive'}</div>
+                <div class="context-menu-item" onclick="globalThis.toggleArchive('${patientId}', ${!isArchived}); closeContextMenu();">${isArchived ? '↩️ Restore' : '📦 Archive'}</div>
                 <div class="context-menu-item danger" onclick="globalThis.deletePatient('${patientId}'); closeContextMenu();">🗑️ Delete</div>
             `;
             
@@ -7612,7 +7631,8 @@
             if (!editId) return;
             const archivedInput = document.getElementById('f-archived');
             const isArchived = archivedInput?.value === 'true';
-            await globalThis.toggleArchive(editId, !isArchived);
+            const changed = await globalThis.toggleArchive(editId, !isArchived);
+            if (!changed) return;
             if (archivedInput) archivedInput.value = (!isArchived).toString();
             const archiveBtn = document.getElementById('modal-archive-btn');
             if (archiveBtn) archiveBtn.textContent = isArchived ? 'Archive' : 'Restore';
@@ -7767,6 +7787,11 @@
         function getPatientVisitCount(patient = {}) {
             const key = getPatientPersonKey(patient);
             return patients.filter(visit => getPatientPersonKey(visit) === key).length;
+        }
+
+        function getPatientVisitGroup(patient = {}) {
+            const key = getPatientPersonKey(patient);
+            return patients.filter(visit => getPatientPersonKey(visit) === key);
         }
 
         function getLatestPatientRows(patientList = []) {
@@ -9338,44 +9363,54 @@ const findHeaderIndex = (rows, sheetLog) => {
 
         globalThis.toggleArchive = async (id, shouldArchive) => {
             const changeNote = await getRequiredChangeNote(shouldArchive ? 'archiving' : 'restoring');
-            if (!changeNote) return;
+            if (!changeNote) return false;
+            const sourcePatient = patients.find(patient => patient.id === id);
+            if (!sourcePatient) return false;
+            const targetPatients = getPatientVisitGroup(sourcePatient)
+                .filter(patient => isArchivedRecord(patient) !== shouldArchive);
+
+            if (!targetPatients.length) {
+                showToast(shouldArchive ? 'Already archived' : 'Already restored');
+                return false;
+            }
+
+            const applyArchiveState = (patient, auditUser) => {
+                AuditLogger.logDataChange(auditUser, patient.id, 'archived', patient.archived, shouldArchive);
+                patient.archived = shouldArchive;
+                patient.lastChangeNote = changeNote;
+                patient.lastChangeNoteAt = new Date().toISOString();
+                patient.lastChangeNoteBy = auditUser;
+                patient.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(patient), changeNote, auditUser, shouldArchive ? 'archive' : 'restore');
+            };
+
             if (!isConnected || !useM365) {
                 // Local mode: update in memory
-                const p = patients.find(x => x.id === id);
-                if (p) {
-                    const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                    AuditLogger.logDataChange(auditUser, id, 'archived', p.archived, shouldArchive);
-                    p.archived = shouldArchive;
-                    p.lastChangeNote = changeNote;
-                    p.lastChangeNoteAt = new Date().toISOString();
-                    p.lastChangeNoteBy = auditUser;
-                    p.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(p), changeNote, auditUser, shouldArchive ? 'archive' : 'restore');
-                    if (shouldArchive) hideArchivedFromCensus();
-                    renderUI();
-                    showToast(shouldArchive ? "Archived" : "Restored");
-                }
-                return;
+                const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                targetPatients.forEach(patient => applyArchiveState(patient, auditUser));
+                if (shouldArchive) hideArchivedFromCensus();
+                renderUI();
+                showToast(shouldArchive ? `Archived ${targetPatients.length} visit(s)` : `Restored ${targetPatients.length} visit(s)`);
+                return true;
             }
             try {
                 if (typeof globalThis.m365SavePatient === 'function') {
-                    const patient = patients.find(p => p.id === id);
-                    if (patient) {
-                        const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                        AuditLogger.logDataChange(auditUser, id, 'archived', patient.archived, shouldArchive);
-                        patient.archived = shouldArchive;
-                        patient.lastChangeNote = changeNote;
-                        patient.lastChangeNoteAt = new Date().toISOString();
-                        patient.lastChangeNoteBy = auditUser;
-                        patient.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(patient), changeNote, auditUser, shouldArchive ? 'archive' : 'restore');
+                    const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
+                    let savedCount = 0;
+                    for (const patient of targetPatients) {
+                        applyArchiveState(patient, auditUser);
                         await globalThis.m365SavePatient(patient);
-                        if (shouldArchive) hideArchivedFromCensus();
-                        renderUI();
-                        showToast(shouldArchive ? "Archived" : "Restored");
+                        savedCount++;
                     }
+                    if (shouldArchive) hideArchivedFromCensus();
+                    renderUI();
+                    showToast(shouldArchive ? `Archived ${savedCount} visit(s)` : `Restored ${savedCount} visit(s)`);
+                    return true;
                 }
             } catch (err) {
                 console.error("Archive error:", err);
+                showToast('Archive failed');
             }
+            return false;
         };
 
         globalThis.updateStatusQuick = async (id, newStatus) => {
