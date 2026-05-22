@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Clinical Rounding List - Adaptive Platform</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230f172a'/%3E%3Cpath d='M50 22v56M22 50h56' stroke='white' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" integrity="sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js" integrity="sha384-6kRQDsV2kVYRSENnw7WnekWKCx8/Lmv7rFKpDuR2AoIbjlBShlYcs3x0QlE3kuRh" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js" integrity="sha384-GbQVk5KsTZEMJtvSbtmGpderuiERKpKVVFucxROOKnIXvtg03h3pORjyyGlPD6UO" crossorigin="anonymous"></script>
@@ -620,7 +620,7 @@
         body.selection-mode-active .selection-underlay-target input,
         body.selection-mode-active .selection-underlay-target textarea {
             background: #e5e7eb !important;
-            color: #64748b !important;
+            color: #334155 !important;
             border-color: #cbd5e1 !important;
             box-shadow: none !important;
         }
@@ -637,7 +637,7 @@
         .batch-count {
             flex-shrink: 0;
             padding: 0.5rem 0.95rem;
-            background: #3b82f6;
+            background: #2563eb;
             color: white;
             border-radius: 999px;
             font-size: 0.75rem;
@@ -712,7 +712,7 @@
         
         .context-menu-item.danger:hover {
             background: #fee2e2;
-            color: #dc2626;
+            color: #991b1b;
         }
         
         body.dark-mode .context-menu-item.danger:hover {
@@ -961,9 +961,9 @@
         }
         
         .filter-preset-btn.active {
-            background: #3b82f6;
+            background: #2563eb;
             color: white;
-            border-color: #2563eb;
+            border-color: #1d4ed8;
         }
         
         /* Procedure category filters */
@@ -1001,9 +1001,9 @@
         }
         
         .procedure-btn.active {
-            background: #0ea5e9;
+            background: #0369a1;
             color: white;
-            border-color: #0284c7;
+            border-color: #075985;
         }
         
         /* Filter reset button */
@@ -1031,7 +1031,7 @@
         }
         
         .filter-apply {
-            background: #3b82f6;
+            background: #2563eb;
             color: white;
         }
         
@@ -1176,7 +1176,7 @@
         }
         
         .hospital-group-count {
-            background: #3b82f6;
+            background: #2563eb;
             color: white;
             padding: 0.25rem 0.5rem;
             border-radius: 0.25rem;
@@ -1505,7 +1505,7 @@
         }
         
         .card-edit {
-            background: #3b82f6;
+            background: #2563eb;
             color: white;
         }
         
@@ -1554,7 +1554,7 @@
         }
         
         .view-btn.active {
-            background: #3b82f6;
+            background: #2563eb;
             color: white;
         }
         
@@ -1737,8 +1737,8 @@
 
         .patient-card.stat .finding-segment-pill-index,
         .mobile-patient-card.stat .finding-segment-pill-index {
-            background: rgba(255, 255, 255, 0.18);
-            color: #fee2e2;
+            background: #991b1b;
+            color: #ffffff;
         }
 
         .mobile-patient-card.stat .finding-segment-empty {
@@ -1974,7 +1974,7 @@
             position: absolute;
             top: -40px;
             left: 0;
-            background: #3b82f6;
+            background: #2563eb;
             color: white;
             padding: 0.5rem 1rem;
             text-decoration: none;
@@ -2419,7 +2419,7 @@
         }
 
         .timeline-notes {
-            color: #6b7280;
+            color: #374151;
             margin-top: 0.5rem;
             padding: 0.75rem;
             background: #f3f4f6;
@@ -2560,9 +2560,9 @@
         }
 
         .calendar-view-toggle button.active {
-            background: #3b82f6;
+            background: #2563eb;
             color: white;
-            border-color: #3b82f6;
+            border-color: #2563eb;
         }
 
         body.dark-mode .calendar-view-toggle button {
@@ -2869,17 +2869,17 @@
     </style>
     
     <script>
-        let patients = [];
-        let onCallSchedule = [];
+        var patients = [];
+        var onCallSchedule = [];
         let selectedPatientIds = new Set();
-        let currentUser = null;
-        let globalSettings = { onCall: "", hospitals: "" };
-        let currentTab = 'active';
-        let flaggedRecords = []; // Records flagged during import for human review
+        var currentUser = null;
+        var globalSettings = { onCall: "", hospitals: "" };
+        var currentTab = 'active';
+        var flaggedRecords = []; // Records flagged during import for human review
         let rawImportData = null;
         let calDate = new Date();
-        let isConnected = false;
-        let isAuthenticated = false;
+        var isConnected = false;
+        var isAuthenticated = false;
 
         const STATUS_OPTIONS = [
             { value: 'NEW CONSULT', badge: 'NC' },
@@ -4335,6 +4335,15 @@
         }
 
         // Batch Change Status
+        function applyBatchStatusPatient(patient, newStatus, changeNote, auditUser) {
+            AuditLogger.logDataChange(auditUser, patient.id, 'procedureStatus', patient.procedureStatus, newStatus);
+            patient.procedureStatus = newStatus;
+            patient.lastChangeNote = changeNote;
+            patient.lastChangeNoteAt = new Date().toISOString();
+            patient.lastChangeNoteBy = auditUser;
+            patient.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(patient), changeNote, auditUser, 'batch status update');
+        }
+
         globalThis.batchChangeStatus = async () => {
             const newStatus = await getBatchStatusSelection();
             if (!newStatus) return;
@@ -4346,22 +4355,18 @@
             let failed = 0;
             const useCloud = isConnected && useM365 && typeof globalThis.m365SavePatient === 'function';
             if (useCloud) showToast(`⏳ Saving ${ids.length} records…`);
+            const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
 
             for (const id of ids) {
                 const p = patients.find(x => x.id === id);
                 if (!p) continue;
-                const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                AuditLogger.logDataChange(auditUser, id, 'procedureStatus', p.procedureStatus, newStatus);
-                p.procedureStatus = newStatus;
-                p.lastChangeNote = changeNote;
-                p.lastChangeNoteAt = new Date().toISOString();
-                p.lastChangeNoteBy = auditUser;
-                p.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(p), changeNote, auditUser, 'batch status update');
-                if (useCloud) {
-                    try { await globalThis.m365SavePatient(p); updated++; }
-                    catch (err) { console.error('Batch status save error for', id, err); failed++; }
-                } else {
+                try {
+                    applyBatchStatusPatient(p, newStatus, changeNote, auditUser);
+                    if (useCloud) await globalThis.m365SavePatient(p);
                     updated++;
+                } catch (err) {
+                    console.error('Batch status save error for', id, err);
+                    failed++;
                 }
             }
 
@@ -4370,21 +4375,104 @@
             showToast(failed ? `⚠️ ${updated} saved, ${failed} failed` : `✅ ${updated} records updated to ${newStatus}`);
         };
 
-        // Batch Archive
-        globalThis.batchArchiveSelected = async () => {
-            const selectedPatients = [...selectedPatientIds]
+        function getSelectedPatientIdsForBatchAction() {
+            const selectedIds = new Set(selectedPatientIds);
+            document.querySelectorAll('input[data-patient-checkbox]:checked').forEach((checkbox) => {
+                if (checkbox.value) selectedIds.add(checkbox.value);
+            });
+
+            const selectAllCheckbox = document.querySelector('input[data-select-all-checkbox]');
+            if (selectAllCheckbox && selectAllCheckbox.checked) {
+                getFilteredData().forEach(patient => selectedIds.add(patient.id));
+            }
+
+            return selectedIds;
+        }
+
+        function getUnarchivedVisitsForSelectedPatients(selectedIds) {
+            const selectedPatients = [...selectedIds]
                 .map(id => patients.find(patient => patient.id === id))
                 .filter(Boolean);
-            const targets = [];
             const seenTargetIds = new Set();
+            const targets = [];
+
             selectedPatients.forEach((patient) => {
                 getPatientVisitGroup(patient).forEach((visit) => {
-                    if (!seenTargetIds.has(visit.id) && !isArchivedRecord(visit)) {
-                        seenTargetIds.add(visit.id);
-                        targets.push(visit);
-                    }
+                    if (seenTargetIds.has(visit.id) || isArchivedRecord(visit)) return;
+                    seenTargetIds.add(visit.id);
+                    targets.push(visit);
                 });
             });
+
+            return { selectedPatients, targets };
+        }
+
+        function applyArchiveStateToVisits(targets, changeNote, auditUser, archivedAt) {
+            targets.forEach((patient) => {
+                AuditLogger.logDataChange(auditUser, patient.id, 'archived', patient.archived, true);
+                patient.archived = true;
+                patient.lastChangeNote = changeNote;
+                patient.lastChangeNoteAt = archivedAt;
+                patient.lastChangeNoteBy = auditUser;
+                patient.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(patient), changeNote, auditUser, 'batch archive');
+            });
+        }
+
+        async function refreshPatientsAfterBatchArchive(targetIds, changeNote, auditUser, archivedAt) {
+            if (typeof globalThis.m365FetchPatients !== 'function') return;
+            const refreshedPatients = await globalThis.m365FetchPatients();
+            if (!Array.isArray(refreshedPatients)) return;
+
+            const refreshedStillActive = new Set(
+                refreshedPatients
+                    .filter(patient => targetIds.has(patient.id) && !isArchivedRecord(patient))
+                    .map(patient => patient.id)
+            );
+
+            patients = refreshedPatients.map(patient => {
+                if (!refreshedStillActive.has(patient.id)) return patient;
+                return {
+                    ...patient,
+                    archived: true,
+                    lastChangeNote: patient.lastChangeNote || changeNote,
+                    lastChangeNoteAt: patient.lastChangeNoteAt || archivedAt,
+                    lastChangeNoteBy: patient.lastChangeNoteBy || auditUser
+                };
+            });
+
+            if (refreshedStillActive.size > 0) {
+                console.warn('Archive refresh did not reflect archived state for some saved visits; preserving local archive state', [...refreshedStillActive]);
+            }
+        }
+
+        async function saveArchivedVisitsToCloud(targets, targetIds, changeNote, auditUser, archivedAt) {
+            let archived = 0;
+            let failed = 0;
+
+            for (const patient of targets) {
+                try {
+                    await globalThis.m365SavePatient(patient);
+                    archived++;
+                } catch (err) {
+                    console.error('Batch archive save error for', patient.id, err);
+                    failed++;
+                }
+            }
+
+            try {
+                await refreshPatientsAfterBatchArchive(targetIds, changeNote, auditUser, archivedAt);
+            } catch (err) {
+                console.warn('Batch archive refresh failed:', err);
+            }
+
+            return { archived, failed };
+        }
+
+        // Batch Archive
+        globalThis.batchArchiveSelected = async () => {
+            const selectedIds = getSelectedPatientIdsForBatchAction();
+            selectedPatientIds = selectedIds;
+            const { selectedPatients, targets } = getUnarchivedVisitsForSelectedPatients(selectedIds);
 
             if (!targets.length) {
                 showToast('No active visits to archive');
@@ -4395,36 +4483,62 @@
             const changeNote = await getRequiredChangeNote('batch archive');
             if (!changeNote) return;
 
-            let archived = 0;
-            let failed = 0;
             const useCloud = isConnected && useM365 && typeof globalThis.m365SavePatient === 'function';
             if (useCloud) showToast(`⏳ Archiving ${targets.length} visit(s)…`);
-
-            for (const p of targets) {
-                const id = p.id;
-                const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                AuditLogger.logDataChange(auditUser, id, 'archived', p.archived, true);
-                p.archived = true;
-                p.lastChangeNote = changeNote;
-                p.lastChangeNoteAt = new Date().toISOString();
-                p.lastChangeNoteBy = auditUser;
-                p.notesHistory = appendPatientChangeNote(normalizePatientChangeHistory(p), changeNote, auditUser, 'batch archive');
-                if (useCloud) {
-                    try { await globalThis.m365SavePatient(p); archived++; }
-                    catch (err) { console.error('Batch archive save error for', id, err); failed++; }
-                } else {
-                    archived++;
-                }
-            }
+            const targetIds = new Set(targets.map(patient => patient.id));
+            const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
+            const archivedAt = new Date().toISOString();
+            applyArchiveStateToVisits(targets, changeNote, auditUser, archivedAt);
 
             selectedPatientIds.clear();
             hideArchivedFromCensus();
             renderUI();
             updateBatchOpCount();
-            showToast(failed ? `⚠️ ${archived} archived, ${failed} failed` : `📦 ${archived} records archived`);
+
+            const result = useCloud
+                ? await saveArchivedVisitsToCloud(targets, targetIds, changeNote, auditUser, archivedAt)
+                : { archived: targets.length, failed: 0 };
+
+            selectedPatientIds.clear();
+            hideArchivedFromCensus();
+            renderUI();
+            updateBatchOpCount();
+            showToast(result.failed ? `⚠️ ${result.archived} archived, ${result.failed} failed` : `📦 ${result.archived} records archived`);
         };
 
         // Batch Delete
+        async function deletePatientsFromCloud(ids, auditUser) {
+            let deleted = 0;
+            let failed = 0;
+
+            for (const id of ids) {
+                AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
+                try {
+                    await globalThis.m365DeletePatient(id);
+                    deleted++;
+                } catch (err) {
+                    console.error('Batch delete error for', id, err);
+                    failed++;
+                }
+            }
+
+            if (typeof globalThis.m365FetchPatients === 'function') {
+                try {
+                    await globalThis.m365FetchPatients();
+                } catch (err) {
+                    console.warn('Batch delete refresh failed:', err);
+                }
+            }
+
+            return { deleted, failed };
+        }
+
+        function deletePatientsLocally(ids, auditUser) {
+            ids.forEach(id => AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted'));
+            patients = patients.filter(p => !selectedPatientIds.has(p.id));
+            return { deleted: ids.length, failed: 0 };
+        }
+
         globalThis.batchDeleteSelected = async () => {
             if (!confirm(`DELETE ${selectedPatientIds.size} records? This cannot be undone.`)) return;
             const changeNote = await getRequiredChangeNote('batch delete');
@@ -4435,33 +4549,13 @@
             const useCloud = isConnected && useM365 && typeof globalThis.m365DeletePatient === 'function';
             if (useCloud) showToast(`⏳ Deleting ${ids.length} records…`);
 
-            let deleted = 0;
-            let failed = 0;
-            if (useCloud) {
-                for (const id of ids) {
-                    AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
-                    try { await globalThis.m365DeletePatient(id); deleted++; }
-                    catch (err) { console.error('Batch delete error for', id, err); failed++; }
-                }
-                // Refetch to sync list after M365 deletes
-                if (typeof globalThis.m365FetchPatients === 'function') {
-                    try {
-                        await globalThis.m365FetchPatients();
-                    } catch (err) {
-                        console.warn('Batch delete refresh failed:', err);
-                    }
-                }
-            } else {
-                ids.forEach(id => {
-                    AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted');
-                });
-                patients = patients.filter(p => !selectedPatientIds.has(p.id));
-                deleted = ids.length;
-            }
+            const result = useCloud
+                ? await deletePatientsFromCloud(ids, auditUser)
+                : deletePatientsLocally(ids, auditUser);
 
             renderUI();
             updateBatchOpCount();
-            showToast(failed ? `⚠️ ${deleted} deleted, ${failed} failed` : `🗑️ ${deleted} records deleted`);
+            showToast(result.failed ? `⚠️ ${result.deleted} deleted, ${result.failed} failed` : `🗑️ ${result.deleted} records deleted`);
         };
 
         // Cancel Batch Operation
@@ -5598,7 +5692,6 @@
                 const icdRows = topIcd.map(([code, cnt]) => `ICD ${code}: ${cnt} diagnoses`);
                 const divider = cptRows.length && icdRows.length ? ['──── ICD Diagnoses ────'] : [];
                 renderAnalyticsDetails('CPT & ICD Code Frequency', [...cptRows, ...divider, ...icdRows].length ? [...cptRows, ...divider, ...icdRows] : ['No billing codes recorded']);
-                return;
             }
         }
 
@@ -6845,7 +6938,7 @@
             }
             
             const buildCardHistoryHTML = (p, personKey) => {
-                const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const esc = v => String(v || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
                 const visits = patients
                     .filter(v => getPatientPersonKey(v) === personKey)
                     .sort(comparePatientVisitRecency);
@@ -6982,7 +7075,7 @@
             }
 
             const buildMobileCardHistoryHTML = (patient, personKey) => {
-                const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const esc = v => String(v || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
                 const visits = patients
                     .filter(v => getPatientPersonKey(v) === personKey)
                     .sort(comparePatientVisitRecency);
@@ -8019,7 +8112,7 @@
             normalizedMeta.createdOnDate = effectiveCreatedOnDate;
 
             let nextVisitDate = String(date || '').trim();
-            const nextFindingsDates = { ...(findingsDates || {}) };
+            const nextFindingsDates = findingsDates ? { ...findingsDates } : {};
             const appliedDefaults = [];
             const selectedCodes = Array.isArray(findingsCodes)
                 ? findingsCodes.map(code => String(code || '').trim()).filter(Boolean)
@@ -8174,7 +8267,7 @@
                 return excelEpoch.toISOString().split('T')[0];
             }
 
-            const slashMatch = text.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/);
+            const slashMatch = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/);
             if (slashMatch) {
                 const month = Number(slashMatch[1]);
                 const day = Number(slashMatch[2]);
@@ -8355,7 +8448,8 @@ const findHeaderIndex = (rows, sheetLog) => {
             const parseRows3Pass = (rowsInput, sheetName = 'Data') => {
                 const validationLog = [];
                 const log = (msg, level = 'info') => {
-                    const prefix = level === 'error' ? '❌ ERROR' : level === 'warn' ? '⚠️ WARN' : level === 'success' ? '✅' : '💬';
+                    const logPrefixes = { error: '❌ ERROR', warn: '⚠️ WARN', success: '✅', info: '💬' };
+                    const prefix = logPrefixes[level] || logPrefixes.info;
                     const fullMsg = `    [${sheetName}] ${prefix}: ${msg}`;
                     validationLog.push(fullMsg);
                     if (level === 'error' || level === 'warn') console.log(fullMsg);
@@ -8631,6 +8725,72 @@ const findHeaderIndex = (rows, sheetLog) => {
         const MAX_AUTO_RETRIES = 2;
         const CONNECTION_TIMEOUT = 5000;
         const getRetryDelay = (attempt) => Math.min(3000 * Math.pow(2, attempt), 6000);
+
+        function setM365RuntimeState({ connected = false, m365 = false, authenticated = false } = {}) {
+            globalThis.isConnected = connected;
+            useM365 = m365;
+            globalThis.isAuthenticated = authenticated;
+        }
+
+        function renderLocalModeState(reasonMessage) {
+            setM365RuntimeState();
+            console.log(reasonMessage);
+            toggleAuthUIElements();
+            renderUI();
+        }
+
+        function initializeConfiguredM365() {
+            try {
+                console.log('🚀 M365 config valid - initializing MSAL...');
+                initializeMSAL();
+                console.log('✅ MSAL initialized');
+                toggleAuthUIElements();
+                showLoginPrompt();
+                console.log('✅ Auth UI toggled and login prompt shown');
+            } catch (e) {
+                console.error('❌ M365 Initialization Error:', e);
+                console.error('📍 Stack:', e.stack);
+                setM365RuntimeState();
+                showLoginPrompt();
+            }
+        }
+
+        function initializeM365FromConfig() {
+            if (typeof M365_CONFIG === 'undefined' || M365_CONFIG === undefined) {
+                console.error('❌ M365_CONFIG not found - m365-integration.js may not have loaded');
+                renderLocalModeState('⚠️  Running in Local Mode');
+                return;
+            }
+
+            console.log('✅ M365_CONFIG found');
+            console.log('📋 Config details:', {
+                clientId: M365_CONFIG.auth.clientId.substring(0, 8) + '...',
+                authority: M365_CONFIG.auth.authority.substring(0, 30) + '...',
+                siteId: M365_CONFIG.sharepoint.siteId.substring(0, 8) + '...'
+            });
+
+            const hasValidClientId = M365_CONFIG.auth.clientId !== 'YOUR_CLIENT_ID_HERE';
+            const hasValidSiteId = M365_CONFIG.sharepoint.siteId !== 'YOUR_SITE_ID_HERE';
+            useM365 = hasValidClientId && hasValidSiteId;
+
+            console.log('🔍 M365 Config Validation:', { hasValidClientId, hasValidSiteId, useM365 });
+
+            if (useM365 && typeof initializeMSAL === 'function') {
+                initializeConfiguredM365();
+                return;
+            }
+
+            if (!useM365) {
+                console.log('ℹ️  Required:');
+                console.log('    - clientId:', hasValidClientId ? '✅' : '❌ set to YOUR_CLIENT_ID_HERE');
+                console.log('    - siteId:', hasValidSiteId ? '✅' : '❌ set to YOUR_SITE_ID_HERE');
+                renderLocalModeState('⚠️  M365 config incomplete - running in Local Mode');
+                return;
+            }
+
+            console.error('❌ initializeMSAL function not available');
+            renderLocalModeState('⚠️  Running in Local Mode');
+        }
         
         // Version enforcement to prevent cache reversion
         const EXPECTED_VERSION = '2026-02-08T07:50:00Z';
@@ -8651,87 +8811,20 @@ const findHeaderIndex = (rows, sheetLog) => {
         // Initialize M365 after all scripts have loaded
         globalThis.addEventListener('load', () => {
             console.group('🔧 HTML Initialization (window load event)');
-
             console.log('⏱️  Timestamp:', new Date().toISOString());
-            
-            // Check callback availability FIRST
             console.log('📡 Callback check:', {
                 updateAuthState: typeof globalThis.updateAuthState,
                 showToast: typeof globalThis.showToast,
                 m365Login: typeof globalThis.m365Login
             });
-            
-            // Wait for M365_CONFIG to be available
-            if (typeof M365_CONFIG !== 'undefined' && M365_CONFIG !== undefined) {
-                console.log('✅ M365_CONFIG found');
-                console.log('📋 Config details:', {
-                    clientId: M365_CONFIG.auth.clientId.substring(0, 8) + '...',
-                    authority: M365_CONFIG.auth.authority.substring(0, 30) + '...',
-                    siteId: M365_CONFIG.sharepoint.siteId.substring(0, 8) + '...'
-                });
-                
-                const hasValidClientId = M365_CONFIG.auth.clientId !== 'YOUR_CLIENT_ID_HERE';
-                const hasValidSiteId = M365_CONFIG.sharepoint.siteId !== 'YOUR_SITE_ID_HERE';
-                useM365 = hasValidClientId && hasValidSiteId;
-                
-                console.log('🔍 M365 Config Validation:', {
-                    hasValidClientId,
-                    hasValidSiteId,
-                    useM365: useM365
-                });
-                
-                if (useM365 && typeof initializeMSAL === 'function') {
-                    try {
-                        console.log('🚀 M365 config valid - initializing MSAL...');
-                        initializeMSAL();
-                        console.log('✅ MSAL initialized');
-                        
-                        // Start with auth UI hidden
-                        toggleAuthUIElements();
-                        showLoginPrompt();
-                        console.log('✅ Auth UI toggled and login prompt shown');
-                    } catch (e) {
-                        console.error('❌ M365 Initialization Error:', e);
-                        console.error('📍 Stack:', e.stack);
-                        isConnected = false;
-                        useM365 = false;
-                        isAuthenticated = false;
-                        showLoginPrompt();
-                    }
-                } else if (useM365 === false) {
-                    // Local mode
-                    isConnected = false;
-                    useM365 = false;
-                    isAuthenticated = false;
-                    console.log('⚠️  M365 config incomplete - running in Local Mode');
-                    console.log('ℹ️  Required:');
-                    console.log('    - clientId:', hasValidClientId ? '✅' : '❌ set to YOUR_CLIENT_ID_HERE');
-                    console.log('    - siteId:', hasValidSiteId ? '✅' : '❌ set to YOUR_SITE_ID_HERE');
-                    toggleAuthUIElements();
-                    renderUI();
-                } else {
-                    console.error('❌ initializeMSAL function not available');
-                    isConnected = false;
-                    useM365 = false;
-                    isAuthenticated = false;
-                    toggleAuthUIElements();
-                    renderUI();
-                }
-            } else {
-                console.error('❌ M365_CONFIG not found - m365-integration.js may not have loaded');
-                isConnected = false;
-                useM365 = false;
-                isAuthenticated = false;
-                toggleAuthUIElements();
-                renderUI();
-            }
+            initializeM365FromConfig();
             console.groupEnd();
         });
         
         // Callback functions that m365-integration.js will call to update UI
         globalThis.updatePatientsFromM365 = function(patientsData) {
             console.log('📊 updatePatientsFromM365 called with', patientsData.length, 'patients');
-            patients = patientsData;
+            globalThis.patients = patientsData;
             renderUI();
         };
 
@@ -8763,13 +8856,13 @@ const findHeaderIndex = (rows, sheetLog) => {
         
         globalThis.updateOnCallFromM365 = function(onCallData) {
             console.log('📅 updateOnCallFromM365 called with', onCallData.length, 'on-call shifts');
-            onCallSchedule = onCallData;
+            globalThis.onCallSchedule = onCallData;
             updateOnCallDashboard();
         };
         
         globalThis.updateSettingsFromM365 = function(settingsData) {
             console.log('⚙️  updateSettingsFromM365 called:', settingsData);
-            globalSettings = { onCall: settingsData.defaultOnCall || '', hospitals: settingsData.hospitals || '' };
+            globalThis.globalSettings = { onCall: settingsData.defaultOnCall || '', hospitals: settingsData.hospitals || '' };
             const changedCrossOutState = syncCrossedOutPatientIds(settingsData[CROSS_OUT_SETTINGS_KEY]);
             updateOnCallDashboard();
             if (changedCrossOutState && patients.length) renderUI();
@@ -8781,9 +8874,9 @@ const findHeaderIndex = (rows, sheetLog) => {
             console.log('authenticated:', authenticated);
             console.log('username:', username);
             
-            isAuthenticated = authenticated;
-            currentUser = username;
-            isConnected = authenticated;
+            globalThis.isAuthenticated = authenticated;
+            globalThis.currentUser = username;
+            globalThis.isConnected = authenticated;
             
             console.log('📍 State updated:', {
                 isAuthenticated,
@@ -9603,7 +9696,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             // Update tab button animation state
             if (reviewBtn) {
-                if (flaggedRecords.length > 0 && flaggedRecords.some(r => !r.resolved)) {
+                if (flaggedRecords.some(r => !r.resolved)) {
                     reviewBtn.classList.add('has-flagged-records');
                 } else {
                     reviewBtn.classList.remove('has-flagged-records');
@@ -9720,7 +9813,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         // CLEAR ALL RESOLVED FLAGS
         globalThis.clearResolvedFlags = () => {
             const before = flaggedRecords.length;
-            flaggedRecords = flaggedRecords.filter(r => !r.resolved);
+            globalThis.flaggedRecords = flaggedRecords.filter(r => !r.resolved);
             const cleared = before - flaggedRecords.length;
             globalThis.renderReviewTab();
             showToast(`✓ Cleared ${cleared} resolved record(s)`);
@@ -9746,7 +9839,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             // Force refresh when switching tabs
             globalThis.forceRefresh();
-            currentTab = tab;
+            globalThis.currentTab = tab;
             ['table-section', 'calendar-section', 'oncall-section', 'timeline-section', 'analytics-section', 'reports-section', 'audit-section', 'procedure-log-section', 'shift-report-section', 'review-section'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
             
             if (tab === 'calendar') {
