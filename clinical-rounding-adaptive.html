@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Clinical Rounding List - Adaptive Platform</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230f172a'/%3E%3Cpath d='M50 22v56M22 50h56' stroke='white' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E">
-    <script src="https://cdn.tailwindcss.com" integrity="sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K" crossorigin="anonymous"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js" integrity="sha384-6kRQDsV2kVYRSENnw7WnekWKCx8/Lmv7rFKpDuR2AoIbjlBShlYcs3x0QlE3kuRh" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js" integrity="sha384-GbQVk5KsTZEMJtvSbtmGpderuiERKpKVVFucxROOKnIXvtg03h3pORjyyGlPD6UO" crossorigin="anonymous"></script>
@@ -4324,7 +4324,7 @@
             const selectAllCheckbox = document.querySelector('input[data-select-all-checkbox]');
             if (!selectAllCheckbox) return;
 
-            const visiblePatients = getFilteredData();
+            const visiblePatients = getLatestPatientRows(getFilteredData());
             const visibleCount = visiblePatients.length;
             const selectedVisibleCount = visiblePatients.reduce((count, patient) => (
                 selectedPatientIds.has(patient.id) ? count + 1 : count
@@ -4332,6 +4332,25 @@
 
             selectAllCheckbox.checked = visibleCount > 0 && selectedVisibleCount === visibleCount;
             selectAllCheckbox.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleCount;
+        }
+
+        function getVisitTargetsForSelectedPatients(selectedIds, { includeArchived = true } = {}) {
+            const selectedPatients = [...selectedIds]
+                .map(id => patients.find(patient => patient.id === id))
+                .filter(Boolean);
+            const seenTargetIds = new Set();
+            const targets = [];
+
+            selectedPatients.forEach((patient) => {
+                getPatientVisitGroup(patient).forEach((visit) => {
+                    if (seenTargetIds.has(visit.id)) return;
+                    if (!includeArchived && isArchivedRecord(visit)) return;
+                    seenTargetIds.add(visit.id);
+                    targets.push(visit);
+                });
+            });
+
+            return { selectedPatients, targets };
         }
 
         // Batch Change Status
@@ -4390,21 +4409,7 @@
         }
 
         function getUnarchivedVisitsForSelectedPatients(selectedIds) {
-            const selectedPatients = [...selectedIds]
-                .map(id => patients.find(patient => patient.id === id))
-                .filter(Boolean);
-            const seenTargetIds = new Set();
-            const targets = [];
-
-            selectedPatients.forEach((patient) => {
-                getPatientVisitGroup(patient).forEach((visit) => {
-                    if (seenTargetIds.has(visit.id) || isArchivedRecord(visit)) return;
-                    seenTargetIds.add(visit.id);
-                    targets.push(visit);
-                });
-            });
-
-            return { selectedPatients, targets };
+            return getVisitTargetsForSelectedPatients(selectedIds, { includeArchived: false });
         }
 
         function applyArchiveStateToVisits(targets, changeNote, auditUser, archivedAt) {
@@ -4489,6 +4494,14 @@
             const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
             const archivedAt = new Date().toISOString();
             applyArchiveStateToVisits(targets, changeNote, auditUser, archivedAt);
+            if (useCloud) {
+                queuePendingPatientSyncGuard({
+                    archivedIds: new Set(targetIds),
+                    changeNote,
+                    archivedAt,
+                    auditUser
+                });
+            }
 
             selectedPatientIds.clear();
             hideArchivedFromCensus();
@@ -4535,24 +4548,35 @@
 
         function deletePatientsLocally(ids, auditUser) {
             ids.forEach(id => AuditLogger.logDataChange(auditUser, id, 'record', 'present', 'deleted'));
-            patients = patients.filter(p => !selectedPatientIds.has(p.id));
+            const idSet = new Set(ids);
+            patients = patients.filter(p => !idSet.has(p.id));
             return { deleted: ids.length, failed: 0 };
         }
 
         globalThis.batchDeleteSelected = async () => {
-            if (!confirm(`DELETE ${selectedPatientIds.size} records? This cannot be undone.`)) return;
+            const selectedIds = getSelectedPatientIdsForBatchAction();
+            selectedPatientIds = selectedIds;
+            const { selectedPatients, targets } = getVisitTargetsForSelectedPatients(selectedIds);
+            if (!targets.length) {
+                showToast('No visits selected to delete');
+                return;
+            }
+
+            if (!confirm(`DELETE ${targets.length} visit(s) for ${selectedPatients.length} selected patient(s)? This cannot be undone.`)) return;
             const changeNote = await getRequiredChangeNote('batch delete');
             if (!changeNote) return;
 
-            const ids = [...selectedPatientIds];
+            const ids = targets.map(patient => patient.id);
             const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
             const useCloud = isConnected && useM365 && typeof globalThis.m365DeletePatient === 'function';
             if (useCloud) showToast(`⏳ Deleting ${ids.length} records…`);
+            if (useCloud) queuePendingPatientSyncGuard({ deletedIds: new Set(ids) });
 
             const result = useCloud
                 ? await deletePatientsFromCloud(ids, auditUser)
                 : deletePatientsLocally(ids, auditUser);
 
+            selectedPatientIds.clear();
             renderUI();
             updateBatchOpCount();
             showToast(result.failed ? `⚠️ ${result.deleted} deleted, ${result.failed} failed` : `🗑️ ${result.deleted} records deleted`);
@@ -8298,18 +8322,54 @@
             return isValidIsoDateString(normalized) ? normalized : '';
         };
 
+        const normalizeImportIdentityText = (value = '') => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const normalizeImportNameIdentity = (value = '') => normalizeImportIdentityText(value).replace(/[^a-z0-9\s]/g, '').trim();
+
+        const getImportNameDateKey = (patient = {}) => {
+            const normalizedDate = normalizeImportedDateValue(patient.date || '').trim();
+            const normalizedName = normalizeImportNameIdentity(patient.name || '');
+            if (!normalizedDate || !normalizedName) return '';
+            return `${normalizedName}|${normalizedDate}`;
+        };
+
+        const hasImportMrn = (patient = {}) => Boolean(normalizeImportIdentityText(patient.mrn || ''));
+
+        const canFallbackImportIdentityMatch = (left = {}, right = {}) => {
+            const leftNameDateKey = getImportNameDateKey(left);
+            const rightNameDateKey = getImportNameDateKey(right);
+            if (!leftNameDateKey || leftNameDateKey !== rightNameDateKey) return false;
+
+            const leftDob = normalizeImportIdentityText(left.dob || '');
+            const rightDob = normalizeImportIdentityText(right.dob || '');
+            const leftHospital = normalizeImportIdentityText(left.hospital || '');
+            const rightHospital = normalizeImportIdentityText(right.hospital || '');
+
+            const dobCompatible = !leftDob || !rightDob || leftDob === rightDob;
+            const hospitalCompatible = !leftHospital || !rightHospital || leftHospital === rightHospital;
+            return dobCompatible && hospitalCompatible;
+        };
+
+        const doImportedPatientsMatch = (left = {}, right = {}) => {
+            if (buildImportIdentityKey(left) === buildImportIdentityKey(right)) return true;
+            if (hasImportMrn(left) && hasImportMrn(right)) return false;
+            return canFallbackImportIdentityMatch(left, right);
+        };
+
+        const findExistingImportedPatientIndex = (patientList = [], incomingPatient = {}) => (
+            patientList.findIndex(existingPatient => doImportedPatientsMatch(existingPatient, incomingPatient))
+        );
+
         const buildImportIdentityKey = (patient = {}) => {
             const normalizedDate = normalizeImportedDateValue(patient.date || '').trim();
-            const normalizedMrn = String(patient.mrn || '').trim().toLowerCase();
-            const normalizedHospital = String(patient.hospital || '').trim().toLowerCase();
-            const normalizedRoom = String(patient.room || '').trim().toLowerCase();
-            const normalizedName = String(patient.name || '').trim().toLowerCase();
+            const normalizedMrn = normalizeImportIdentityText(patient.mrn || '');
+            const normalizedHospital = normalizeImportIdentityText(patient.hospital || '');
+            const normalizedName = normalizeImportNameIdentity(patient.name || '');
 
             if (normalizedMrn && normalizedDate) {
                 return `${normalizedMrn}|${normalizedDate}`;
             }
 
-            return `fallback|${normalizedDate}|${normalizedHospital || 'unknown-hospital'}|${normalizedRoom || 'unknown-room'}|${normalizedName || 'unknown-name'}`;
+            return `fallback|${normalizedDate}|${normalizedHospital || 'unknown-hospital'}|${normalizedName || 'unknown-name'}`;
         };
 
         const isMeaningfulImportValue = (value) => {
@@ -8340,43 +8400,35 @@
         const dedupeImportedPatients = (patientList = [], sourceLabel = 'import') => {
             const uniquePatients = [];
             const duplicateRows = [];
-            const byKey = new Map();
 
             patientList.forEach((patient, index) => {
                 const key = buildImportIdentityKey(patient);
                 patient.visitKey = patient.visitKey || key;
-                const existing = byKey.get(key);
+                const existingIndex = findExistingImportedPatientIndex(uniquePatients, patient);
+                const existing = existingIndex >= 0 ? uniquePatients[existingIndex] : null;
 
                 if (!existing) {
-                    byKey.set(key, {
-                        key,
-                        patient,
-                        sourceLabel,
-                        firstIndex: index,
-                        uniqueIndex: uniquePatients.length,
-                        score: scoreImportedPatientCompleteness(patient)
-                    });
                     uniquePatients.push(patient);
                     return;
                 }
 
                 duplicateRows.push({
                     patient,
-                    keptPatient: existing.patient,
+                    keptPatient: existing,
                     sourceLabel,
                     key,
-                    firstIndex: existing.firstIndex,
+                    firstIndex: existingIndex,
                     duplicateIndex: index
                 });
 
                 const incomingScore = scoreImportedPatientCompleteness(patient);
-                const mergedPatient = incomingScore >= existing.score
-                    ? mergeImportedPatientRows(existing.patient, patient)
-                    : mergeImportedPatientRows(patient, existing.patient);
+                const existingScore = scoreImportedPatientCompleteness(existing);
+                const mergedPatient = incomingScore >= existingScore
+                    ? mergeImportedPatientRows(existing, patient)
+                    : mergeImportedPatientRows(patient, existing);
 
-                mergedPatient.visitKey = key;
-                uniquePatients[existing.uniqueIndex] = mergedPatient;
-                byKey.set(key, { ...existing, patient: mergedPatient, score: Math.max(existing.score, incomingScore) });
+                mergedPatient.visitKey = buildImportIdentityKey(mergedPatient);
+                uniquePatients[existingIndex] = mergedPatient;
             });
 
             return { uniquePatients, duplicateRows };
@@ -8791,6 +8843,37 @@ const findHeaderIndex = (rows, sheetLog) => {
             console.error('❌ initializeMSAL function not available');
             renderLocalModeState('⚠️  Running in Local Mode');
         }
+
+        function queuePendingPatientSyncGuard(guard = null) {
+            globalThis._pendingPatientSyncGuard = guard;
+        }
+
+        function applyPendingPatientSyncGuard(patientsData = []) {
+            const guard = globalThis._pendingPatientSyncGuard;
+            if (!guard) return patientsData;
+
+            let nextPatients = [...patientsData];
+
+            if (guard.deletedIds?.size) {
+                nextPatients = nextPatients.filter(patient => !guard.deletedIds.has(patient.id));
+            }
+
+            if (guard.archivedIds?.size) {
+                nextPatients = nextPatients.map((patient) => {
+                    if (!guard.archivedIds.has(patient.id)) return patient;
+                    return {
+                        ...patient,
+                        archived: true,
+                        lastChangeNote: patient.lastChangeNote || guard.changeNote,
+                        lastChangeNoteAt: patient.lastChangeNoteAt || guard.archivedAt,
+                        lastChangeNoteBy: patient.lastChangeNoteBy || guard.auditUser
+                    };
+                });
+            }
+
+            globalThis._pendingPatientSyncGuard = null;
+            return nextPatients;
+        }
         
         // Version enforcement to prevent cache reversion
         const EXPECTED_VERSION = '2026-02-08T07:50:00Z';
@@ -8824,7 +8907,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         // Callback functions that m365-integration.js will call to update UI
         globalThis.updatePatientsFromM365 = function(patientsData) {
             console.log('📊 updatePatientsFromM365 called with', patientsData.length, 'patients');
-            globalThis.patients = patientsData;
+            globalThis.patients = applyPendingPatientSyncGuard(patientsData);
             renderUI();
         };
 
@@ -10356,7 +10439,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         };
         
         globalThis.toggleAllSelection = (e) => {
-            const filtered = getFilteredData();
+            const filtered = getLatestPatientRows(getFilteredData());
             if (e.target.checked) filtered.forEach(p => selectedPatientIds.add(p.id));
             else filtered.forEach(p => selectedPatientIds.delete(p.id));
             enforceSelectionViewLock(selectedPatientIds.size > 0);
@@ -10743,9 +10826,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         const fileDetails = [];
 
                         filePatients.forEach(p => {
-                            const key = buildImportIdentityKey(p);
-
-                            const existingIdx = patients.findIndex(e => buildImportIdentityKey(e) === key);
+                            const existingIdx = findExistingImportedPatientIndex(patients, p);
                             if (existingIdx < 0) {
                                 fileNew++;
                                 fileDetails.push({ status: 'new', mrn: p.mrn, date: p.date, name: p.name });
@@ -10793,7 +10874,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     patients.forEach(existing => {
                         if (existing.archived) return;
                         if (!incomingDates.has(existing.date)) return;
-                        if (!incomingKeys.has(buildImportIdentityKey(existing))) {
+                        if (!preview.allPatients.some(incoming => doImportedPatientsMatch(existing, incoming))) {
                             preview.missingFromFile.push({
                                 mrn: existing.mrn, date: existing.date,
                                 name: existing.name || existing.mrn || 'Unknown',
@@ -10810,7 +10891,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                         if (!allEmpty) return; // Column present — fine
                         // Only warn if the matched existing records actually have data for this field
                         const matchedExisting = preview.allPatients
-                            .map(p => patients.find(e => buildImportIdentityKey(e) === buildImportIdentityKey(p)))
+                            .map(p => {
+                                const existingIdx = findExistingImportedPatientIndex(patients, p);
+                                return existingIdx >= 0 ? patients[existingIdx] : null;
+                            })
                             .filter(Boolean);
                         if (matchedExisting.some(e => toStr(e[f.key]))) {
                             preview.missingColumns.push(f.label);
@@ -11109,7 +11193,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             let totalDedupedPatients = 0;
             let fileCount = 0;
             const errors = [];
-            const importBatchKeys = new Set();
+            const importBatchPatients = [];
 
             try {
                 const actionLabel = action === 'newonly' ? 'adding new records only' : action === 'updateonly' ? 'applying updates only' : 'adding new + applying updates';
@@ -11162,12 +11246,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                         const fileDedupe = dedupeImportedPatients(filePatients, fileName);
                         totalDedupedPatients += fileDedupe.duplicateRows.length;
                         filePatients = fileDedupe.uniquePatients.filter((p) => {
-                            const key = buildImportIdentityKey(p);
-                            if (importBatchKeys.has(key)) {
+                            if (findExistingImportedPatientIndex(importBatchPatients, p) >= 0) {
                                 totalDedupedPatients++;
                                 return false;
                             }
-                            importBatchKeys.add(key);
+                            importBatchPatients.push(p);
                             return true;
                         });
                         if (fileDedupe.duplicateRows.length > 0) {
@@ -11198,8 +11281,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         //   updateonly = update changed existing only, skip new
                         for (const p of filePatients) {
                             try {
-                                const patientKey = buildImportIdentityKey(p);
-                                const idx = patients.findIndex(existing => buildImportIdentityKey(existing) === patientKey);
+                                const idx = findExistingImportedPatientIndex(patients, p);
                                 if (idx >= 0) {
                                     // Record exists — skip if newonly, update if replace or updateonly
                                     if (action === 'newonly') continue;
