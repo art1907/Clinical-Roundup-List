@@ -7892,16 +7892,35 @@
             return `id:${patient.id || ''}`;
         }
 
+        function getPatientClinicalDateString(patient = {}) {
+            const rawDate = String(patient.date || '').trim();
+            if (!rawDate) return '';
+            const normalizedDate = normalizeImportedDateValue(rawDate);
+            return isValidIsoDateString(normalizedDate) ? normalizedDate : rawDate;
+        }
+
+        function getPatientVisitRowOrder(patient = {}) {
+            const sourceRowIndex = Number(patient.sourceRowIndex);
+            return Number.isFinite(sourceRowIndex) ? sourceRowIndex : -1;
+        }
+
         function getPatientVisitTimestamp(patient = {}) {
-            const visitTime = patient.visitTime ? new Date(patient.visitTime).getTime() : Number.NaN;
-            if (Number.isFinite(visitTime)) return visitTime;
-            const visitDate = patient.date ? new Date(`${patient.date}T12:00:00`).getTime() : Number.NaN;
+            const clinicalDate = getPatientClinicalDateString(patient);
+            const visitTimeDate = patient.visitTime ? new Date(patient.visitTime) : null;
+            const visitTime = visitTimeDate ? visitTimeDate.getTime() : Number.NaN;
+            const visitTimeMatchesClinicalDate = Number.isFinite(visitTime)
+                && clinicalDate
+                && visitTimeDate.toISOString().slice(0, 10) === clinicalDate;
+            if (visitTimeMatchesClinicalDate) return visitTime;
+            const visitDate = clinicalDate ? new Date(`${clinicalDate}T12:00:00`).getTime() : Number.NaN;
             return Number.isFinite(visitDate) ? visitDate : 0;
         }
 
         function comparePatientVisitRecency(a, b) {
             const timeDelta = getPatientVisitTimestamp(b) - getPatientVisitTimestamp(a);
             if (timeDelta !== 0) return timeDelta;
+            const rowOrderDelta = getPatientVisitRowOrder(b) - getPatientVisitRowOrder(a);
+            if (rowOrderDelta !== 0) return rowOrderDelta;
             return String(b.id || '').localeCompare(String(a.id || ''));
         }
 
@@ -8637,6 +8656,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         const patient = {
                             id: `local-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                             date: normalizedDates.date,
+                            sourceRowIndex: i,
                             room: roomValue || first,
                             name: colMap.name >= 0 ? (parts[colMap.name] || '') : '',
                             dob: colMap.dob >= 0 ? (parts[colMap.dob] || '') : '',
