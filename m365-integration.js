@@ -1506,6 +1506,51 @@ async function api_deletePatientFile(driveItemId) {
 // =============================================================================
 
 async function api_importFromCSV(csvText) {
+    const normalizeCell = (value) => String(value ?? '').replaceAll('\u00A0', ' ').trim();
+    const normalizeSectionName = (value) => normalizeCell(value).toLowerCase().replaceAll(/[^a-z0-9]+/g, ' ').trim();
+    const knownHospitalSections = (() => {
+        const names = new Set();
+        const addName = (value) => {
+            const normalized = normalizeSectionName(value);
+            if (normalized) names.add(normalized);
+        };
+        const addVariants = (value) => {
+            const text = normalizeCell(value);
+            if (!text) return;
+            addName(text);
+            const withoutParens = text.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+            addName(withoutParens);
+            const simplified = withoutParens.replace(/\b(campus|medical center|hospital|center)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+            addName(simplified);
+        };
+
+        [
+            'WGMC',
+            'AWC',
+            'BTMC',
+            'AHD',
+            'BEMC',
+            'Westgate Medical Center',
+            'Abrazo West',
+            'Abrazo West Campus',
+            'Banner Thunderbird Medical Center'
+        ].forEach(addVariants);
+
+        String(globalThis.globalSettings?.hospitals || '')
+            .split(',')
+            .map(normalizeCell)
+            .filter(Boolean)
+            .forEach(addVariants);
+
+        const hospitalSelect = document.getElementById('f-hospital');
+        Array.from(hospitalSelect?.options || []).forEach((option) => {
+            addVariants(option.value);
+            addVariants(option.textContent || '');
+        });
+
+        return names;
+    })();
+    const isKnownHospitalSection = (value) => knownHospitalSections.has(normalizeSectionName(value));
     const rows = Papa.parse(csvText, { header: false }).data;
     
     if (rows.length < 5) {
@@ -1550,10 +1595,11 @@ async function api_importFromCSV(csvText) {
         const row = rows[i];
         
         // Check if this is a hospital section header (only first column populated, rest empty)
-        const isSection = row[0] && row[0].trim() && row.slice(1).every(cell => !cell || !cell.trim());
+        const firstCell = normalizeCell(row[0]);
+        const isSection = firstCell && row.slice(1).every(cell => !normalizeCell(cell)) && isKnownHospitalSection(firstCell);
         
         if (isSection) {
-            currentHospital = row[0].trim();
+            currentHospital = firstCell;
             continue;
         }
         

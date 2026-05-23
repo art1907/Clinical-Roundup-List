@@ -7270,6 +7270,150 @@
             });
         }
 
+        function normalizeReturningPatientText(value) {
+            return String(value || '').trim().toLowerCase();
+        }
+
+        function normalizeReturningPatientDob(value) {
+            const rawValue = String(value || '').trim();
+            if (!rawValue) return '';
+            const normalizedDate = normalizeImportedDateValue(rawValue);
+            return normalizeReturningPatientText(isValidIsoDateString(normalizedDate) ? normalizedDate : rawValue);
+        }
+
+        function getReturningPatientBackfillCandidate(details = {}) {
+            const patientList = typeof globalThis.getCurrentPatients === 'function' ? globalThis.getCurrentPatients() : patients;
+            const excludeId = String(details.excludeId || '');
+            const normalizedMrn = normalizeReturningPatientText(details.mrn);
+            const normalizedName = normalizeReturningPatientText(details.name);
+            const normalizedDob = normalizeReturningPatientDob(details.dob);
+            if (!normalizedMrn && !(normalizedName && normalizedDob)) {
+                return null;
+            }
+
+            const matchesByMrn = normalizedMrn
+                ? patientList.filter((patient) => {
+                    if (!patient || String(patient.id || '') === excludeId) return false;
+                    if (patient.archived === true || patient.archived === 'true') return false;
+                    return normalizeReturningPatientText(patient.mrn) === normalizedMrn;
+                })
+                : [];
+
+            const matchesByDemo = normalizedName && normalizedDob
+                ? patientList.filter((patient) => {
+                    if (!patient || String(patient.id || '') === excludeId) return false;
+                    if (patient.archived === true || patient.archived === 'true') return false;
+                    return normalizeReturningPatientText(patient.name) === normalizedName
+                        && normalizeReturningPatientDob(patient.dob) === normalizedDob;
+                })
+                : [];
+
+            const matches = matchesByMrn.length > 0 ? matchesByMrn : matchesByDemo;
+            if (!matches.length) {
+                return null;
+            }
+
+            return matches.slice().sort(comparePatientVisitRecency)[0] || null;
+        }
+
+        function getReturningPatientSummary(patient = {}) {
+            const parts = [];
+            if (patient.date) parts.push(patient.date);
+            if (patient.room) parts.push(`Room ${patient.room}`);
+            if (patient.hospital) parts.push(patient.hospital);
+            return parts.join(' | ');
+        }
+
+        function hideReturningPatientBackfillPrompt() {
+            const prompt = document.getElementById('returning-patient-backfill');
+            const promptText = document.getElementById('returning-patient-backfill-text');
+            const promptButton = document.getElementById('returning-patient-backfill-apply');
+            if (prompt) prompt.classList.add('hidden');
+            if (promptText) promptText.textContent = '';
+            if (promptButton) promptButton.textContent = 'Use previous visit';
+        }
+
+        function refreshReturningPatientBackfillPrompt() {
+            const modal = document.getElementById('patient-modal');
+            const editId = document.getElementById('edit-id')?.value || '';
+            const prompt = document.getElementById('returning-patient-backfill');
+            const promptText = document.getElementById('returning-patient-backfill-text');
+            const promptButton = document.getElementById('returning-patient-backfill-apply');
+            if (!modal || !prompt || !promptText || editId) {
+                hideReturningPatientBackfillPrompt();
+                return null;
+            }
+
+            const match = getReturningPatientBackfillCandidate({
+                mrn: document.getElementById('f-mrn')?.value || '',
+                name: document.getElementById('f-name')?.value || '',
+                dob: document.getElementById('f-dob')?.value || ''
+            });
+            if (!match) {
+                modal.dataset.returningPatientCandidateId = '';
+                hideReturningPatientBackfillPrompt();
+                return null;
+            }
+
+            const summary = getReturningPatientSummary(match);
+            const applied = modal.dataset.returningPatientBackfilledFrom === String(match.id || '');
+            modal.dataset.returningPatientCandidateId = String(match.id || '');
+            promptText.textContent = applied
+                ? `Previous visit details loaded from ${summary || 'the latest visit'}.`
+                : `Returning patient detected from ${summary || 'the latest visit'}. Fill remaining fields from that visit.`;
+            if (promptButton) {
+                promptButton.textContent = applied ? 'Reapply' : 'Use previous visit';
+            }
+            prompt.classList.remove('hidden');
+            return match;
+        }
+
+        globalThis.applyReturningPatientBackfill = () => {
+            const modal = document.getElementById('patient-modal');
+            const editId = document.getElementById('edit-id')?.value || '';
+            if (!modal || editId) return false;
+
+            const candidate = refreshReturningPatientBackfillPrompt();
+            if (!candidate) return false;
+
+            const fieldMap = {
+                'f-room': 'room',
+                'f-name': 'name',
+                'f-dob': 'dob',
+                'f-mrn': 'mrn',
+                'f-hospital': 'hospital',
+                'f-md': 'supervisingMd',
+                'f-plan': 'plan',
+                'f-cpt-primary': 'cptPrimary',
+                'f-icd-primary': 'icdPrimary',
+                'f-charge-codes-secondary': 'chargeCodesSecondary'
+            };
+
+            Object.entries(fieldMap).forEach(([inputId, fieldName]) => {
+                const input = document.getElementById(inputId);
+                if (!input) return;
+                const currentValue = String(input.value || '').trim();
+                const nextValue = Array.isArray(candidate[fieldName]) ? candidate[fieldName].join(', ') : String(candidate[fieldName] || '').trim();
+                if (!nextValue || currentValue) return;
+                input.value = nextValue;
+            });
+
+            const statusInput = document.getElementById('f-proc-status');
+            if (statusInput && statusInput.value === DEFAULT_RECORD_STATUS && candidate.procedureStatus) {
+                statusInput.value = getSafeConfiguredStatus(candidate.procedureStatus);
+            }
+
+            const statInput = document.getElementById('f-priority');
+            if (statInput && !statInput.checked && (candidate.stat === true || candidate.stat === 'true')) {
+                statInput.checked = true;
+            }
+
+            modal.dataset.returningPatientBackfilledFrom = String(candidate.id || '');
+            refreshReturningPatientBackfillPrompt();
+            showToast(`✓ Backfilled stable fields from ${candidate.name || 'previous visit'}`);
+            return true;
+        };
+
         globalThis.openModal = (id = null) => {
             const modal = document.getElementById('patient-modal');
             if (!modal) return;
@@ -7289,6 +7433,9 @@
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
             renderPatientChangeHistory(null);
+            modal.dataset.returningPatientCandidateId = '';
+            modal.dataset.returningPatientBackfilledFrom = '';
+            hideReturningPatientBackfillPrompt();
 
             const setEditMode = (isEditing) => {
                 modal.dataset.findingsEditable = isEditing ? 'true' : 'false';
@@ -7477,6 +7624,7 @@
                 } else {
                     // New record - check for draft
                     loadDraft();
+                    refreshReturningPatientBackfillPrompt();
                 }
             } else if (editIdInput) {
                 setEditMode(true);
@@ -7489,6 +7637,7 @@
                 if (typeof globalThis.clearPatientFiles === 'function') {
                     globalThis.clearPatientFiles();
                 }
+                refreshReturningPatientBackfillPrompt();
             }
             if (typeof globalThis.syncFindingsUI === 'function') {
                 globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
@@ -8456,6 +8605,52 @@
         // CSV IMPORT ENGINE
         const CSVImporter = (() => {
             const normalizeCell = (value) => String(value ?? '').replaceAll('\u00A0', ' ').trim();
+            const normalizeSectionName = (value) => normalizeCell(value).toLowerCase().replaceAll(/[^a-z0-9]+/g, ' ').trim();
+
+            const getKnownHospitalSectionNames = () => {
+                const names = new Set();
+                const addName = (value) => {
+                    const normalized = normalizeSectionName(value);
+                    if (normalized) names.add(normalized);
+                };
+                const addVariants = (value) => {
+                    const text = normalizeCell(value);
+                    if (!text) return;
+                    addName(text);
+                    const withoutParens = text.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+                    addName(withoutParens);
+                    const simplified = withoutParens.replace(/\b(campus|medical center|hospital|center)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+                    addName(simplified);
+                };
+
+                [
+                    'WGMC',
+                    'AWC',
+                    'BTMC',
+                    'AHD',
+                    'BEMC',
+                    'Westgate Medical Center',
+                    'Abrazo West',
+                    'Abrazo West Campus',
+                    'Banner Thunderbird Medical Center'
+                ].forEach(addVariants);
+
+                String(globalThis.globalSettings?.hospitals || '')
+                    .split(',')
+                    .map(normalizeCell)
+                    .filter(Boolean)
+                    .forEach(addVariants);
+
+                const hospitalSelect = document.getElementById('f-hospital');
+                Array.from(hospitalSelect?.options || []).forEach((option) => {
+                    addVariants(option.value);
+                    addVariants(option.textContent || '');
+                });
+
+                return names;
+            };
+
+            const isKnownHospitalSection = (value, knownHospitals) => knownHospitals.has(normalizeSectionName(value));
 
             const parseCsvLine = (line) => {
                 const out = [];
@@ -8614,18 +8809,23 @@ const findHeaderIndex = (rows, sheetLog) => {
                     result.columnWarnings.push('Detected "Hospital/Room #" as a room column, not a hospital column. Hospital names must come from section headers or a separate Hospital column.');
                 }
 
+                const knownHospitalSections = getKnownHospitalSectionNames();
                 let currentHospital = '';
                 for (let i = headerIdx + 1; i < rows.length; i++) {
                     const parts = rows[i];
                     const first = firstNonEmptyCell(parts);
                     const nonEmptyCount = parts.filter(Boolean).length;
-                    const isHospitalHeader = first && nonEmptyCount === 1;
+                    const isHospitalHeader = first && nonEmptyCount === 1 && isKnownHospitalSection(first, knownHospitalSections);
 
                     if (isHospitalHeader) {
                         currentHospital = first;
                         if (!result.hospitals.includes(currentHospital)) result.hospitals.push(currentHospital);
                         log(`Row ${i}: Hospital section header: "${currentHospital}"`, 'info');
                         continue;
+                    }
+
+                    if (first && nonEmptyCount === 1 && !isHospitalHeader) {
+                        log(`Row ${i}: Single-cell value "${first}" is not a known hospital header; treating it as room-only data`, 'info');
                     }
 
                     if (!parts.some(Boolean)) {
@@ -11603,6 +11803,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                     draftTimer = setTimeout(saveDraft, 1500); // Save draft 1.5s after typing stops
                 });
             });
+            ['f-name', 'f-dob', 'f-mrn'].forEach((fieldId) => {
+                const input = document.getElementById(fieldId);
+                if (!input) return;
+                input.addEventListener('input', refreshReturningPatientBackfillPrompt);
+                input.addEventListener('change', refreshReturningPatientBackfillPrompt);
+            });
             
             // Start with all findings controls hidden/disabled until a code is checked.
             document.querySelectorAll('textarea.findings-value').forEach(input => {
@@ -12550,6 +12756,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                 <div class="grid grid-cols-2 gap-3">
                     <input type="text" id="f-dob" placeholder="DOB" aria-label="Date of Birth" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
                     <input type="text" id="f-mrn" placeholder="MRN" aria-label="Medical Record Number" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                </div>
+                <div id="returning-patient-backfill" class="hidden rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                    <div class="flex items-start justify-between gap-3">
+                        <p id="returning-patient-backfill-text" class="leading-5"></p>
+                        <button id="returning-patient-backfill-apply" type="button" onclick="globalThis.applyReturningPatientBackfill()" class="shrink-0 rounded-md bg-blue-600 px-2.5 py-1 font-semibold text-white hover:bg-blue-700">Use previous visit</button>
+                    </div>
                 </div>
 
                 <!-- Findings -->
