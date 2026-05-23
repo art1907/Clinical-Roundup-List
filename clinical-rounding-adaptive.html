@@ -9490,6 +9490,68 @@ const findHeaderIndex = (rows, sheetLog) => {
             return history;
         }
 
+        function normalizeFindingsHistoryMap(source = {}) {
+            const normalized = {};
+            if (!source || typeof source !== 'object') return normalized;
+            Object.keys(source).sort().forEach((key) => {
+                const normalizedKey = String(key || '').trim();
+                if (!normalizedKey) return;
+                const value = source[key];
+                if (value == null) return;
+                if (Array.isArray(value)) {
+                    const items = value.map(item => String(item ?? '').trim()).filter(Boolean);
+                    if (items.length) normalized[normalizedKey] = items;
+                    return;
+                }
+                if (typeof value === 'object') {
+                    const nested = normalizeFindingsHistoryMap(value);
+                    if (Object.keys(nested).length) normalized[normalizedKey] = nested;
+                    return;
+                }
+                const textValue = String(value).trim();
+                if (textValue) normalized[normalizedKey] = textValue;
+            });
+            return normalized;
+        }
+
+        function buildFindingsHistorySnapshot(record = {}) {
+            return {
+                findingsText: String(record.findingsText || '').trim(),
+                findingsCodes: Array.isArray(record.findingsCodes)
+                    ? record.findingsCodes.map(code => String(code || '').trim()).filter(Boolean).sort()
+                    : [],
+                findingsValues: normalizeFindingsHistoryMap(record.findingsValues || {}),
+                findingsDates: normalizeFindingsHistoryMap(record.findingsDates || {})
+            };
+        }
+
+        function appendFindingsSnapshotHistory(existingHistory, previousRecord, nextRecord, author) {
+            const history = Array.isArray(existingHistory) ? [...existingHistory] : [];
+            if (!previousRecord || !nextRecord) return history;
+
+            const previousSnapshot = buildFindingsHistorySnapshot(previousRecord);
+            const nextSnapshot = buildFindingsHistorySnapshot(nextRecord);
+            const changedFields = ['findingsText', 'findingsCodes', 'findingsValues', 'findingsDates']
+                .filter((field) => JSON.stringify(previousSnapshot[field]) !== JSON.stringify(nextSnapshot[field]));
+
+            if (!changedFields.length) return history;
+
+            history.push({
+                type: 'findings_snapshot',
+                note: 'Findings snapshot saved',
+                author: author || 'unknown',
+                action: 'findings update',
+                timestamp: new Date().toISOString(),
+                changedFields,
+                findingsText: nextSnapshot.findingsText,
+                findingsCodes: nextSnapshot.findingsCodes,
+                findingsValues: nextSnapshot.findingsValues,
+                findingsDates: nextSnapshot.findingsDates
+            });
+
+            return history;
+        }
+
         function normalizePatientChangeHistory(record) {
             if (Array.isArray(record?.notesHistory) && record.notesHistory.length) {
                 return record.notesHistory;
@@ -9523,6 +9585,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const mi = String(value.getMinutes()).padStart(2, '0');
                 return `${mm}/${dd}/${yyyy} ${hh}:${mi}`;
             };
+            const humanizeHistoryField = (field) => {
+                const value = String(field || '').replaceAll(/([A-Z])/g, ' $1').trim();
+                return value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
+            };
             const history = normalizePatientChangeHistory(record).slice().reverse();
             if (!history.length) {
                 container.innerHTML = '<div class="text-xs text-slate-400">No change notes recorded yet.</div>';
@@ -9532,6 +9598,31 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const when = formatClinicalTimestamp(entry.timestamp);
                 const actionText = entry.action ? ' - ' + entry.action : '';
                 const line = `${when} - ${entry.author || 'unknown'}${actionText} - ${entry.note || ''}`;
+                if (entry.type === 'findings_snapshot') {
+                    const findingsRecord = {
+                        findingsText: entry.findingsText || '',
+                        findingsCodes: Array.isArray(entry.findingsCodes) ? entry.findingsCodes : [],
+                        findingsValues: entry.findingsValues && typeof entry.findingsValues === 'object' ? entry.findingsValues : {}
+                    };
+                    const findingsDates = entry.findingsDates && typeof entry.findingsDates === 'object'
+                        ? Object.entries(entry.findingsDates)
+                            .map(([code, value]) => `${humanizeHistoryField(code)}: ${value}`)
+                            .join(' · ')
+                        : '';
+                    const changedFields = Array.isArray(entry.changedFields)
+                        ? entry.changedFields.map((field) => `<span class="inline-block rounded border border-blue-200 bg-white px-1.5 py-0.5 text-[10px] text-blue-700">${esc(humanizeHistoryField(field))}</span>`).join(' ')
+                        : '';
+                    const findingsMarkup = getFindingSegments(findingsRecord).length
+                        ? renderFindingSegments(findingsRecord, true)
+                        : '<div class="text-xs text-slate-400">Findings cleared</div>';
+                    return `
+                        <div class="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                            <div class="text-xs font-semibold text-blue-900">${esc(`${when} - ${entry.author || 'unknown'} - findings snapshot`)}</div>
+                            ${changedFields ? `<div class="mt-2 flex flex-wrap gap-1">${changedFields}</div>` : ''}
+                            <div class="mt-2">${findingsMarkup}</div>
+                            ${findingsDates ? `<div class="mt-2 text-[11px] text-slate-500">Finding dates: ${esc(findingsDates)}</div>` : ''}
+                        </div>`;
+                }
                 return `
                     <div class="border border-slate-200 rounded-lg p-3 bg-white">
                         <div class="text-xs text-slate-700 whitespace-pre-wrap leading-5">${esc(line)}</div>
@@ -9697,6 +9788,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     showToast('⚠️ Missing or invalid date fields were defaulted to the created-on date and highlighted amber for review');
                 }
                 data.notesHistory = normalizePatientChangeHistory(previousPatient);
+                data.notesHistory = appendFindingsSnapshotHistory(data.notesHistory, previousPatient, data, auditUser);
                 data.notesHistory = appendPatientChangeNote(data.notesHistory, changeNote, auditUser, changeActionLabel);
                 data.lastChangeNote = changeNote;
                 data.lastChangeNoteAt = new Date().toISOString();
