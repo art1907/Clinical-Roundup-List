@@ -1572,11 +1572,26 @@ async function api_importFromCSV(csvText) {
     
     // PASS 2: Parse column headers (row 4)
     const headerRow = rows[3];
-    const columnMap = {};
+    const columnMap = {
+        hospital: -1,
+        room: -1,
+        date: -1,
+        name: -1,
+        dob: -1,
+        mrn: -1,
+        findings: -1,
+        plan: -1,
+        supervisingMd: -1,
+        pending: -1,
+        followUp: -1
+    };
     headerRow.forEach((header, index) => {
-        const normalized = (header || '').trim().toLowerCase();
-        if (normalized.includes('hospital') || normalized.includes('room')) columnMap.hospital = index;
-        else if (normalized.includes('date')) columnMap.date = index;
+        const normalized = normalizeSectionName(header).replaceAll(' ', '');
+        if (normalized === 'hospital' || normalized === 'facility' || (normalized.includes('hospital') && !normalized.includes('room'))) {
+            columnMap.hospital = index;
+        } else if (normalized.includes('room') || normalized === 'hospitalroom') {
+            columnMap.room = index;
+        } else if (normalized.includes('date')) columnMap.date = index;
         else if (normalized.includes('name')) columnMap.name = index;
         else if (normalized.includes('dob') || normalized.includes('birth')) columnMap.dob = index;
         else if (normalized.includes('mrn')) columnMap.mrn = index;
@@ -1610,12 +1625,12 @@ async function api_importFromCSV(csvText) {
         
         // Parse patient row
         const patient = {
-            room: row[columnMap.hospital] || '',  // Room from Hospital/Room # column
+            room: row[columnMap.room] || '',
             date: row[columnMap.date] || '',
             name: row[columnMap.name] || '',
             dob: row[columnMap.dob] || '',
             mrn: row[columnMap.mrn] || '',
-            hospital: currentHospital,  // From section header
+            hospital: row[columnMap.hospital] || currentHospital,
             findingsText: row[columnMap.findings] || '',
             plan: row[columnMap.plan] || '',
             supervisingMd: row[columnMap.supervisingMd] || '',

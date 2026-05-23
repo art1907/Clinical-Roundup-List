@@ -8695,6 +8695,19 @@
                 return normalizedHeaders.findIndex(h => normalizedAliases.some(a => h === a || h.includes(a)));
             };
 
+            const findHospitalCol = (normalizedHeaders) => {
+                const hospitalHeader = normalizeHeader('Hospital');
+                const facilityHeader = normalizeHeader('Facility');
+                const hospitalRoomHeader = normalizeHeader('Hospital/Room #');
+
+                return normalizedHeaders.findIndex((header) => {
+                    if (!header || header === hospitalRoomHeader) return false;
+                    if (header === hospitalHeader || header === facilityHeader) return true;
+                    if (header.includes(facilityHeader)) return true;
+                    return header.includes(hospitalHeader) && !header.includes(normalizeHeader('Room'));
+                });
+            };
+
 const findHeaderIndex = (rows, sheetLog) => {
                     if (sheetLog) sheetLog(`Searching ${rows.length} rows for header pattern (Date + MRN/Name/Room)...`);
                     for (let i = 0; i < rows.length; i++) {
@@ -8779,7 +8792,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const headerRow = rows[headerIdx];
                 const normalizedHeaders = headerRow.map(normalizeHeader);
                 const colMap = {
-                    hospital: findCol(normalizedHeaders, ['Hospital', 'Facility']),
+                    hospital: findHospitalCol(normalizedHeaders),
                     room: findCol(normalizedHeaders, ['Room', 'Bed', 'Hospital/Room #']),
                     dateService: findCol(normalizedHeaders, ['Date of Service', 'Date']),
                     name: findCol(normalizedHeaders, ['Name', 'Patient']),
