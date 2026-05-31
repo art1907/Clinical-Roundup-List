@@ -9759,22 +9759,13 @@ const findHeaderIndex = (rows, sheetLog) => {
             
             try {
                 const editId = document.getElementById('edit-id').value;
-                const changeActionLabel = editId ? 'update' : 'create';
-                const changeNote = await getRequiredChangeNote(changeActionLabel);
-                if (!changeNote) return false;
                 const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
-                const getPreviousPatient = () => {
-                    if (!editId) return null;
-                    const existing = patients.find(p => p.id === editId);
-                    return existing || null;
-                };
-                const previousPatient = getPreviousPatient();
                 const normalizedDateState = applyDateReviewDefaultsToRecord({
                     date: data.date,
                     findingsDates: data.findingsDates,
                     findingsCodes: data.findingsCodes,
                     reviewMeta,
-                    createdOnDate: String(data.visitTime || previousPatient?.visitTime || new Date().toISOString()).split('T')[0]
+                    createdOnDate: String(data.visitTime || new Date().toISOString()).split('T')[0]
                 });
                 data.date = normalizedDateState.date;
                 data.findingsDates = normalizedDateState.findingsDates;
@@ -9799,6 +9790,22 @@ const findHeaderIndex = (rows, sheetLog) => {
                         ? `${data.mrn}|${data.date}`
                         : buildImportIdentityKey(data);
                 }
+                let resolvedEditId = editId;
+                if (!resolvedEditId) {
+                    const matchedIndex = findExistingImportedPatientIndex(patients, data);
+                    if (matchedIndex >= 0) {
+                        resolvedEditId = patients[matchedIndex].id;
+                        console.log('↔️ Save matched existing visit identity; treating submission as update', {
+                            matchedId: resolvedEditId,
+                            visitKey: data.visitKey
+                        });
+                    }
+                }
+
+                const previousPatient = resolvedEditId ? (patients.find(p => p.id === resolvedEditId) || null) : null;
+                const changeActionLabel = resolvedEditId ? 'update' : 'create';
+                const changeNote = await getRequiredChangeNote(changeActionLabel);
+                if (!changeNote) return false;
                 if (normalizedDateState.appliedDefaults.length) {
                     showToast('⚠️ Missing or invalid date fields were defaulted to the created-on date and highlighted amber for review');
                 }
@@ -9840,12 +9847,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                     isConnected, 
                     useM365, 
                     willUseLocalMode: !isConnected || !useM365,
-                    editId: editId || 'none (new record)'
+                    editId: resolvedEditId || 'none (new record)'
                 });
 
                 // Pre-save diff preview: show what's actually changing before writing.
-                if (editId) {
-                    const previewPrev = patients.find(p => p.id === editId);
+                if (resolvedEditId) {
+                    const previewPrev = patients.find(p => p.id === resolvedEditId);
                     if (previewPrev) {
                         const previewChanged = USER_DIFF_FIELDS.filter(f => toComparable(previewPrev[f]) !== toComparable(data[f]));
                         if (previewChanged.length) {
@@ -9857,13 +9864,13 @@ const findHeaderIndex = (rows, sheetLog) => {
                 if (!isConnected || !useM365) {
                     console.log('📂 Using LOCAL MODE (in-memory storage)');
                     // Local mode: store in memory
-                    if (editId) {
-                        const index = patients.findIndex(p => p.id === editId);
+                    if (resolvedEditId) {
+                        const index = patients.findIndex(p => p.id === resolvedEditId);
                         if (index !== -1) {
                             const previous = patients[index];
-                            patients[index] = { ...data, id: editId, lastUpdated: new Date().toISOString() };
+                            patients[index] = { ...data, id: resolvedEditId, lastUpdated: new Date().toISOString() };
                             patients[index].notesHistory = data.notesHistory;
-                            diffAndLog(previous, patients[index], editId);
+                            diffAndLog(previous, patients[index], resolvedEditId);
                         }
                     } else {
                         const newId = 'local-' + Date.now();
@@ -9886,8 +9893,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                     if (typeof globalThis.m365SavePatient === 'function') {
                         console.log('✅ m365SavePatient function available, calling it now...');
                         console.log('📦 Data being sent:', { mrn: data.mrn, name: data.name, date: data.date, hospital: data.hospital });
-                        if (editId) {
-                            data.id = editId;
+                        if (resolvedEditId) {
+                            data.id = resolvedEditId;
                         }
                         console.log('📤 About to call globalThis.m365SavePatient...');
                         try {
@@ -9901,7 +9908,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             }
                             
                             // Success - result should be an ID (string/number)
-                            const recordId = editId || result;
+                            const recordId = resolvedEditId || result;
                             diffAndLog(previousPatient, data, recordId);
                             clearDraft(); // Clear draft on successful save
                             showToast("✓ Saved");
