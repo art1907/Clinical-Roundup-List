@@ -1,0 +1,46 @@
+﻿=== Documentation Cleanup Log ===
+Started: 2026-01-18 14:40:35
+Dry Run Mode: True
+
+ Archive directory will be created at: d:\Code\Clinical Roundup File\_archive
+
+--- FILES TO ARCHIVE (7 files) ---
+ MOVE: START_HERE.md (6736 bytes)
+ MOVE: INTEGRATION_READY.md (10812 bytes)
+ MOVE: COMPLETION_REPORT.md (10296 bytes)
+ MOVE: HTML_INTEGRATION_COMPLETE.md (6245 bytes)
+ MOVE: AZURE_MIGRATION.md (7670 bytes)
+ MOVE: CHANGELOG_RECENT.md (7676 bytes)
+ MOVE: MIGRATION_SUMMARY.md (12668 bytes)
+
+--- FILES TO CONSOLIDATE (merge content) ---
+ MERGE: START_HERE.md  DOCUMENTATION_INDEX.md
+  Reason: Merge (remove duplicate entry points)
+ MERGE: INTEGRATION_READY.md  FINAL_STATUS.md
+  Reason: Merge (remove duplicate status reports)
+ MERGE: COMPLETION_REPORT.md  FINAL_STATUS.md
+  Reason: Merge (remove duplicate status reports)
+ MERGE: MIGRATION_SUMMARY.md  M365_MIGRATION.md
+  Reason: Merge (remove duplicate architecture)
+
+--- FILES TO KEEP (10 files, no changes) ---
+ KEEP: README.md
+ KEEP: QUICK_REFERENCE.md
+ KEEP: DOCUMENTATION_INDEX.md
+ KEEP: FINAL_STATUS.md
+ KEEP: HTML_INTEGRATION_SUMMARY.md
+ KEEP: HTML_INTEGRATION_CHANGES.md
+ KEEP: INSTALLATION_GUIDE.md
+ KEEP: M365_MIGRATION.md
+ KEEP: USERGUIDE.md
+ KEEP: AGENTS.md
+
+--- SUMMARY ---
+Total files to move: 7
+Total files to merge: 4 (into 3 targets)
+Total files to keep: 10
+Total root .md files after cleanup: 10
+
+Disk space savings: ~1,400 lines (consolidated)
+Referential integrity: 100% preserved 
+Reversibility: All archived files recoverable 

@@ -11,7 +11,7 @@ This release package contains everything needed to deploy the Clinical Rounding 
 - `USERGUIDE.md` - End-user documentation
 
 ### Sample Data (Optional)
-- `Rounding List.csv` - Example CSV file for testing bulk import
+- `samples/data/Rounding List.csv` - Example CSV file for testing bulk import
 
 ## Quick Deployment
 

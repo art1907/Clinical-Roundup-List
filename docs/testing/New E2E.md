@@ -5,7 +5,7 @@ You are the app explorer.
 Your job is to find bugs, confusing screens, and slow things.
 
 Use this Excel file:
-- **E2E Clinical Records.xlsx**
+- **samples/data/E2E Clinical Records.xlsx**
 
 Very important:
 - **1 record = 1 row in the Excel sheet**
@@ -36,7 +36,7 @@ Feedback check:
 - Did anything look broken right away?
 
 ### Step 2: Add First 3 Records from the Excel File
-- Open **E2E Clinical Records.xlsx**
+- Open **samples/data/E2E Clinical Records.xlsx**
 - Look at **row 1**, **row 2**, and **row 3**
 - Click **Add**
 - Enter the data from **Record 01**, **Record 02**, and **Record 03**
@@ -165,7 +165,7 @@ Feedback check:
 ## Level 4 - Data Volume Test
 
 ### Step 10: Enter Remaining Records from the Excel File
-- Open **E2E Clinical Records.xlsx**
+- Open **samples/data/E2E Clinical Records.xlsx**
 - Enter **Records 04 to 20**
 - Save each one
 

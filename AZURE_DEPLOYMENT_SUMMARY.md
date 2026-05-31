@@ -128,7 +128,7 @@ Check deployment status: GitHub → **Actions** tab
 2. Sign in with organizational account
 3. Test key features:
    - Add patient
-   - Import CSV (`Rounding List.csv`)
+   - Import CSV (`samples/data/Rounding List.csv`)
    - Export Excel
    - On-call schedule
    - Archive patient

@@ -409,7 +409,7 @@ Save the file. You're done with configuration!
 
 ### 5.4 Test CSV Import
 
-1. Download `Rounding List.csv` (sample file in project)
+1. Download `samples/data/Rounding List.csv` (sample file in project)
 2. Click **Import**
 3. Select the CSV file
 4. Verify patients load ✅

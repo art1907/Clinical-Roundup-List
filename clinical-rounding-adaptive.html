@@ -9567,6 +9567,58 @@ const findHeaderIndex = (rows, sheetLog) => {
             return [];
         }
 
+        function formatClinicalTimestamp(timestamp) {
+            if (!timestamp) return '-';
+            const value = new Date(timestamp);
+            if (Number.isNaN(value.getTime())) return String(timestamp);
+            const mm = String(value.getMonth() + 1).padStart(2, '0');
+            const dd = String(value.getDate()).padStart(2, '0');
+            const yyyy = value.getFullYear();
+            const hh = String(value.getHours()).padStart(2, '0');
+            const mi = String(value.getMinutes()).padStart(2, '0');
+            return `${mm}/${dd}/${yyyy} ${hh}:${mi}`;
+        }
+
+        function humanizeHistoryField(field) {
+            const value = String(field || '').replaceAll(/([A-Z])/g, ' $1').trim();
+            return value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
+        }
+
+        function buildFindingsDatesLabel(findingsDates) {
+            if (!findingsDates || typeof findingsDates !== 'object') return '';
+            return Object.entries(findingsDates)
+                .map(([code, value]) => `${humanizeHistoryField(code)}: ${value}`)
+                .join(' · ');
+        }
+
+        function buildFindingsHistoryChips(changedFields, esc) {
+            if (!Array.isArray(changedFields)) return '';
+            return changedFields
+                .map((field) => `<span class="inline-block rounded border border-blue-200 bg-white px-1.5 py-0.5 text-[10px] text-blue-700">${esc(humanizeHistoryField(field))}</span>`)
+                .join(' ');
+        }
+
+        function renderFindingsSnapshotHistoryEntry(entry, when, esc) {
+            const findingsRecord = {
+                findingsText: entry.findingsText || '',
+                findingsCodes: Array.isArray(entry.findingsCodes) ? entry.findingsCodes : [],
+                findingsValues: entry.findingsValues && typeof entry.findingsValues === 'object' ? entry.findingsValues : {}
+            };
+            const findingsDates = buildFindingsDatesLabel(entry.findingsDates);
+            const changedFields = buildFindingsHistoryChips(entry.changedFields, esc);
+            const findingsMarkup = getFindingSegments(findingsRecord).length
+                ? renderFindingSegments(findingsRecord, true)
+                : '<div class="text-xs text-slate-400">Findings cleared</div>';
+
+            return `
+                <div class="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                    <div class="text-xs font-semibold text-blue-900">${esc(`${when} - ${entry.author || 'unknown'} - findings snapshot`)}</div>
+                    ${changedFields ? `<div class="mt-2 flex flex-wrap gap-1">${changedFields}</div>` : ''}
+                    <div class="mt-2">${findingsMarkup}</div>
+                    ${findingsDates ? `<div class="mt-2 text-[11px] text-slate-500">Finding dates: ${esc(findingsDates)}</div>` : ''}
+                </div>`;
+        }
+
         function renderPatientChangeHistory(record) {
             const container = document.getElementById('patient-change-history');
             if (!container) return;
@@ -9574,21 +9626,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                 .replaceAll('&', '&amp;')
                 .replaceAll('<', '&lt;')
                 .replaceAll('>', '&gt;');
-            const formatClinicalTimestamp = (timestamp) => {
-                if (!timestamp) return '-';
-                const value = new Date(timestamp);
-                if (Number.isNaN(value.getTime())) return String(timestamp);
-                const mm = String(value.getMonth() + 1).padStart(2, '0');
-                const dd = String(value.getDate()).padStart(2, '0');
-                const yyyy = value.getFullYear();
-                const hh = String(value.getHours()).padStart(2, '0');
-                const mi = String(value.getMinutes()).padStart(2, '0');
-                return `${mm}/${dd}/${yyyy} ${hh}:${mi}`;
-            };
-            const humanizeHistoryField = (field) => {
-                const value = String(field || '').replaceAll(/([A-Z])/g, ' $1').trim();
-                return value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
-            };
             const history = normalizePatientChangeHistory(record).slice().reverse();
             if (!history.length) {
                 container.innerHTML = '<div class="text-xs text-slate-400">No change notes recorded yet.</div>';
@@ -9599,29 +9636,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const actionText = entry.action ? ' - ' + entry.action : '';
                 const line = `${when} - ${entry.author || 'unknown'}${actionText} - ${entry.note || ''}`;
                 if (entry.type === 'findings_snapshot') {
-                    const findingsRecord = {
-                        findingsText: entry.findingsText || '',
-                        findingsCodes: Array.isArray(entry.findingsCodes) ? entry.findingsCodes : [],
-                        findingsValues: entry.findingsValues && typeof entry.findingsValues === 'object' ? entry.findingsValues : {}
-                    };
-                    const findingsDates = entry.findingsDates && typeof entry.findingsDates === 'object'
-                        ? Object.entries(entry.findingsDates)
-                            .map(([code, value]) => `${humanizeHistoryField(code)}: ${value}`)
-                            .join(' · ')
-                        : '';
-                    const changedFields = Array.isArray(entry.changedFields)
-                        ? entry.changedFields.map((field) => `<span class="inline-block rounded border border-blue-200 bg-white px-1.5 py-0.5 text-[10px] text-blue-700">${esc(humanizeHistoryField(field))}</span>`).join(' ')
-                        : '';
-                    const findingsMarkup = getFindingSegments(findingsRecord).length
-                        ? renderFindingSegments(findingsRecord, true)
-                        : '<div class="text-xs text-slate-400">Findings cleared</div>';
-                    return `
-                        <div class="border border-blue-200 rounded-lg p-3 bg-blue-50">
-                            <div class="text-xs font-semibold text-blue-900">${esc(`${when} - ${entry.author || 'unknown'} - findings snapshot`)}</div>
-                            ${changedFields ? `<div class="mt-2 flex flex-wrap gap-1">${changedFields}</div>` : ''}
-                            <div class="mt-2">${findingsMarkup}</div>
-                            ${findingsDates ? `<div class="mt-2 text-[11px] text-slate-500">Finding dates: ${esc(findingsDates)}</div>` : ''}
-                        </div>`;
+                    return renderFindingsSnapshotHistoryEntry(entry, when, esc);
                 }
                 return `
                     <div class="border border-slate-200 rounded-lg p-3 bg-white">
@@ -10559,7 +10574,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             const visits = patients
             .filter(v => getPatientPersonKey(v) === personKey)
             .sort(comparePatientVisitRecency);
-            const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const esc = v => String(v || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
             const colCount = (visibleCols.includes('room') ? 1 : 0) + (visibleCols.includes('hospital') ? 1 : 0) +
                              (visibleCols.includes('findings') ? 1 : 0) + 4;
             const rows = visits.map((v, i) => {
@@ -11070,7 +11085,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             const preview = {
                 files: [],
                 totals: { new: 0, updates: 0, unchanged: 0, intraFileDupes: 0, schedules: 0 },
-                updates: [],          // { patient, existing, changedFields, fileName }
+                updates: [],
                 intraFileDuplicateRows: [],
                 missingFromFile: [],  // Existing records for same dates NOT in new file
                 missingColumns: [],   // Expected column names absent from import
@@ -11089,7 +11104,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                     const lowerFileName = fileName.toLowerCase();
                     let fileOnCall = [];
                     let filePatients = [];
-                    let fileHospitals = [];
 
                     try {
                         if (lowerFileName.endsWith('.xlsx') || lowerFileName.endsWith('.xls')) {
@@ -11107,7 +11121,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     }
                                     fileOnCall = fileOnCall.concat(parsed.onCall);
                                     filePatients = filePatients.concat(parsed.patients);
-                                    fileHospitals = [...new Set([...fileHospitals, ...parsed.hospitals])];
                                     if (Array.isArray(parsed.columnWarnings)) {
                                         parsed.columnWarnings.forEach(w => preview.columnWarnings.push(`${fileName} / ${sheetName}: ${w}`));
                                     }
@@ -11126,7 +11139,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                             const parsed = CSVImporter.parse3Pass(csvText);
                             fileOnCall = parsed.onCall;
                             filePatients = parsed.patients;
-                            fileHospitals = parsed.hospitals || [];
                             if (Array.isArray(parsed.columnWarnings)) {
                                 parsed.columnWarnings.forEach(w => preview.columnWarnings.push(`${fileName}: ${w}`));
                             }
@@ -11193,7 +11205,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
 
                 // ── DETECT RECORDS IN SYSTEM NOT IN FILE (possible removals) ────────
-                const incomingKeys  = new Set(preview.allPatients.map(p => buildImportIdentityKey(p)));
                 const incomingDates = new Set(preview.allPatients.map(p => p.date).filter(Boolean));
                 if (incomingDates.size > 0) {
                     patients.forEach(existing => {
