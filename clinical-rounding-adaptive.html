@@ -7069,7 +7069,7 @@
                         
                         <div class="card-actions">
                             <button class="card-action-btn card-edit" onclick="globalThis.openModal('${p.id}')">Edit</button>
-                            <button class="card-action-btn" style="background:#16a34a;color:#fff;border:1px solid #15803d" onclick="globalThis.startNewVisitFromPatient('${p.id}')">New Visit</button>
+                            <button class="card-action-btn" style="background:#16a34a;color:#fff;border:1px solid #15803d" onclick="globalThis.startNewVisitFromPatient('${p.id}')">Follow Up</button>
                             <button class="card-action-btn card-print" onclick="globalThis.printPatientRecord('${p.id}')">Print</button>
                             ${visitCount > 1 ? `<button class="card-action-btn" style="background:${isExpanded ? '#dbeafe' : '#f1f5f9'};color:${isExpanded ? '#1d4ed8' : '#64748b'};border:1px solid ${isExpanded ? '#bfdbfe' : '#e2e8f0'}" onclick="globalThis.togglePatientHistory('${personKey}')">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         </div>
@@ -7170,7 +7170,7 @@
 
                         <div class="mobile-card-actions">
                             <button onclick="globalThis.openModal('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Edit</button>
-                            <button onclick="globalThis.startNewVisitFromPatient('${patient.id}')" class="bg-green-600 text-white hover:bg-green-700">New Visit</button>
+                            <button onclick="globalThis.startNewVisitFromPatient('${patient.id}')" class="bg-green-600 text-white hover:bg-green-700">Follow Up</button>
                             <button onclick="globalThis.printPatientRecord('${patient.id}')" class="bg-slate-700 text-white hover:bg-slate-800">Print</button>
                             ${visitCountM > 1 ? `<button onclick="globalThis.togglePatientHistory('${personKeyM}')" class="${isExpandedM ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}">${isExpandedM ? '▼' : '▶'} ${visitCountM} visits</button>` : ''}
                         </div>
@@ -7220,7 +7220,7 @@
                                     </div>
                                     <div style="display: flex; gap: 0.5rem;">
                                         <button onclick="globalThis.openModal('${p.id}')" style="padding: 0.25rem 0.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Edit</button>
-                                        <button onclick="globalThis.startNewVisitFromPatient('${p.id}')" style="padding: 0.25rem 0.5rem; background: #16a34a; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">New Visit</button>
+                                        <button onclick="globalThis.startNewVisitFromPatient('${p.id}')" style="padding: 0.25rem 0.5rem; background: #16a34a; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Follow Up</button>
                                     </div>
                                 </div>
                             `;
@@ -7490,9 +7490,9 @@
             ));
 
             if (existingToday) {
-                showToast('ℹ️ Today already has a visit for this MRN. Saving will update that today visit.');
+                showToast('ℹ️ Today already has a follow-up for this MRN. Saving will update that today entry.');
             } else {
-                showToast('✓ New day visit prefilled. Update findings and save.');
+                showToast('✓ Follow-up prefilled for today. Update findings and save.');
             }
 
             return true;
@@ -10625,7 +10625,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <td class="p-3 align-top w-20">
                         <div class="flex flex-col items-start gap-1">
                             <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModal('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Edit</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.startNewVisitFromPatient('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-green-600 text-white hover:bg-green-700'} px-2 py-1 rounded transition-colors">New Visit</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.startNewVisitFromPatient('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-green-600 text-white hover:bg-green-700'} px-2 py-1 rounded transition-colors">Follow Up</button>
                             <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
                         </div>
                     </td>
