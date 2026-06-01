@@ -4473,7 +4473,7 @@
             if (!p) return;
             
             menu.innerHTML = `
-                <div class="context-menu-item" onclick="globalThis.openModal('${patientId}'); closeContextMenu();">✏️ Edit</div>
+                <div class="context-menu-item" onclick="globalThis.openModalWithAmendWarning('${patientId}'); closeContextMenu();">✏️ Amend Existing Record</div>
                 <div class="context-menu-item" onclick="globalThis.toggleArchive('${patientId}', ${!p.archived}); closeContextMenu();">${p.archived ? '↩️ Restore' : '📦 Archive'}</div>
                 <div class="context-menu-item danger" onclick="globalThis.deletePatient('${patientId}'); closeContextMenu();">🗑️ Delete</div>
             `;
@@ -6427,7 +6427,7 @@
                         </div>
                         
                         <div class="card-actions">
-                            <button class="card-action-btn card-edit" onclick="globalThis.openModal('${p.id}')">Edit</button>
+                            <button class="card-action-btn card-edit" onclick="globalThis.openModalWithAmendWarning('${p.id}')">Amend Existing Record</button>
                             <button class="card-action-btn card-print" onclick="globalThis.printPatientRecord('${p.id}')">Print</button>
                         </div>
                     </div>
@@ -6493,7 +6493,7 @@
                         </div>
 
                         <div class="mobile-card-actions">
-                            <button onclick="globalThis.openModal('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Edit</button>
+                            <button onclick="globalThis.openModalWithAmendWarning('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Amend Existing Record</button>
                             <button onclick="globalThis.printPatientRecord('${patient.id}')" class="bg-slate-700 text-white hover:bg-slate-800">Print</button>
                         </div>
                     </article>
@@ -6540,7 +6540,7 @@
                                         <div style="font-size: 0.75rem; color: #666;">MRN: ${p.mrn} ${age ? '| Age: ' + age : ''} | Room: ${p.room}</div>
                                     </div>
                                     <div style="display: flex; gap: 0.5rem;">
-                                        <button onclick="globalThis.openModal('${p.id}')" style="padding: 0.25rem 0.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Edit</button>
+                                        <button onclick="globalThis.openModalWithAmendWarning('${p.id}')" style="padding: 0.25rem 0.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Amend Existing Record</button>
                                     </div>
                                 </div>
                             `;
@@ -6905,6 +6905,47 @@
                 console.error('File list error:', err);
                 list.innerHTML = '<div class="text-red-600">Failed to load files.</div>';
             }
+        };
+
+        globalThis.openModalWithAmendWarning = (id) => {
+            if (!id) {
+                globalThis.openModal(id);
+                return true;
+            }
+
+            const warningText = [
+                'MEDICO-LEGAL DISCLAIMER',
+                '',
+                'You are about to amend an existing clinical record that may already be used for care, billing, audit, and legal documentation.',
+                'Proceed only when clinically necessary and after verifying the correct patient and visit.',
+                'Enter accurate amendments only and avoid altering historical meaning unless required for correction.',
+                '',
+                'By continuing, you confirm you will take extreme care and provide an appropriate reason for the change as required by policy.'
+            ].join('\n');
+
+            const acknowledged = globalThis.confirm(warningText);
+            if (!acknowledged) {
+                return false;
+            }
+
+            const requiredPhrase = 'AMEND';
+            const typedConfirmation = globalThis.prompt(
+                `Type ${requiredPhrase} to confirm this medico-legal amendment action.`
+            );
+
+            if (typedConfirmation === null) {
+                return false;
+            }
+
+            if (String(typedConfirmation || '').trim().toUpperCase() !== requiredPhrase) {
+                if (typeof globalThis.showToast === 'function') {
+                    globalThis.showToast('Amend action cancelled: confirmation phrase did not match.');
+                }
+                return false;
+            }
+
+            globalThis.openModal(id);
+            return true;
         };
 
         globalThis.uploadPatientFiles = async () => {
@@ -8703,18 +8744,18 @@
                         <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
                     </td>
                     ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
-                    <td class="p-3 align-top w-[20%] min-w-[16rem]">
+                    <td class="p-3 pr-5 align-top w-[18%] min-w-[12rem]">
                         <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${p.plan || '-'}</div>
                         <div class="flex items-start">
-                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-[16rem]">
+                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-[12rem]">
                                 ${renderStatusOptionsMarkup(status)}
                             </select>
                         </div>
                     </td>
-                    <td class="p-3 align-top w-20">
+                    <td class="p-3 pr-4 align-top w-28">
                         <div class="flex flex-col items-start gap-1">
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModal('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Edit</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${p.id}')" class="min-w-[6rem] text-center text-[8px] font-bold leading-tight whitespace-normal ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Amend Existing Record</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[6rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
                         </div>
                     </td>
                 </tr>`;
@@ -10845,7 +10886,7 @@
 
             <div class="flex-shrink-0 relative">
                 <div class="flex gap-2 p-3 border-t border-slate-200 bg-slate-50">
-                    <button id="modal-edit-btn" type="button" onclick="globalThis.enableModalEdit()" class="hidden flex-1 px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded hover:bg-blue-700 transition-colors">Edit</button>
+                    <button id="modal-edit-btn" type="button" onclick="globalThis.enableModalEdit()" class="hidden flex-1 px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded hover:bg-blue-700 transition-colors">Amend Existing Record</button>
                     <button id="modal-archive-btn" type="button" onclick="globalThis.archiveFromModal()" class="hidden flex-1 px-4 py-2 bg-slate-700 text-white font-bold text-xs rounded hover:bg-slate-800 transition-colors">Archive</button>
                     <button id="modal-delete-btn" type="button" onclick="globalThis.deleteFromModal()" class="hidden flex-1 px-4 py-2 bg-red-600 text-white font-bold text-xs rounded hover:bg-red-700 transition-colors">Delete</button>
                 </div>
