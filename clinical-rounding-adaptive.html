@@ -7428,6 +7428,8 @@
 
             const now = new Date();
             const today = now.toISOString().split('T')[0];
+            const activeFilterDate = String(document.getElementById('filter-date')?.value || '').trim();
+            const targetVisitDate = activeFilterDate || today;
             const nowIso = now.toISOString();
             const setValue = (inputId, value) => {
                 const input = document.getElementById(inputId);
@@ -7449,7 +7451,7 @@
                 ? sourcePatient.chargeCodesSecondary.join(', ')
                 : (sourcePatient.chargeCodesSecondary || ''));
 
-            setValue('f-date', today);
+            setValue('f-date', targetVisitDate);
             setValue('f-visit-time', nowIso);
             setValue('f-visit-key', '');
             setValue('f-archived', 'false');
@@ -7483,16 +7485,16 @@
             }
             syncDateReviewUI();
 
-            const existingToday = patients.find((entry) => (
+            const existingForTargetDate = patients.find((entry) => (
                 entry.id !== sourcePatient.id
                 && String(entry.mrn || '').trim().toLowerCase() === String(sourcePatient.mrn || '').trim().toLowerCase()
-                && String(entry.date || '').trim() === today
+                && String(entry.date || '').trim() === targetVisitDate
             ));
 
-            if (existingToday) {
-                showToast('ℹ️ Today already has a follow-up for this MRN. Saving will update that today entry.');
+            if (existingForTargetDate) {
+                showToast(`ℹ️ ${targetVisitDate} already has a follow-up for this MRN. Saving will update that entry.`);
             } else {
-                showToast('✓ Follow-up prefilled for today. Update findings and save.');
+                showToast(`✓ Follow-up prefilled for ${targetVisitDate}. Update findings and save.`);
             }
 
             return true;
@@ -10613,8 +10615,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                         ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${personKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         ${reviewBadge}
                     </td>
-                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[32%] min-w-[16rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-pre-wrap break-all ${crossedOutClass}" style="overflow-wrap:anywhere;word-break:break-word;">${findingsMarkup}</div></td>` : ''}
-                    <td class="p-3 align-top w-[22%] min-w-[16rem]">
+                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[28%] min-w-[14rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-pre-wrap break-all ${crossedOutClass}" style="overflow-wrap:anywhere;word-break:break-word;">${findingsMarkup}</div></td>` : ''}
+                    <td class="p-3 align-top w-[26%] min-w-[16rem]">
                         <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${p.plan || '-'}</div>
                         <div class="flex items-start">
                             <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-[16rem]">
@@ -10622,11 +10624,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                             </select>
                         </div>
                     </td>
-                    <td class="p-3 align-top w-20">
+                    <td class="p-3 align-top w-28">
                         <div class="flex flex-col items-start gap-1">
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModal('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Edit</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.startNewVisitFromPatient('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-green-600 text-white hover:bg-green-700'} px-2 py-1 rounded transition-colors">Add Follow Up</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModal('${p.id}')" class="min-w-[6.25rem] whitespace-nowrap text-center text-[9px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Edit</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.startNewVisitFromPatient('${p.id}')" class="min-w-[6.25rem] whitespace-nowrap text-center text-[9px] font-bold ${isStat ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-green-600 text-white hover:bg-green-700'} px-2 py-1 rounded transition-colors">Add Follow Up</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[6.25rem] whitespace-nowrap text-center text-[9px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
                         </div>
                     </td>
                 </tr>`;
