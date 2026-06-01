@@ -6817,6 +6817,11 @@
         };
 
         globalThis.enableModalEdit = () => {
+            const editId = document.getElementById('edit-id')?.value;
+            if (editId && typeof globalThis.confirmAmendAction === 'function') {
+                if (!globalThis.confirmAmendAction()) return false;
+            }
+
             const modal = document.getElementById('patient-modal');
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
@@ -6848,6 +6853,7 @@
             });
             const findingsText = document.getElementById('f-findings-text');
             if (findingsText) findingsText.readOnly = false;
+            return true;
         };
 
         const localPatientFiles = new Map();
@@ -6907,12 +6913,7 @@
             }
         };
 
-        globalThis.openModalWithAmendWarning = (id) => {
-            if (!id) {
-                globalThis.openModal(id);
-                return true;
-            }
-
+        globalThis.confirmAmendAction = () => {
             const warningText = [
                 'MEDICO-LEGAL DISCLAIMER',
                 '',
@@ -6941,6 +6942,19 @@
                 if (typeof globalThis.showToast === 'function') {
                     globalThis.showToast('Amend action cancelled: confirmation phrase did not match.');
                 }
+                return false;
+            }
+
+            return true;
+        };
+
+        globalThis.openModalWithAmendWarning = (id) => {
+            if (!id) {
+                globalThis.openModal(id);
+                return true;
+            }
+
+            if (!globalThis.confirmAmendAction()) {
                 return false;
             }
 
