@@ -4537,7 +4537,15 @@
 
             if (typeof globalThis.m365FetchPatients === 'function') {
                 try {
-                    await globalThis.m365FetchPatients();
+                    const refreshedPatients = await globalThis.m365FetchPatients();
+                    if (Array.isArray(refreshedPatients)) {
+                        if (typeof globalThis.updatePatientsFromM365 === 'function') {
+                            globalThis.updatePatientsFromM365(refreshedPatients);
+                        } else {
+                            patients = refreshedPatients;
+                            renderUI();
+                        }
+                    }
                 } catch (err) {
                     console.warn('Batch delete refresh failed:', err);
                 }
@@ -7428,8 +7436,7 @@
 
             const now = new Date();
             const today = now.toISOString().split('T')[0];
-            const activeFilterDate = String(document.getElementById('filter-date')?.value || '').trim();
-            const targetVisitDate = activeFilterDate || today;
+            const targetVisitDate = today;
             const nowIso = now.toISOString();
             const setValue = (inputId, value) => {
                 const input = document.getElementById(inputId);
@@ -7484,6 +7491,11 @@
                 globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
             }
             syncDateReviewUI();
+
+            const filterDateInput = document.getElementById('filter-date');
+            if (filterDateInput && filterDateInput.value !== today) {
+                filterDateInput.value = today;
+            }
 
             const existingForTargetDate = patients.find((entry) => (
                 entry.id !== sourcePatient.id
@@ -10057,7 +10069,15 @@ const findHeaderIndex = (rows, sheetLog) => {
                             // Refetch data to update UI
                             if (typeof globalThis.m365FetchPatients === 'function') {
                                 console.log('🔄 Refetching patients...');
-                                await globalThis.m365FetchPatients();
+                                const refreshedPatients = await globalThis.m365FetchPatients();
+                                if (Array.isArray(refreshedPatients)) {
+                                    if (typeof globalThis.updatePatientsFromM365 === 'function') {
+                                        globalThis.updatePatientsFromM365(refreshedPatients);
+                                    } else {
+                                        patients = refreshedPatients;
+                                        renderUI();
+                                    }
+                                }
                             }
                             if (currentTab === 'audit' && typeof globalThis.loadAuditLogs === 'function') {
                                 await globalThis.loadAuditLogs();
@@ -10210,7 +10230,15 @@ const findHeaderIndex = (rows, sheetLog) => {
                     showToast("✓ Deleted");
                     // Refetch to update UI
                     if (typeof globalThis.m365FetchPatients === 'function') {
-                        await globalThis.m365FetchPatients();
+                        const refreshedPatients = await globalThis.m365FetchPatients();
+                        if (Array.isArray(refreshedPatients)) {
+                            if (typeof globalThis.updatePatientsFromM365 === 'function') {
+                                globalThis.updatePatientsFromM365(refreshedPatients);
+                            } else {
+                                patients = refreshedPatients;
+                                renderUI();
+                            }
+                        }
                     }
                 }
             } catch (err) {
@@ -10681,7 +10709,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     </td>
                     <td class="p-3 pr-4 align-top w-32">
                         <div class="flex flex-col items-start gap-1">
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${p.id}')" class="min-w-[6.25rem] whitespace-nowrap text-center text-[9px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Amend Existing Record</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${p.id}')" class="min-w-[6rem] whitespace-normal leading-tight text-center text-[9px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Amend Existing Record</button>
                             <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.startNewVisitFromPatient('${p.id}')" class="min-w-[6.25rem] whitespace-nowrap text-center text-[9px] font-bold ${isStat ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-green-600 text-white hover:bg-green-700'} px-2 py-1 rounded transition-colors">Add Follow Up</button>
                             <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[6.25rem] whitespace-nowrap text-center text-[9px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
                         </div>

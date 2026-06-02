@@ -4368,7 +4368,15 @@
                 // Refetch to sync list after M365 deletes
                 if (typeof globalThis.m365FetchPatients === 'function') {
                     try {
-                        await globalThis.m365FetchPatients();
+                        const refreshedPatients = await globalThis.m365FetchPatients();
+                        if (Array.isArray(refreshedPatients)) {
+                            if (typeof globalThis.updatePatientsFromM365 === 'function') {
+                                globalThis.updatePatientsFromM365(refreshedPatients);
+                            } else {
+                                patients = refreshedPatients;
+                                renderUI();
+                            }
+                        }
                     } catch (err) {
                         console.warn('Batch delete refresh failed:', err);
                     }
@@ -8171,7 +8179,15 @@
                             // Refetch data to update UI
                             if (typeof globalThis.m365FetchPatients === 'function') {
                                 console.log('🔄 Refetching patients...');
-                                await globalThis.m365FetchPatients();
+                                const refreshedPatients = await globalThis.m365FetchPatients();
+                                if (Array.isArray(refreshedPatients)) {
+                                    if (typeof globalThis.updatePatientsFromM365 === 'function') {
+                                        globalThis.updatePatientsFromM365(refreshedPatients);
+                                    } else {
+                                        patients = refreshedPatients;
+                                        renderUI();
+                                    }
+                                }
                             }
                             if (currentTab === 'audit' && typeof globalThis.loadAuditLogs === 'function') {
                                 await globalThis.loadAuditLogs();
@@ -8312,7 +8328,15 @@
                     showToast("✓ Deleted");
                     // Refetch to update UI
                     if (typeof globalThis.m365FetchPatients === 'function') {
-                        await globalThis.m365FetchPatients();
+                        const refreshedPatients = await globalThis.m365FetchPatients();
+                        if (Array.isArray(refreshedPatients)) {
+                            if (typeof globalThis.updatePatientsFromM365 === 'function') {
+                                globalThis.updatePatientsFromM365(refreshedPatients);
+                            } else {
+                                patients = refreshedPatients;
+                                renderUI();
+                            }
+                        }
                     }
                 }
             } catch (err) {
