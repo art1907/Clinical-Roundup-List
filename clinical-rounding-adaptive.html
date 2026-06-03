@@ -4537,15 +4537,7 @@
 
             if (typeof globalThis.m365FetchPatients === 'function') {
                 try {
-                    const refreshedPatients = await globalThis.m365FetchPatients();
-                    if (Array.isArray(refreshedPatients)) {
-                        if (typeof globalThis.updatePatientsFromM365 === 'function') {
-                            globalThis.updatePatientsFromM365(refreshedPatients);
-                        } else {
-                            patients = refreshedPatients;
-                            renderUI();
-                        }
-                    }
+                    await globalThis.m365FetchPatients();
                 } catch (err) {
                     console.warn('Batch delete refresh failed:', err);
                 }
@@ -4678,7 +4670,7 @@
             const isArchived = isArchivedRecord(p);
             
             menu.innerHTML = `
-                <div class="context-menu-item" onclick="globalThis.openModalWithAmendWarning('${patientId}'); closeContextMenu();">✏️ Amend Existing Record</div>
+                <div class="context-menu-item" onclick="globalThis.openModal('${patientId}'); closeContextMenu();">✏️ Edit</div>
                 <div class="context-menu-item" onclick="globalThis.toggleArchive('${patientId}', ${!isArchived}); closeContextMenu();">${isArchived ? '↩️ Restore' : '📦 Archive'}</div>
                 <div class="context-menu-item danger" onclick="globalThis.deletePatient('${patientId}'); closeContextMenu();">🗑️ Delete</div>
             `;
@@ -7076,8 +7068,7 @@
                         </div>
                         
                         <div class="card-actions">
-                            <button class="card-action-btn card-edit" onclick="globalThis.openModalWithAmendWarning('${p.id}')">Amend Existing Record</button>
-                            <button class="card-action-btn" style="background:#16a34a;color:#fff;border:1px solid #15803d" onclick="globalThis.startNewVisitFromPatient('${p.id}')">Add Follow Up</button>
+                            <button class="card-action-btn card-edit" onclick="globalThis.openModal('${p.id}')">Edit</button>
                             <button class="card-action-btn card-print" onclick="globalThis.printPatientRecord('${p.id}')">Print</button>
                             ${visitCount > 1 ? `<button class="card-action-btn" style="background:${isExpanded ? '#dbeafe' : '#f1f5f9'};color:${isExpanded ? '#1d4ed8' : '#64748b'};border:1px solid ${isExpanded ? '#bfdbfe' : '#e2e8f0'}" onclick="globalThis.togglePatientHistory('${personKey}')">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         </div>
@@ -7177,8 +7168,7 @@
                         </div>
 
                         <div class="mobile-card-actions">
-                            <button onclick="globalThis.openModalWithAmendWarning('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Amend Existing Record</button>
-                            <button onclick="globalThis.startNewVisitFromPatient('${patient.id}')" class="bg-green-600 text-white hover:bg-green-700">Add Follow Up</button>
+                            <button onclick="globalThis.openModal('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Edit</button>
                             <button onclick="globalThis.printPatientRecord('${patient.id}')" class="bg-slate-700 text-white hover:bg-slate-800">Print</button>
                             ${visitCountM > 1 ? `<button onclick="globalThis.togglePatientHistory('${personKeyM}')" class="${isExpandedM ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}">${isExpandedM ? '▼' : '▶'} ${visitCountM} visits</button>` : ''}
                         </div>
@@ -7227,8 +7217,7 @@
                                         <div style="font-size: 0.75rem; color: #666;">MRN: ${p.mrn} ${age ? '| Age: ' + age : ''} | Room: ${p.room}</div>
                                     </div>
                                     <div style="display: flex; gap: 0.5rem;">
-                                        <button onclick="globalThis.openModalWithAmendWarning('${p.id}')" style="padding: 0.25rem 0.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Amend Existing Record</button>
-                                        <button onclick="globalThis.startNewVisitFromPatient('${p.id}')" style="padding: 0.25rem 0.5rem; background: #16a34a; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Add Follow Up</button>
+                                        <button onclick="globalThis.openModal('${p.id}')" style="padding: 0.25rem 0.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Edit</button>
                                     </div>
                                 </div>
                             `;
@@ -7422,93 +7411,6 @@
             modal.dataset.returningPatientBackfilledFrom = String(candidate.id || '');
             refreshReturningPatientBackfillPrompt();
             showToast(`✓ Backfilled stable fields from ${candidate.name || 'previous visit'}`);
-            return true;
-        };
-
-        globalThis.startNewVisitFromPatient = (patientId) => {
-            const sourcePatient = patients.find((entry) => entry.id === patientId);
-            if (!sourcePatient) {
-                showToast('Record not found');
-                return false;
-            }
-
-            globalThis.openModal();
-
-            const now = new Date();
-            const today = now.toISOString().split('T')[0];
-            const targetVisitDate = today;
-            const nowIso = now.toISOString();
-            const setValue = (inputId, value) => {
-                const input = document.getElementById(inputId);
-                if (!input) return;
-                input.value = value == null ? '' : String(value);
-            };
-
-            setValue('f-room', sourcePatient.room || '');
-            setValue('f-name', sourcePatient.name || '');
-            setValue('f-dob', sourcePatient.dob || '');
-            setValue('f-mrn', sourcePatient.mrn || '');
-            setValue('f-hospital', sourcePatient.hospital || '');
-            setValue('f-md', sourcePatient.supervisingMd || '');
-            setValue('f-plan', sourcePatient.plan || '');
-            setValue('f-proc-status', getSafeConfiguredStatus(sourcePatient.procedureStatus || DEFAULT_RECORD_STATUS));
-            setValue('f-cpt-primary', sourcePatient.cptPrimary || '');
-            setValue('f-icd-primary', sourcePatient.icdPrimary || '');
-            setValue('f-charge-codes-secondary', Array.isArray(sourcePatient.chargeCodesSecondary)
-                ? sourcePatient.chargeCodesSecondary.join(', ')
-                : (sourcePatient.chargeCodesSecondary || ''));
-
-            setValue('f-date', targetVisitDate);
-            setValue('f-visit-time', nowIso);
-            setValue('f-visit-key', '');
-            setValue('f-archived', 'false');
-
-            // Start each day with fresh clinical findings and action items.
-            setValue('f-findings-text', '');
-            setValue('f-findings-codes', '');
-            setValue('f-findings-values', '{}');
-            setValue('f-findings-dates', '{}');
-            setValue('f-pending', '');
-            setValue('f-fu', '');
-
-            document.querySelectorAll('.findings-checkbox').forEach((checkbox) => {
-                checkbox.checked = false;
-            });
-            document.querySelectorAll('.findings-value').forEach((valueInput) => {
-                valueInput.value = '';
-                valueInput.disabled = true;
-            });
-            document.querySelectorAll('.findings-date').forEach((dateInput) => {
-                dateInput.value = '';
-                dateInput.disabled = true;
-            });
-            document.querySelectorAll('.findings-custom-input').forEach((input) => {
-                input.value = '';
-            });
-
-            setFormDateReviewMeta({});
-            if (typeof globalThis.syncFindingsUI === 'function') {
-                globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
-            }
-            syncDateReviewUI();
-
-            const filterDateInput = document.getElementById('filter-date');
-            if (filterDateInput && filterDateInput.value !== today) {
-                filterDateInput.value = today;
-            }
-
-            const existingForTargetDate = patients.find((entry) => (
-                entry.id !== sourcePatient.id
-                && String(entry.mrn || '').trim().toLowerCase() === String(sourcePatient.mrn || '').trim().toLowerCase()
-                && String(entry.date || '').trim() === targetVisitDate
-            ));
-
-            if (existingForTargetDate) {
-                showToast(`ℹ️ ${targetVisitDate} already has a follow-up for this MRN. Saving will update that entry.`);
-            } else {
-                showToast(`✓ Follow-up prefilled for ${targetVisitDate}. Update findings and save.`);
-            }
-
             return true;
         };
 
@@ -7751,11 +7653,6 @@
         };
 
         globalThis.enableModalEdit = () => {
-            const editId = document.getElementById('edit-id')?.value;
-            if (editId && typeof globalThis.confirmAmendAction === 'function') {
-                if (!globalThis.confirmAmendAction()) return false;
-            }
-
             const modal = document.getElementById('patient-modal');
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
@@ -7787,7 +7684,6 @@
             });
             const findingsText = document.getElementById('f-findings-text');
             if (findingsText) findingsText.readOnly = false;
-            return true;
         };
 
         const localPatientFiles = new Map();
@@ -7903,55 +7799,6 @@
                 console.error('File list error:', err);
                 list.innerHTML = '<div class="text-red-600">Failed to load files.</div>';
             }
-        };
-
-        globalThis.confirmAmendAction = () => {
-            const warningText = [
-                'MEDICO-LEGAL DISCLAIMER',
-                '',
-                'You are about to amend an existing clinical record that may already be used for care, billing, audit, and legal documentation.',
-                'Proceed only when clinically necessary and after verifying the correct patient and visit.',
-                'Enter accurate amendments only and avoid altering historical meaning unless required for correction.',
-                '',
-                'By continuing, you confirm you will take extreme care and provide an appropriate reason for the change as required by policy.'
-            ].join('\n');
-
-            const acknowledged = globalThis.confirm(warningText);
-            if (!acknowledged) {
-                return false;
-            }
-
-            const requiredPhrase = 'AMEND';
-            const typedConfirmation = globalThis.prompt(
-                `Type ${requiredPhrase} to confirm this medico-legal amendment action.`
-            );
-
-            if (typedConfirmation === null) {
-                return false;
-            }
-
-            if (String(typedConfirmation || '').trim().toUpperCase() !== requiredPhrase) {
-                if (typeof globalThis.showToast === 'function') {
-                    globalThis.showToast('Amend action cancelled: confirmation phrase did not match.');
-                }
-                return false;
-            }
-
-            return true;
-        };
-
-        globalThis.openModalWithAmendWarning = (id) => {
-            if (!id) {
-                globalThis.openModal(id);
-                return true;
-            }
-
-            if (!globalThis.confirmAmendAction()) {
-                return false;
-            }
-
-            globalThis.openModal(id);
-            return true;
         };
 
         globalThis.uploadPatientFiles = async () => {
@@ -10069,15 +9916,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             // Refetch data to update UI
                             if (typeof globalThis.m365FetchPatients === 'function') {
                                 console.log('🔄 Refetching patients...');
-                                const refreshedPatients = await globalThis.m365FetchPatients();
-                                if (Array.isArray(refreshedPatients)) {
-                                    if (typeof globalThis.updatePatientsFromM365 === 'function') {
-                                        globalThis.updatePatientsFromM365(refreshedPatients);
-                                    } else {
-                                        patients = refreshedPatients;
-                                        renderUI();
-                                    }
-                                }
+                                await globalThis.m365FetchPatients();
                             }
                             if (currentTab === 'audit' && typeof globalThis.loadAuditLogs === 'function') {
                                 await globalThis.loadAuditLogs();
@@ -10230,15 +10069,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     showToast("✓ Deleted");
                     // Refetch to update UI
                     if (typeof globalThis.m365FetchPatients === 'function') {
-                        const refreshedPatients = await globalThis.m365FetchPatients();
-                        if (Array.isArray(refreshedPatients)) {
-                            if (typeof globalThis.updatePatientsFromM365 === 'function') {
-                                globalThis.updatePatientsFromM365(refreshedPatients);
-                            } else {
-                                patients = refreshedPatients;
-                                renderUI();
-                            }
-                        }
+                        await globalThis.m365FetchPatients();
                     }
                 }
             } catch (err) {
@@ -10665,8 +10496,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const status = getSafeConfiguredStatus(getPatientStatus(p));
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || STATUS_COLORS['To-Do'];
                 const findingsDisplay = getFindingsDisplay(p);
-                const findingsMarkup = escapeInlineHtml(findingsDisplay)
-                    .replaceAll(' | ', '<br>');
                 const visitTimeDisplay = p.visitTime ? new Date(p.visitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                 const isCrossedOut = isPatientCrossedOut(p.id);
                 const crossedOutClass = isCrossedOut ? 'cross-out-target' : '';
@@ -10698,20 +10527,19 @@ const findHeaderIndex = (rows, sheetLog) => {
                         ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${personKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         ${reviewBadge}
                     </td>
-                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[28%] min-w-[14rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-pre-wrap break-all ${crossedOutClass}" style="overflow-wrap:anywhere;word-break:break-word;">${findingsMarkup}</div></td>` : ''}
-                    <td class="p-3 pr-5 align-top w-[22%] min-w-[13rem]">
+                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
+                    <td class="p-3 align-top w-[20%] min-w-[16rem]">
                         <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${p.plan || '-'}</div>
                         <div class="flex items-start">
-                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-[12rem]">
+                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-[16rem]">
                                 ${renderStatusOptionsMarkup(status)}
                             </select>
                         </div>
                     </td>
-                    <td class="p-3 pr-4 align-top w-32">
+                    <td class="p-3 align-top w-20">
                         <div class="flex flex-col items-start gap-1">
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${p.id}')" class="min-w-[6rem] whitespace-normal leading-tight text-center text-[9px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Amend Existing Record</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.startNewVisitFromPatient('${p.id}')" class="min-w-[6.25rem] whitespace-nowrap text-center text-[9px] font-bold ${isStat ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-green-600 text-white hover:bg-green-700'} px-2 py-1 rounded transition-colors">Add Follow Up</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[6.25rem] whitespace-nowrap text-center text-[9px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModal('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Edit</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
                         </div>
                     </td>
                 </tr>`;
@@ -13407,7 +13235,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             <div class="flex-shrink-0 relative">
                 <div class="flex gap-2 p-3 border-t border-slate-200 bg-slate-50">
-                    <button id="modal-edit-btn" type="button" onclick="globalThis.enableModalEdit()" class="hidden flex-1 px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded hover:bg-blue-700 transition-colors">Amend Existing Record</button>
+                    <button id="modal-edit-btn" type="button" onclick="globalThis.enableModalEdit()" class="hidden flex-1 px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded hover:bg-blue-700 transition-colors">Edit</button>
                     <button id="modal-archive-btn" type="button" onclick="globalThis.archiveFromModal()" class="hidden flex-1 px-4 py-2 bg-slate-700 text-white font-bold text-xs rounded hover:bg-slate-800 transition-colors">Archive</button>
                     <button id="modal-delete-btn" type="button" onclick="globalThis.deleteFromModal()" class="hidden flex-1 px-4 py-2 bg-red-600 text-white font-bold text-xs rounded hover:bg-red-700 transition-colors">Delete</button>
                 </div>
