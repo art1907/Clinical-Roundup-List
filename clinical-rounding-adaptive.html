@@ -915,16 +915,32 @@
         }
 
         .main-census-table {
-            table-layout: auto;
-            min-width: 100%;
+            table-layout: fixed;
+            min-width: 76rem;
+            width: 100%;
         }
 
         .main-census-table thead th,
         .main-census-table tbody td {
             white-space: normal;
-            overflow-wrap: anywhere;
-            word-break: break-word;
+            overflow-wrap: break-word;
+            word-break: normal;
             vertical-align: top;
+        }
+
+        .main-census-table .col-select { width: 3.25rem; }
+        .main-census-table .col-room { width: 8%; min-width: 5.5rem; }
+        .main-census-table .col-hospital { width: 10%; min-width: 8.5rem; }
+        .main-census-table .col-patient { width: 16%; min-width: 10rem; }
+        .main-census-table .col-findings { width: 26%; }
+        .main-census-table .col-plan { width: 26%; }
+        .main-census-table .col-actions { width: 11.5rem; min-width: 11.5rem; }
+
+        .main-census-table .col-hospital,
+        .main-census-table .col-hospital * {
+            word-break: normal;
+            overflow-wrap: normal;
+            hyphens: auto;
         }
 
         .main-census-table thead th:first-child,
@@ -934,8 +950,16 @@
 
         .main-census-table thead th:last-child,
         .main-census-table tbody td:last-child {
-            min-width: 12rem;
             padding-right: 1rem;
+        }
+
+        .table-action-btn {
+            width: 10.25rem;
+            min-height: 2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
         }
         
         th.sort-asc .sort-indicator::after {
@@ -4096,6 +4120,20 @@
         // PHASE 1: SETTINGS, SEARCH, SHORTCUTS, BATCH OPERATIONS
         // ============================================================================= 
 
+        const DEFAULT_VISIBLE_COLUMNS = ['room', 'hospital', 'findings', 'plan'];
+        const ALLOWED_VISIBLE_COLUMNS = new Set(DEFAULT_VISIBLE_COLUMNS);
+
+        function getSanitizedVisibleColumns() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem('app-visible-columns') || '[]');
+                if (!Array.isArray(parsed)) return [...DEFAULT_VISIBLE_COLUMNS];
+                const safe = parsed.filter(col => ALLOWED_VISIBLE_COLUMNS.has(col));
+                return safe.length ? [...new Set(safe)] : [...DEFAULT_VISIBLE_COLUMNS];
+            } catch {
+                return [...DEFAULT_VISIBLE_COLUMNS];
+            }
+        }
+
         // Load settings from localStorage
         function loadSettings() {
             const theme = localStorage.getItem('app-theme') || 'light';
@@ -4110,7 +4148,7 @@
             }
             
             // Load column visibility
-            const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
+            const visibleCols = getSanitizedVisibleColumns();
             document.querySelectorAll('.column-vis').forEach(cb => {
                 cb.checked = visibleCols.includes(cb.value);
             });
@@ -4154,7 +4192,9 @@
 
         // Column Visibility Management
         globalThis.updateColumnVisibility = () => {
-            const visibleCols = Array.from(document.querySelectorAll('.column-vis:checked')).map(cb => cb.value);
+            const visibleCols = Array.from(document.querySelectorAll('.column-vis:checked'))
+                .map(cb => cb.value)
+                .filter(col => ALLOWED_VISIBLE_COLUMNS.has(col));
             localStorage.setItem('app-visible-columns', JSON.stringify(visibleCols));
             renderUI();
             showToast('👁️ Column visibility updated');
@@ -10658,7 +10698,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             }
             
             // Get visible columns
-            const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
+            const visibleCols = getSanitizedVisibleColumns();
 
             const renderSectionRow = (label, count, isReviewSection) => `
                 <tr class="${isReviewSection ? 'bg-amber-100 border-y border-amber-200' : 'bg-slate-100 border-y border-slate-200'}">
@@ -10701,17 +10741,17 @@ const findHeaderIndex = (rows, sheetLog) => {
                 
                 const mainRow = `
                 <tr class="transition-colors ${statClass} ${isCrossedOut ? 'crossed-out-row' : ''}" oncontextmenu="globalThis.openContextMenu(event, '${safePatientId}')">
-                    <td class="p-3 align-top"><input type="checkbox" data-patient-checkbox value="${safePatientId}" onchange="updateBatchOpCount()" class="w-5 h-5 rounded cursor-pointer" ${selectedPatientIds.has(p.id)?'checked':''}></td>
-                    ${visibleCols.includes('room') ? `<td class="p-3 align-top"><div class="font-bold text-sm ${textPrimary} ${crossedOutClass}">${safeRoom}</div></td>` : ''}
-                    ${visibleCols.includes('hospital') ? `<td class="p-3 align-top"><div class="text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${safeHospital}</div></td>` : ''}
-                    <td class="p-3 align-top">
+                    <td class="p-3 align-top col-select"><input type="checkbox" data-patient-checkbox value="${safePatientId}" onchange="updateBatchOpCount()" class="w-5 h-5 rounded cursor-pointer" ${selectedPatientIds.has(p.id)?'checked':''}></td>
+                    ${visibleCols.includes('room') ? `<td class="p-3 align-top col-room"><div class="font-bold text-sm ${textPrimary} ${crossedOutClass}">${safeRoom}</div></td>` : ''}
+                    ${visibleCols.includes('hospital') ? `<td class="p-3 align-top col-hospital"><div class="text-xs font-semibold ${textSecondary} whitespace-normal ${crossedOutClass}">${safeHospital}</div></td>` : ''}
+                    <td class="p-3 align-top col-patient">
                         <div class="text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}">${safeName}</div>
                         <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${safeDate}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
                         ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${safePersonKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         ${reviewBadge}
                     </td>
-                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${safeFindingsDisplay}</div></td>` : ''}
-                    <td class="p-3 align-top">
+                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top col-findings"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${safeFindingsDisplay}</div></td>` : ''}
+                    <td class="p-3 align-top col-plan">
                         <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${safePlan}</div>
                         <div class="flex items-start">
                             <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${safePatientId}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full">
@@ -10719,11 +10759,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                             </select>
                         </div>
                     </td>
-                    <td class="p-3 align-top">
+                    <td class="p-3 align-top col-actions">
                         <div class="flex flex-col items-start gap-1">
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${safePatientId}')" class="min-w-[6rem] text-center text-[8px] font-bold leading-tight whitespace-normal ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Amend Existing Record</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openFollowUpModal('${safePatientId}')" class="min-w-[6rem] text-center text-[8px] font-bold leading-tight whitespace-normal bg-green-600 text-white hover:bg-green-700 px-2 py-1 rounded transition-colors">Add Follow Up</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${safePatientId}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${safePatientId}')" class="table-action-btn text-[8px] font-bold leading-tight whitespace-normal ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Amend Existing Record</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openFollowUpModal('${safePatientId}')" class="table-action-btn text-[8px] font-bold leading-tight whitespace-normal bg-green-600 text-white hover:bg-green-700 px-2 py-1 rounded transition-colors">Add Follow Up</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${safePatientId}')" class="table-action-btn text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
                         </div>
                     </td>
                 </tr>`;
@@ -12649,13 +12689,13 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <table class="main-census-table w-full border-collapse text-sm">
                         <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
-                                <th class="p-3 align-top"><label for="select-all-patients" class="sr-only">Select all patient rows</label><input id="select-all-patients" type="checkbox" data-select-all-checkbox onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer" aria-label="Select all patient rows" title="Select all patient rows"></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700">Findings</th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700">Actions</th>
+                                <th class="p-3 align-top col-select"><label for="select-all-patients" class="sr-only">Select all patient rows</label><input id="select-all-patients" type="checkbox" data-select-all-checkbox onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer" aria-label="Select all patient rows" title="Select all patient rows"></th>
+                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable col-room" data-sort-column="room">Room <span class="sort-indicator"></span></th>
+                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable col-hospital" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
+                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable col-patient" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
+                                <th class="p-3 align-top text-left font-bold text-slate-700 col-findings">Findings</th>
+                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable col-plan" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
+                                <th class="p-3 align-top text-left font-bold text-slate-700 col-actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="table-body" class="divide-y divide-slate-100"></tbody>
