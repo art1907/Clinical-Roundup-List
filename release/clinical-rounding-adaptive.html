@@ -4482,6 +4482,7 @@
             
             menu.innerHTML = `
                 <div class="context-menu-item" onclick="globalThis.openModalWithAmendWarning('${patientId}'); closeContextMenu();">✏️ Amend Existing Record</div>
+                <div class="context-menu-item" onclick="globalThis.openFollowUpModal('${patientId}'); closeContextMenu();">➕ Add Follow Up</div>
                 <div class="context-menu-item" onclick="globalThis.toggleArchive('${patientId}', ${!p.archived}); closeContextMenu();">${p.archived ? '↩️ Restore' : '📦 Archive'}</div>
                 <div class="context-menu-item danger" onclick="globalThis.deletePatient('${patientId}'); closeContextMenu();">🗑️ Delete</div>
             `;
@@ -6436,6 +6437,7 @@
                         
                         <div class="card-actions">
                             <button class="card-action-btn card-edit" onclick="globalThis.openModalWithAmendWarning('${p.id}')">Amend Existing Record</button>
+                            <button class="card-action-btn" style="background:#16a34a;color:#fff;border:1px solid #15803d" onclick="globalThis.openFollowUpModal('${p.id}')">Add Follow Up</button>
                             <button class="card-action-btn card-print" onclick="globalThis.printPatientRecord('${p.id}')">Print</button>
                         </div>
                     </div>
@@ -6502,6 +6504,7 @@
 
                         <div class="mobile-card-actions">
                             <button onclick="globalThis.openModalWithAmendWarning('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Amend Existing Record</button>
+                            <button onclick="globalThis.openFollowUpModal('${patient.id}')" class="bg-green-600 text-white hover:bg-green-700">Add Follow Up</button>
                             <button onclick="globalThis.printPatientRecord('${patient.id}')" class="bg-slate-700 text-white hover:bg-slate-800">Print</button>
                         </div>
                     </article>
@@ -6549,6 +6552,7 @@
                                     </div>
                                     <div style="display: flex; gap: 0.5rem;">
                                         <button onclick="globalThis.openModalWithAmendWarning('${p.id}')" style="padding: 0.25rem 0.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Amend Existing Record</button>
+                                        <button onclick="globalThis.openFollowUpModal('${p.id}')" style="padding: 0.25rem 0.5rem; background: #16a34a; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Add Follow Up</button>
                                     </div>
                                 </div>
                             `;
@@ -6601,6 +6605,68 @@
             });
         }
 
+        function hideFollowUpCarryForwardSummary() {
+            const panel = document.getElementById('followup-carryforward-summary');
+            const body = document.getElementById('followup-carryforward-summary-body');
+            if (body) body.innerHTML = '';
+            if (panel) panel.classList.add('hidden');
+        }
+
+        function showFollowUpCarryForwardSummary(sourcePatient = {}) {
+            const panel = document.getElementById('followup-carryforward-summary');
+            const body = document.getElementById('followup-carryforward-summary-body');
+            if (!panel || !body) return;
+
+            const normalizeText = (value) => {
+                if (Array.isArray(value)) {
+                    return value.map(v => String(v || '').trim()).filter(Boolean).join(', ');
+                }
+                if (value && typeof value === 'object') {
+                    const serialized = JSON.stringify(value);
+                    return serialized === '{}' || serialized === '[]' ? '' : serialized;
+                }
+                return String(value || '').trim();
+            };
+
+            const entries = [];
+            const addEntry = (label, value) => {
+                const text = normalizeText(value);
+                if (!text) return;
+                entries.push({ label, value: text });
+            };
+
+            const findingsSummary = typeof getFindingsDisplay === 'function'
+                ? String(getFindingsDisplay(sourcePatient) || '').trim()
+                : '';
+
+            addEntry('Room', sourcePatient.room);
+            addEntry('Hospital', sourcePatient.hospital);
+            addEntry('Provider', sourcePatient.supervisingMd);
+            addEntry('Plan', sourcePatient.plan);
+            addEntry('Status', sourcePatient.procedureStatus);
+            addEntry('Findings', findingsSummary === '-' ? '' : findingsSummary);
+            addEntry('Progress Notes', sourcePatient.progressNotes || '');
+            addEntry('Pending', sourcePatient.pending);
+            addEntry('Follow Up', sourcePatient.followUp);
+            addEntry('CPT Primary', sourcePatient.cptPrimary);
+            addEntry('ICD Primary', sourcePatient.icdPrimary);
+            addEntry('Charge Codes Secondary', sourcePatient.chargeCodesSecondary);
+
+            if (!entries.length) {
+                hideFollowUpCarryForwardSummary();
+                return;
+            }
+
+            body.innerHTML = entries.map((entry) => `
+                <div class="rounded border border-emerald-200 bg-white px-2 py-1.5">
+                    <div class="text-[10px] font-bold uppercase tracking-wide text-emerald-800">${escapeInlineHtml(entry.label)}</div>
+                    <div class="text-[11px] leading-5 text-emerald-900 whitespace-pre-wrap">${escapeInlineHtml(entry.value)}</div>
+                </div>
+            `).join('');
+
+            panel.classList.remove('hidden');
+        }
+
         globalThis.openModal = (id = null) => {
             const modal = document.getElementById('patient-modal');
             if (!modal) return;
@@ -6620,6 +6686,7 @@
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
             renderPatientChangeHistory(null);
+            hideFollowUpCarryForwardSummary();
 
             const setEditMode = (isEditing) => {
                 modal.dataset.findingsEditable = isEditing ? 'true' : 'false';
@@ -6970,6 +7037,93 @@
             return true;
         };
 
+        globalThis.openFollowUpModal = (id) => {
+            const sourcePatient = patients.find((p) => p.id === id);
+            if (!sourcePatient) {
+                showToast('Unable to load source visit for follow up');
+                return false;
+            }
+
+            globalThis.openModal();
+
+            const setTextValue = (inputId, value) => {
+                const input = document.getElementById(inputId);
+                if (!input) return;
+                input.value = value == null ? '' : value;
+            };
+
+            // Carry stable identity details only.
+            setTextValue('f-room', sourcePatient.room || '');
+            setTextValue('f-name', sourcePatient.name || '');
+            setTextValue('f-dob', sourcePatient.dob || '');
+            setTextValue('f-mrn', sourcePatient.mrn || '');
+            setTextValue('f-hospital', sourcePatient.hospital || '');
+            setTextValue('f-md', sourcePatient.supervisingMd || '');
+
+            // New follow-up values should be entered fresh.
+            setTextValue('f-plan', '');
+            setTextValue('f-findings-text', '');
+            setTextValue('f-progress-notes', '');
+            setTextValue('f-pending', '');
+            setTextValue('f-fu', '');
+            setTextValue('f-cpt-primary', '');
+            setTextValue('f-icd-primary', '');
+            setTextValue('f-charge-codes-secondary', '');
+            setTextValue('f-findings-codes', '');
+            setTextValue('f-findings-values', '{}');
+            setTextValue('f-findings-dates', '{}');
+
+            setTextValue('f-date', sourcePatient.date || new Date().toISOString().split('T')[0]);
+
+            const statusInput = document.getElementById('f-proc-status');
+            if (statusInput) {
+                const hasFollowUpStatus = Array.from(statusInput.options || []).some((opt) => opt.value === 'FOLLOW UP (CONSULT)');
+                statusInput.value = hasFollowUpStatus
+                    ? 'FOLLOW UP (CONSULT)'
+                    : getSafeConfiguredStatus(sourcePatient.procedureStatus || DEFAULT_RECORD_STATUS);
+            }
+
+            const statInput = document.getElementById('f-priority');
+            if (statInput) {
+                statInput.checked = sourcePatient.stat === true || sourcePatient.stat === 'true';
+            }
+
+            document.querySelectorAll('.findings-checkbox').forEach((cb) => {
+                cb.checked = false;
+                const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
+                const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
+
+                if (FINDINGS_CUSTOM_CODES.has(cb.value)) {
+                    populateCustomFindingFields(cb.value, {});
+                }
+                if (valueInput) {
+                    valueInput.value = '';
+                    valueInput.disabled = true;
+                }
+                if (dateInput) {
+                    dateInput.value = '';
+                    dateInput.disabled = true;
+                }
+            });
+
+            showFollowUpCarryForwardSummary(sourcePatient);
+            if (typeof globalThis.syncFindingsUI === 'function') {
+                globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
+            }
+
+            const followUpVisitTime = new Date().toISOString();
+            setTextValue('f-visit-time', followUpVisitTime);
+            const visitDate = document.getElementById('f-date')?.value || sourcePatient.date || new Date().toISOString().split('T')[0];
+            const visitMrn = String(document.getElementById('f-mrn')?.value || sourcePatient.mrn || '').trim();
+            const visitKeyBase = visitMrn && visitDate
+                ? `${visitMrn}|${visitDate}`
+                : buildImportIdentityKey({ ...sourcePatient, date: visitDate, visitTime: followUpVisitTime });
+            setTextValue('f-visit-key', `${visitKeyBase}|${followUpVisitTime}`);
+
+            showToast('Follow-up visit draft opened as a new record. Prior values are display-only above; enter new values below.');
+            return true;
+        };
+
         globalThis.uploadPatientFiles = async () => {
             const input = document.getElementById('patient-files-input');
             const editId = document.getElementById('edit-id')?.value;
@@ -7072,6 +7226,7 @@
                 clearDraft();// Clear draft on close
                 const form = document.getElementById('patient-form');
                 if (form) form.reset(); // Clear form on close
+                hideFollowUpCarryForwardSummary();
             }
         };
         
@@ -8793,6 +8948,7 @@
                     <td class="p-3 pr-4 align-top w-28">
                         <div class="flex flex-col items-start gap-1">
                             <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${p.id}')" class="min-w-[6rem] text-center text-[8px] font-bold leading-tight whitespace-normal ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Amend Existing Record</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openFollowUpModal('${p.id}')" class="min-w-[6rem] text-center text-[8px] font-bold leading-tight whitespace-normal bg-green-600 text-white hover:bg-green-700 px-2 py-1 rounded transition-colors">Add Follow Up</button>
                             <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[6rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
                         </div>
                     </td>
@@ -10576,6 +10732,12 @@
                 <div class="grid grid-cols-2 gap-3">
                     <input type="text" id="f-dob" placeholder="DOB" aria-label="Date of Birth" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
                     <input type="text" id="f-mrn" placeholder="MRN" aria-label="Medical Record Number" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                </div>
+
+                <div id="followup-carryforward-summary" class="hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                    <div class="font-bold uppercase tracking-wide">Follow-up source data</div>
+                    <div class="mt-1 text-[11px] text-emerald-800">Display only. Enter new values in the editable fields below.</div>
+                    <div id="followup-carryforward-summary-body" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
                 </div>
 
                 <!-- Findings -->

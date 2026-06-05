@@ -7482,6 +7482,68 @@
             return true;
         };
 
+        function hideFollowUpCarryForwardSummary() {
+            const panel = document.getElementById('followup-carryforward-summary');
+            const body = document.getElementById('followup-carryforward-summary-body');
+            if (body) body.innerHTML = '';
+            if (panel) panel.classList.add('hidden');
+        }
+
+        function showFollowUpCarryForwardSummary(sourcePatient = {}) {
+            const panel = document.getElementById('followup-carryforward-summary');
+            const body = document.getElementById('followup-carryforward-summary-body');
+            if (!panel || !body) return;
+
+            const normalizeText = (value) => {
+                if (Array.isArray(value)) {
+                    return value.map(v => String(v || '').trim()).filter(Boolean).join(', ');
+                }
+                if (value && typeof value === 'object') {
+                    const serialized = JSON.stringify(value);
+                    return serialized === '{}' || serialized === '[]' ? '' : serialized;
+                }
+                return String(value || '').trim();
+            };
+
+            const entries = [];
+            const addEntry = (label, value) => {
+                const text = normalizeText(value);
+                if (!text) return;
+                entries.push({ label, value: text });
+            };
+
+            const findingsSummary = typeof getFindingsDisplay === 'function'
+                ? String(getFindingsDisplay(sourcePatient) || '').trim()
+                : '';
+
+            addEntry('Room', sourcePatient.room);
+            addEntry('Hospital', sourcePatient.hospital);
+            addEntry('Provider', sourcePatient.supervisingMd);
+            addEntry('Plan', sourcePatient.plan);
+            addEntry('Status', sourcePatient.procedureStatus);
+            addEntry('Findings', findingsSummary === '-' ? '' : findingsSummary);
+            addEntry('Progress Notes', getVisibleProgressNotes(sourcePatient));
+            addEntry('Pending', sourcePatient.pending);
+            addEntry('Follow Up', sourcePatient.followUp);
+            addEntry('CPT Primary', sourcePatient.cptPrimary);
+            addEntry('ICD Primary', sourcePatient.icdPrimary);
+            addEntry('Charge Codes Secondary', sourcePatient.chargeCodesSecondary);
+
+            if (!entries.length) {
+                hideFollowUpCarryForwardSummary();
+                return;
+            }
+
+            body.innerHTML = entries.map((entry) => `
+                <div class="rounded border border-emerald-200 bg-white px-2 py-1.5">
+                    <div class="text-[10px] font-bold uppercase tracking-wide text-emerald-800">${escapeInlineHtml(entry.label)}</div>
+                    <div class="text-[11px] leading-5 text-emerald-900 whitespace-pre-wrap">${escapeInlineHtml(entry.value)}</div>
+                </div>
+            `).join('');
+
+            panel.classList.remove('hidden');
+        }
+
         globalThis.openModal = (id = null) => {
             const modal = document.getElementById('patient-modal');
             if (!modal) return;
@@ -7506,6 +7568,7 @@
             modal.dataset.amendConfirmed = 'false';
             modal.dataset.forceNewVisit = 'false';
             hideReturningPatientBackfillPrompt();
+            hideFollowUpCarryForwardSummary();
 
             const setEditMode = (isEditing) => {
                 modal.dataset.findingsEditable = isEditing ? 'true' : 'false';
@@ -7840,12 +7903,17 @@
             setTextValue('f-mrn', sourcePatient.mrn || '');
             setTextValue('f-hospital', sourcePatient.hospital || '');
             setTextValue('f-md', sourcePatient.supervisingMd || '');
-            setTextValue('f-plan', sourcePatient.plan || '');
-            setTextValue('f-cpt-primary', sourcePatient.cptPrimary || '');
-            setTextValue('f-icd-primary', sourcePatient.icdPrimary || '');
-            setTextValue('f-charge-codes-secondary', Array.isArray(sourcePatient.chargeCodesSecondary)
-                ? sourcePatient.chargeCodesSecondary.join(', ')
-                : (sourcePatient.chargeCodesSecondary || ''));
+            setTextValue('f-plan', '');
+            setTextValue('f-cpt-primary', '');
+            setTextValue('f-icd-primary', '');
+            setTextValue('f-charge-codes-secondary', '');
+            setTextValue('f-findings-text', '');
+            setTextValue('f-progress-notes', '');
+            setTextValue('f-pending', '');
+            setTextValue('f-fu', '');
+            setTextValue('f-findings-codes', '');
+            setTextValue('f-findings-values', '{}');
+            setTextValue('f-findings-dates', '{}');
 
             setTextValue('f-date', sourcePatient.date || new Date().toISOString().split('T')[0]);
 
@@ -7862,18 +7930,29 @@
                 statInput.checked = sourcePatient.stat === true || sourcePatient.stat === 'true';
             }
 
-            setTextValue('f-findings-text', '');
-            setTextValue('f-progress-notes', '');
-            setTextValue('f-pending', '');
-            setTextValue('f-fu', '');
-            setTextValue('f-findings-codes', '');
-            setTextValue('f-findings-values', '{}');
-            setTextValue('f-findings-dates', '{}');
             setFormDateReviewMeta({});
 
             document.querySelectorAll('.findings-checkbox').forEach((cb) => {
                 cb.checked = false;
+                const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
+                const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
+
+                if (FINDINGS_CUSTOM_CODES.has(cb.value)) {
+                    populateCustomFindingFields(cb.value, {});
+                }
+
+                if (valueInput) {
+                    valueInput.value = '';
+                    valueInput.disabled = true;
+                }
+
+                if (dateInput) {
+                    dateInput.value = '';
+                    dateInput.disabled = true;
+                }
             });
+
+            showFollowUpCarryForwardSummary(sourcePatient);
             if (typeof globalThis.syncFindingsUI === 'function') {
                 globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
             }
@@ -7888,7 +7967,7 @@
                 : buildImportIdentityKey({ ...sourcePatient, date: visitDate, visitTime: followUpVisitTime });
             setTextValue('f-visit-key', `${visitKeyBase}|${followUpVisitTime}`);
 
-            showToast('Follow-up visit draft opened as a new record. Keep date for same-day or adjust date for multi-day follow up.');
+            showToast('Follow-up visit draft opened as a new record. Prior values are displayed above; enter new values in the editable fields below.');
             return true;
         };
 
@@ -8132,6 +8211,7 @@
                 modal.dataset.amendConfirmed = 'false';
                 modal.dataset.forceNewVisit = 'false';
                 modal.dataset.followUpSourceId = '';
+                hideFollowUpCarryForwardSummary();
             }
         };
         
@@ -13109,6 +13189,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                         <p id="returning-patient-backfill-text" class="leading-5"></p>
                         <button id="returning-patient-backfill-apply" type="button" onclick="globalThis.applyReturningPatientBackfill()" class="shrink-0 rounded-md bg-blue-600 px-2.5 py-1 font-semibold text-white hover:bg-blue-700">Use previous visit</button>
                     </div>
+                </div>
+                <div id="followup-carryforward-summary" class="hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                    <div class="font-bold uppercase tracking-wide">Follow-up source data</div>
+                    <div class="mt-1 text-[11px] text-emerald-800">Only populated values from the source visit are shown below.</div>
+                    <div id="followup-carryforward-summary-body" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
                 </div>
 
                 <!-- Findings -->
