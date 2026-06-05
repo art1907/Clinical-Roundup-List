@@ -65,6 +65,145 @@ const M365_CONFIG = {
 let msalInstance = null;
 let currentAccount = null;
 let pollTimer = null;
+let sessionInvalidationInProgress = false;
+
+const SERVER_SESSION_POLICY_KEYS = {
+    epoch: 'SessionEpoch',
+    forceLogoutBeforeUtc: 'ForceLogoutBeforeUtc'
+};
+
+const LOCAL_SESSION_POLICY_KEYS = {
+    epoch: 'm365_session_epoch',
+    authAt: 'm365_auth_at'
+};
+
+function getStorageItemSafe(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function setStorageItemSafe(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        // Ignore storage write errors (private mode / blocked storage).
+    }
+}
+
+function removeStorageItemSafe(key) {
+    try {
+        localStorage.removeItem(key);
+    } catch {
+        // Ignore storage remove errors.
+    }
+}
+
+function markAuthIssuedAtNow() {
+    setStorageItemSafe(LOCAL_SESSION_POLICY_KEYS.authAt, String(Date.now()));
+}
+
+function getAuthIssuedAtMs() {
+    const raw = getStorageItemSafe(LOCAL_SESSION_POLICY_KEYS.authAt);
+    const asNumber = Number.parseInt(raw || '', 10);
+    return Number.isFinite(asNumber) ? asNumber : 0;
+}
+
+function parseDateMs(value) {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    if (!text) return null;
+    const ms = Date.parse(text);
+    return Number.isFinite(ms) ? ms : null;
+}
+
+function clearAppRuntimeCaches() {
+    try {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key) continue;
+            if (key.startsWith('m365_cache_') || key === 'patientDraft') {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach((key) => localStorage.removeItem(key));
+    } catch {
+        // Ignore storage clear errors.
+    }
+}
+
+function evaluateServerSessionPolicy(settings) {
+    if (!settings || typeof settings !== 'object') {
+        return { shouldInvalidate: false, reason: '' };
+    }
+
+    const remoteEpoch = String(settings[SERVER_SESSION_POLICY_KEYS.epoch] || '').trim();
+    const localEpoch = String(getStorageItemSafe(LOCAL_SESSION_POLICY_KEYS.epoch) || '').trim();
+
+    if (remoteEpoch) {
+        if (!localEpoch) {
+            setStorageItemSafe(LOCAL_SESSION_POLICY_KEYS.epoch, remoteEpoch);
+        } else if (localEpoch !== remoteEpoch) {
+            setStorageItemSafe(LOCAL_SESSION_POLICY_KEYS.epoch, remoteEpoch);
+            return {
+                shouldInvalidate: true,
+                reason: 'Session invalidated by administrator (SessionEpoch updated).'
+            };
+        }
+    }
+
+    const forceLogoutBeforeMs = parseDateMs(settings[SERVER_SESSION_POLICY_KEYS.forceLogoutBeforeUtc]);
+    if (forceLogoutBeforeMs) {
+        const authAtMs = getAuthIssuedAtMs();
+        if (!authAtMs || authAtMs < forceLogoutBeforeMs) {
+            return {
+                shouldInvalidate: true,
+                reason: 'Session expired by server policy (ForceLogoutBeforeUtc).'
+            };
+        }
+    }
+
+    return { shouldInvalidate: false, reason: '' };
+}
+
+async function triggerServerSessionInvalidation(reason) {
+    if (sessionInvalidationInProgress) return;
+    sessionInvalidationInProgress = true;
+
+    stopPolling();
+    clearAppRuntimeCaches();
+    removeStorageItemSafe(LOCAL_SESSION_POLICY_KEYS.authAt);
+
+    if (typeof updateConnectionStatus === 'function') {
+        updateConnectionStatus(false, '');
+    }
+    if (typeof window.updateAuthState === 'function') {
+        try {
+            window.updateAuthState(false, '');
+        } catch (err) {
+            console.warn('Failed to update auth state during invalidation:', err?.message || err);
+        }
+    }
+
+    if (typeof showToast === 'function') {
+        showToast(`🔒 ${reason || 'Session invalidated. Please sign in again.'}`);
+    }
+
+    if (!msalInstance) {
+        sessionInvalidationInProgress = false;
+        return;
+    }
+
+    try {
+        await msalInstance.logoutRedirect({ account: currentAccount || undefined });
+    } catch (err) {
+        console.error('Server session invalidation logout failed:', err);
+        sessionInvalidationInProgress = false;
+    }
+}
 
 function initializeMSAL() {
     try {
@@ -112,6 +251,17 @@ async function login() {
 
 function logout() {
     stopPolling();
+    clearAppRuntimeCaches();
+    removeStorageItemSafe(LOCAL_SESSION_POLICY_KEYS.authAt);
+    if (typeof updateConnectionStatus === 'function') {
+        updateConnectionStatus(false, '');
+    }
+    if (typeof window.updateAuthState === 'function') {
+        window.updateAuthState(false, '');
+    }
+    if (!msalInstance) {
+        return;
+    }
     msalInstance.logoutRedirect({
         account: currentAccount
     });
@@ -142,6 +292,8 @@ async function getAccessToken() {
 }
 
 function handleSuccessfulLogin() {
+    sessionInvalidationInProgress = false;
+    markAuthIssuedAtNow();
     console.log('User authenticated:', currentAccount.username);
     updateConnectionStatus(true, currentAccount.username);
     startPolling();
@@ -738,6 +890,12 @@ async function fetchAllData() {
             fetchOnCallSchedule(),
             fetchSettings()
         ]);
+
+        const sessionPolicy = evaluateServerSessionPolicy(settings);
+        if (sessionPolicy.shouldInvalidate) {
+            await triggerServerSessionInvalidation(sessionPolicy.reason);
+            return;
+        }
         
         // Update global state (assumes these variables exist in main HTML)
         if (typeof window.updatePatientsFromM365 === 'function') {
