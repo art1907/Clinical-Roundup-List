@@ -120,7 +120,7 @@ AZURE_CLIENT_SECRET=client-secret-value
 ## 📚 Detailed Documentation
 
 - **Full Deployment Guide**: [AZURE_STATIC_WEB_APP_DEPLOYMENT.md](./AZURE_STATIC_WEB_APP_DEPLOYMENT.md)
-- **Architecture Details**: [_archive/AZURE_MIGRATION.md](./_archive/AZURE_MIGRATION.md)
+- **Architecture Details**: [_archive/AZURE_MIGRATION.md](../_archive/AZURE_MIGRATION.md)
 - **User Guide**: [USERGUIDE.md](./USERGUIDE.md)
 - **Installation**: [INSTALLATION_GUIDE.md](./INSTALLATION_GUIDE.md)
 

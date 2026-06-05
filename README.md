@@ -86,7 +86,7 @@ Perfect for testing or small teams:
 3. Create SharePoint Lists
 4. Push code → Auto-deploy ✨
 
-📖 **See: [AZURE_DEPLOY_QUICKSTART.md](./AZURE_DEPLOY_QUICKSTART.md)** for 15-minute setup guide  
+📖 **See: [AZURE_DEPLOY_QUICKSTART.md](./documents/AZURE_DEPLOY_QUICKSTART.md)** for 15-minute setup guide  
 📖 **Full guide: [AZURE_STATIC_WEB_APP_DEPLOYMENT.md](./AZURE_STATIC_WEB_APP_DEPLOYMENT.md)**
 
 ### Option 3: Netlify (Alternative)

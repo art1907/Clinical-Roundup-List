@@ -93,7 +93,7 @@ Common Graph calls:
 
 ## 3. App Configuration Entries
 
-Current app reads config from [m365-integration.js](m365-integration.js).
+Current app reads config from [m365-integration.js](../m365-integration.js).
 
 ## 3.1 M365_CONFIG (Browser Mode)
 
@@ -246,7 +246,7 @@ Per-user onboarding template:
 
 ## 8. Notes for This Repository
 
-1. Active app configuration currently lives in [m365-integration.js](m365-integration.js).
-2. Main app file is [clinical-rounding-adaptive.html](clinical-rounding-adaptive.html).
+1. Active app configuration currently lives in [m365-integration.js](../m365-integration.js).
+2. Main app file is [clinical-rounding-adaptive.html](../clinical-rounding-adaptive.html).
 3. Azure hosting guidance is in [AZURE_DEPLOY_QUICKSTART.md](AZURE_DEPLOY_QUICKSTART.md) and [AZURE_STATIC_WEB_APP_DEPLOYMENT.md](AZURE_STATIC_WEB_APP_DEPLOYMENT.md).
 4. Installation baseline is in [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md).

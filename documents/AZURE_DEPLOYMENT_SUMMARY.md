@@ -13,10 +13,10 @@ Your Clinical Rounding application is **fully configured** for Azure Static Web 
 ### ✅ Documentation Created
 1. **[AZURE_DEPLOY_QUICKSTART.md](./AZURE_DEPLOY_QUICKSTART.md)** - 15-minute deployment checklist
 2. **[AZURE_STATIC_WEB_APP_DEPLOYMENT.md](./AZURE_STATIC_WEB_APP_DEPLOYMENT.md)** - Complete deployment guide (600+ lines)
-3. **Updated [README.md](./README.md)** - Added deployment options section
+3. **Updated [README.md](../README.md)** - Added deployment options section
 
 ### ✅ Existing Documentation (Referenced)
-- **[_archive/AZURE_MIGRATION.md](./_archive/AZURE_MIGRATION.md)** - Architecture details
+- **[_archive/AZURE_MIGRATION.md](../_archive/AZURE_MIGRATION.md)** - Architecture details
 - **[INSTALLATION_GUIDE.md](./INSTALLATION_GUIDE.md)** - General installation instructions
 - **[USERGUIDE.md](./USERGUIDE.md)** - End-user documentation
 - **[M365_MIGRATION.md](./M365_MIGRATION.md)** - M365 integration details
@@ -174,9 +174,9 @@ Check deployment status: GitHub → **Actions** tab
 - **[AZURE_STATIC_WEB_APP_DEPLOYMENT.md](./AZURE_STATIC_WEB_APP_DEPLOYMENT.md)** ← Complete guide (troubleshooting, security)
 
 ### For Architecture
-- **[_archive/AZURE_MIGRATION.md](./_archive/AZURE_MIGRATION.md)** - Architecture decisions
+- **[_archive/AZURE_MIGRATION.md](../_archive/AZURE_MIGRATION.md)** - Architecture decisions
 - **[M365_MIGRATION.md](./M365_MIGRATION.md)** - SharePoint integration details
-- **[AGENTS.md](./AGENTS.md)** - Development conversation log
+- **[AGENTS.md](../AGENTS.md)** - Development conversation log
 
 ### For Users
 - **[USERGUIDE.md](./USERGUIDE.md)** - How to use the app

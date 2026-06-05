@@ -58,16 +58,16 @@
 | Document | Purpose | Read Time | Status |
 |----------|---------|-----------|--------|
 | [USERGUIDE.md](./USERGUIDE.md) | How to use the app | 30 min | ✅ EXISTING |
-| [AGENTS.md](./AGENTS.md) | Architecture decisions | 60 min | ✅ EXISTING |
-| [GRAPHIC_USER_GUIDE.html](./GRAPHIC_USER_GUIDE.html) | Visual map of UI controls/functions | 10 min | ✅ NEW |
+| [AGENTS.md](../AGENTS.md) | Architecture decisions | 60 min | ✅ EXISTING |
+| [GRAPHIC_USER_GUIDE.html](../GRAPHIC_USER_GUIDE.html) | Visual map of UI controls/functions | 10 min | ✅ NEW |
 | [AI_AUGMENTATION_OPTIONS.md](./AI_AUGMENTATION_OPTIONS.md) | AI enhancement opportunity list | 5 min | ✅ NEW |
 
 ### Code & Project
 | Document | Purpose | Read Time | Status |
 |----------|---------|-----------|--------|
-| [clinical-rounding-adaptive.html](./clinical-rounding-adaptive.html) | Main app (3,935 lines) | - | ✅ MODIFIED |
-| [m365-integration.js](./m365-integration.js) | M365 integration (689 lines) | - | ✅ READY |
-| [README.md](./README.md) | Project overview | 10 min | ✅ ACTIVE |
+| [clinical-rounding-adaptive.html](../clinical-rounding-adaptive.html) | Main app (3,935 lines) | - | ✅ MODIFIED |
+| [m365-integration.js](../m365-integration.js) | M365 integration (689 lines) | - | ✅ READY |
+| [README.md](../README.md) | Project overview | 10 min | ✅ ACTIVE |
 
 ---
 
@@ -379,9 +379,9 @@ A: Yes! Just fill in M365_CONFIG and reload to switch modes.
 - [Read QUICK_REFERENCE.md](./QUICK_REFERENCE.md)
 - [Read FINAL_STATUS.md](./FINAL_STATUS.md)
 - [Read INSTALLATION_GUIDE.md](./INSTALLATION_GUIDE.md)
-- [Open GRAPHIC_USER_GUIDE.html](./GRAPHIC_USER_GUIDE.html)
+- [Open GRAPHIC_USER_GUIDE.html](../GRAPHIC_USER_GUIDE.html)
 - [Read AI_AUGMENTATION_OPTIONS.md](./AI_AUGMENTATION_OPTIONS.md)
-- [View M365_CONFIG](./clinical-rounding-adaptive.html#L854)
+- [View M365_CONFIG](../clinical-rounding-adaptive.html#L854)
 
 ---
 

@@ -249,7 +249,7 @@ Save & test!
 1. **[INSTALLATION_GUIDE.md](./INSTALLATION_GUIDE.md)** - Step-by-step M365 setup
 2. **[USERGUIDE.md](./USERGUIDE.md)** - How to use the app
 3. **[M365_MIGRATION.md](./M365_MIGRATION.md)** - Architecture details
-4. **[AGENTS.md](./AGENTS.md)** - Decision log
+4. **[AGENTS.md](../AGENTS.md)** - Decision log
 
 ---
 
