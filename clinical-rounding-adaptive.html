@@ -8620,6 +8620,20 @@
 
         const getPatientDateReviewMeta = (patient = {}) => parseProgressNotesWithDateReviewMeta(patient.progressNotes || '').reviewMeta;
 
+        function getFindingDateInputByCode(code = '') {
+            const normalizedCode = String(code || '').trim();
+            if (!normalizedCode) return null;
+            const escapedCode = normalizedCode.replaceAll('"', '\\"');
+            return document.querySelector(`input.findings-date[data-code="${escapedCode}"]`);
+        }
+
+        function getFindingLabelByCode(code = '') {
+            const input = getFindingDateInputByCode(code);
+            const labelText = input?.closest('div')?.querySelector('span.flex-1')?.textContent;
+            const fallbackLabel = String(code || '').replaceAll(/[-_]+/g, ' ').trim();
+            return String(labelText || fallbackLabel || code).trim();
+        }
+
         const buildProgressNotesWithDateReviewMeta = (visibleText = '', reviewMeta = {}) => {
             const cleanedVisibleText = String(visibleText || '').replace(/(?:\r?\n)?\[\[SYS_DATE_REVIEW_META=[^\]]+\]\]\s*$/, '').trimEnd();
             const normalizedMeta = normalizeDateReviewMeta(reviewMeta);
@@ -8642,7 +8656,8 @@
 
             const flaggedFindingCodes = Object.keys(normalizedMeta.findingsDatesDefaulted);
             if (flaggedFindingCodes.length) {
-                summaryLines.push(`${flaggedFindingCodes.length} finding date${flaggedFindingCodes.length === 1 ? '' : 's'} defaulted to created-on date. Update the amber-highlighted finding date field${flaggedFindingCodes.length === 1 ? '' : 's'} to clear the review flag.`);
+                const flaggedLabels = flaggedFindingCodes.map((code) => getFindingLabelByCode(code)).join(', ');
+                summaryLines.push(`${flaggedFindingCodes.length} finding date${flaggedFindingCodes.length === 1 ? '' : 's'} defaulted to created-on date. Update the amber-highlighted finding date field${flaggedFindingCodes.length === 1 ? '' : 's'} to clear the review flag. ${flaggedLabels ? `Flagged: ${flaggedLabels}.` : ''}`);
             }
 
             return summaryLines;
@@ -8740,6 +8755,44 @@
             }
         }
 
+        function applyAmberFindingContextHighlight(input, shouldHighlight) {
+            if (!input) return;
+            const contextCard = input.closest('.border.border-slate-200.rounded.p-2.bg-white') || input.closest('.border');
+            if (!contextCard) return;
+
+            if (shouldHighlight) {
+                contextCard.style.backgroundColor = '#fffbeb';
+                contextCard.style.borderColor = '#f59e0b';
+                contextCard.style.boxShadow = '0 0 0 1px rgba(245, 158, 11, 0.2)';
+                return;
+            }
+
+            contextCard.style.backgroundColor = '';
+            contextCard.style.borderColor = '';
+            contextCard.style.boxShadow = '';
+        }
+
+        globalThis.focusVisitDateField = () => {
+            const input = document.getElementById('f-date');
+            if (!input) return;
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            input.focus();
+        };
+
+        globalThis.focusFindingDateField = (code = '') => {
+            const input = getFindingDateInputByCode(code);
+            if (!input) {
+                showToast(`Unable to locate finding date field for ${String(code || 'the selected code')}`);
+                return;
+            }
+            const details = input.closest('details');
+            if (details) details.open = true;
+            input.disabled = false;
+            input.style.display = 'inline-block';
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            input.focus();
+        };
+
         function syncDateReviewUI() {
             const reviewMeta = getFormDateReviewMeta();
             const visitDateInput = document.getElementById('f-date');
@@ -8773,7 +8826,15 @@
             applyAmberDateHighlight(visitDateInput, Boolean(reviewMeta.visitDateDefaultedTo));
             document.querySelectorAll('input.findings-date').forEach((input) => {
                 const code = String(input.dataset.code || '').trim();
-                applyAmberDateHighlight(input, Boolean(reviewMeta.findingsDatesDefaulted[code]));
+                const isFlagged = Boolean(reviewMeta.findingsDatesDefaulted[code]);
+                applyAmberDateHighlight(input, isFlagged);
+                applyAmberFindingContextHighlight(input, isFlagged);
+            });
+
+            Object.keys(reviewMeta.findingsDatesDefaulted).forEach((code) => {
+                const findingDateInput = getFindingDateInputByCode(code);
+                const details = findingDateInput?.closest('details');
+                if (details) details.open = true;
             });
 
             const banner = document.getElementById('date-review-banner');
@@ -8787,7 +8848,18 @@
             }
 
             banner.classList.remove('hidden');
-            banner.innerHTML = summaryLines.map(line => `<div>${escapeInlineHtml(line)}</div>`).join('');
+            const findingActions = Object.keys(reviewMeta.findingsDatesDefaulted).map((code) => `
+                <button type="button" data-finding-code="${escapeInlineHtml(code)}" onclick="globalThis.focusFindingDateField(this.dataset.findingCode)" class="px-2 py-1 rounded border border-amber-300 bg-amber-100 text-amber-900 text-[11px] font-semibold hover:bg-amber-200">
+                    ${escapeInlineHtml(getFindingLabelByCode(code))}
+                </button>
+            `).join('');
+            const visitAction = reviewMeta.visitDateDefaultedTo
+                ? '<button type="button" onclick="globalThis.focusVisitDateField()" class="px-2 py-1 rounded border border-amber-300 bg-amber-100 text-amber-900 text-[11px] font-semibold hover:bg-amber-200">Visit Date</button>'
+                : '';
+            const actionRow = (visitAction || findingActions)
+                ? `<div class="mt-2 flex flex-wrap gap-1.5">${visitAction}${findingActions}</div>`
+                : '';
+            banner.innerHTML = summaryLines.map(line => `<div>${escapeInlineHtml(line)}</div>`).join('') + actionRow;
         }
 
         const normalizeImportedDateValue = (value) => {
