@@ -323,8 +323,33 @@ class DataService {
         const fields = item.fields;
         const rawPlan = fields.Plan || '';
         
-        // Parse JSON fields
-        const findingsData = fields.FindingsData ? JSON.parse(fields.FindingsData) : { codes: [], values: {} };
+        // Parse JSON fields from both legacy ({ codes, values }) and current ({ code: value }) formats.
+        let parsedFindingsData = {};
+        try {
+            parsedFindingsData = fields.FindingsData ? JSON.parse(fields.FindingsData) : {};
+        } catch {
+            parsedFindingsData = {};
+        }
+
+        const findingsValues = parsedFindingsData && typeof parsedFindingsData.values === 'object'
+            ? parsedFindingsData.values
+            : (parsedFindingsData && typeof parsedFindingsData === 'object' && !Array.isArray(parsedFindingsData)
+                ? parsedFindingsData
+                : {});
+
+        let findingsDates = {};
+        try {
+            findingsDates = fields.FindingsDates ? JSON.parse(fields.FindingsDates) : {};
+        } catch {
+            findingsDates = {};
+        }
+
+        const findingsCodes = Array.from(new Set([
+            ...((parsedFindingsData && Array.isArray(parsedFindingsData.codes)) ? parsedFindingsData.codes : []),
+            ...(String(fields.FindingsCodes || '').split(',').map((code) => code.trim()).filter(Boolean)),
+            ...Object.keys(findingsValues || {}),
+            ...Object.keys(findingsDates || {})
+        ].map((code) => String(code || '').trim()).filter(Boolean)));
         
         return {
             id: item.id,
@@ -335,8 +360,9 @@ class DataService {
             dob: fields.DOB || '',
             mrn: fields.MRN || '',
             hospital: fields.Hospital || '',
-            findingsCodes: findingsData.codes || [],
-            findingsValues: findingsData.values || {},
+            findingsCodes,
+            findingsValues,
+            findingsDates,
             findingsText: fields.FindingsText || '',
             plan: stripProcedureDateToken(rawPlan),
             procedureDate: extractProcedureDateToken(rawPlan),
@@ -368,7 +394,11 @@ class DataService {
             DOB: patient.dob || '',
             MRN: patient.mrn || '',
             Hospital: patient.hospital || '',
+            FindingsCodes: Array.isArray(patient.findingsCodes)
+                ? patient.findingsCodes.map((code) => String(code || '').trim()).filter(Boolean).join(',')
+                : '',
             FindingsData: findingsData,
+            FindingsDates: patient.findingsDates ? JSON.stringify(patient.findingsDates) : '{}',
             FindingsText: patient.findingsText || '',
             Plan: composePlanWithProcedureDateToken(patient.plan || '', patient.procedureDate || ''),
             SupervisingMD: patient.supervisingMd || '',

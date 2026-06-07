@@ -310,6 +310,8 @@ window.savePatient = async (e) => {
     const findingsCodes = codesInput.value ? codesInput.value.split(',').map(c => c.trim()).filter(c => c) : [];
     const valuesInput = document.getElementById('f-findings-values');
     const findingsValues = valuesInput.value ? JSON.parse(valuesInput.value) : {};
+    const datesInput = document.getElementById('f-findings-dates');
+    const findingsDates = datesInput.value ? JSON.parse(datesInput.value) : {};
     
     const data = {
         room: document.getElementById('f-room').value,
@@ -320,6 +322,7 @@ window.savePatient = async (e) => {
         hospital: document.getElementById('f-hospital').value,
         findingsCodes: findingsCodes,
         findingsValues: findingsValues,
+        findingsDates: findingsDates,
         findingsText: document.getElementById('f-findings-text').value,
         plan: document.getElementById('f-plan').value,
         supervisingMd: document.getElementById('f-md').value,

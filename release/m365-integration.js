@@ -428,6 +428,25 @@ async function fetchPatients(dateFilter = null) {
         
         const patients = response.value.map(item => {
             const rawPlan = item.fields.Plan || '';
+            const findingsValues = (() => {
+                try {
+                    return item.fields.FindingsData ? JSON.parse(item.fields.FindingsData) : {};
+                } catch {
+                    return {};
+                }
+            })();
+            const findingsDates = (() => {
+                try {
+                    return item.fields.FindingsDates ? JSON.parse(item.fields.FindingsDates) : {};
+                } catch {
+                    return {};
+                }
+            })();
+            const findingsCodes = Array.from(new Set([
+                ...(item.fields.FindingsCodes ? item.fields.FindingsCodes.split(',').map(c => c.trim()) : []),
+                ...Object.keys(findingsValues || {}),
+                ...Object.keys(findingsDates || {})
+            ].map((code) => String(code || '').trim()).filter(Boolean)));
             return ({
             id: item.id,
             room: item.fields.Room || '',
@@ -436,8 +455,9 @@ async function fetchPatients(dateFilter = null) {
             dob: item.fields.DOB || '',
             mrn: item.fields.MRN || '',
             hospital: item.fields.Hospital || '',
-            findingsCodes: item.fields.FindingsCodes ? item.fields.FindingsCodes.split(',').map(c => c.trim()) : [],
-            findingsValues: item.fields.FindingsData ? JSON.parse(item.fields.FindingsData) : {},
+            findingsCodes,
+            findingsValues,
+            findingsDates,
             findingsText: item.fields.FindingsText || '',
             plan: stripProcedureDateToken(rawPlan),
             procedureDate: extractProcedureDateToken(rawPlan),
@@ -484,6 +504,7 @@ async function savePatient(patientData) {
         VisitKey: visitKey,  // Compound unique key
         FindingsCodes: patientData.findingsCodes ? patientData.findingsCodes.join(',') : '',
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
+        FindingsDates: patientData.findingsDates ? JSON.stringify(patientData.findingsDates) : '{}',
         FindingsText: patientData.findingsText || '',
         Plan: normalizedPlan,
         SupervisingMD: patientData.supervisingMd || '',

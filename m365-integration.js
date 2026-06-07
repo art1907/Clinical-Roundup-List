@@ -867,6 +867,13 @@ async function api_fetchPatients(dateFilter = null) {
             const rawPlan = item.fields.Plan || '';
             const rawPriority = item.fields.Priority ?? item.fields.Stat ?? item.fields.STAT ?? item.fields.StatPriority ?? item.fields.IsSTAT;
             const statValue = parseBoolish(rawPriority);
+            const findingsValues = safeJsonParse(item.fields.FindingsData, {}, `FindingsData for item ${item.id}`);
+            const findingsDates = safeJsonParse(item.fields.FindingsDates, {}, `FindingsDates for item ${item.id}`);
+            const findingsCodes = Array.from(new Set([
+                ...(item.fields.FindingsCodes ? item.fields.FindingsCodes.split(',').map(c => c.trim()) : []),
+                ...Object.keys(findingsValues || {}),
+                ...Object.keys(findingsDates || {})
+            ].map((code) => String(code || '').trim()).filter(Boolean)));
             return ({
             // Keep STAT compatibility across app variants (stat and priority)
             stat: statValue,
@@ -881,11 +888,9 @@ async function api_fetchPatients(dateFilter = null) {
             hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
             visitTime: item.fields[VISIT_TIME_FIELD] || item.fields.Visit_x0020_Time || '',
             visitKey: item.fields.VisitKey || '',
-            findingsValues: safeJsonParse(item.fields.FindingsData, {}, `FindingsData for item ${item.id}`),
-            findingsDates: safeJsonParse(item.fields.FindingsDates, {}, `FindingsDates for item ${item.id}`),
-            findingsCodes: item.fields.FindingsCodes
-                ? item.fields.FindingsCodes.split(',').map(c => c.trim())
-                : Object.keys(safeJsonParse(item.fields.FindingsData, {}, `FindingsData codes for item ${item.id}`)),
+            findingsValues,
+            findingsDates,
+            findingsCodes,
             findingsText: item.fields.FindingsText || '',
             plan: stripProcedureDateToken(rawPlan),
             procedureDate: extractProcedureDateToken(rawPlan),
@@ -1040,6 +1045,9 @@ async function api_savePatient(patientData) {
         Hospital_x0028_s_x0029_: patientData.hospital || '',
         VisitKey: visitKeyValue,
         [VISIT_TIME_FIELD]: visitTimeValue,
+        FindingsCodes: Array.isArray(patientData.findingsCodes)
+            ? patientData.findingsCodes.map((code) => String(code || '').trim()).filter(Boolean).join(',')
+            : '',
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
         FindingsDates: patientData.findingsDates ? JSON.stringify(patientData.findingsDates) : '{}',
         FindingsText: patientData.findingsText || '',
