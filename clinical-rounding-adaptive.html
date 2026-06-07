@@ -7849,6 +7849,9 @@
                         const isCustomCode = FINDINGS_CUSTOM_CODES.has(cb.value);
                         const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
                         const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
+                            if (dateInput) {
+                                delete dateInput.dataset.userDateConfirmed;
+                            }
                         if (isCustomCode && customValue) {
                             populateCustomFindingFields(cb.value, customValue);
                         } else if (valueInput) {
@@ -8073,6 +8076,7 @@
                 if (dateInput) {
                     dateInput.value = '';
                     dateInput.disabled = true;
+                    delete dateInput.dataset.userDateConfirmed;
                 }
             });
 
@@ -8877,7 +8881,8 @@
                     return;
                 }
                 const currentValue = String(findingDateInput?.value || '').trim();
-                if (isValidIsoDateString(currentValue) && currentValue !== reviewMeta.findingsDatesDefaulted[code]) {
+                const userConfirmedDate = findingDateInput?.dataset.userDateConfirmed === 'true';
+                if (isValidIsoDateString(currentValue) && (currentValue !== reviewMeta.findingsDatesDefaulted[code] || userConfirmedDate)) {
                     delete reviewMeta.findingsDatesDefaulted[code];
                 }
             });
@@ -12395,7 +12400,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                 input.addEventListener('focus', (e) => autoResizeTextarea(e.target));
             });
             document.querySelectorAll('input.findings-date').forEach(input => {
-                input.addEventListener('change', updateSelectedCodes);
+                input.addEventListener('change', (event) => {
+                    event.target.dataset.userDateConfirmed = 'true';
+                    updateSelectedCodes();
+                });
             });
             document.getElementById('f-date')?.addEventListener('change', syncDateReviewUI);
             document.querySelectorAll('.findings-custom-input').forEach(input => {
