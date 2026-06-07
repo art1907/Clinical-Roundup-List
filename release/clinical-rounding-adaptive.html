@@ -6660,6 +6660,22 @@
             const findingsSummary = typeof getFindingsDisplay === 'function'
                 ? String(getFindingsDisplay(sourcePatient) || '').trim()
                 : '';
+            const findingsDatesMap = sourcePatient.findingsDates && typeof sourcePatient.findingsDates === 'object'
+                ? sourcePatient.findingsDates
+                : {};
+            const findingsDateLines = Object.entries(findingsDatesMap)
+                .filter(([, value]) => String(value || '').trim())
+                .map(([code, value]) => {
+                    const checkbox = document.querySelector(`.findings-checkbox[value="${code}"]`);
+                    const labelText = checkbox?.closest('div')?.querySelector('span.flex-1')?.textContent;
+                    const fallbackLabel = String(code || '').replaceAll(/[-_]+/g, ' ').trim();
+                    const label = String(labelText || fallbackLabel || code).trim();
+                    return `${label}: ${String(value || '').trim()}`;
+                });
+            const findingsWithDates = [
+                findingsSummary === '-' ? '' : findingsSummary,
+                findingsDateLines.length ? `Dates: ${findingsDateLines.join(' | ')}` : ''
+            ].filter(Boolean).join('\n');
 
             addEntry('Room', sourcePatient.room);
             addEntry('Hospital', sourcePatient.hospital);
@@ -6667,7 +6683,7 @@
             addEntry('Procedure Date', getProcedureDateFromRecord(sourcePatient));
             addEntry('Plan', getPlanTextWithoutProcedureDate(sourcePatient.plan));
             addEntry('Status', sourcePatient.procedureStatus);
-            addEntry('Findings', findingsSummary === '-' ? '' : findingsSummary);
+            addEntry('Findings', findingsWithDates);
             addEntry('Progress Notes', sourcePatient.progressNotes || '');
             addEntry('Pending', sourcePatient.pending);
             addEntry('Follow Up', sourcePatient.followUp);
@@ -6680,12 +6696,15 @@
                 return;
             }
 
-            body.innerHTML = entries.map((entry) => `
-                <div class="rounded border border-emerald-200 bg-white px-2 py-1.5">
+            body.innerHTML = entries.map((entry) => {
+                const shouldExpand = entry.label === 'Findings' && String(entry.value || '').length > 180;
+                return `
+                <div class="rounded border border-emerald-200 bg-white px-2 py-1.5 self-start ${shouldExpand ? 'sm:col-span-2' : ''}">
                     <div class="text-[10px] font-bold uppercase tracking-wide text-emerald-800">${escapeInlineHtml(entry.label)}</div>
                     <div class="text-[11px] leading-5 text-emerald-900 whitespace-pre-wrap">${escapeInlineHtml(entry.value)}</div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
 
             panel.classList.remove('hidden');
         }
@@ -10775,7 +10794,7 @@
                 <div id="followup-carryforward-summary" class="hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
                     <div class="font-bold uppercase tracking-wide">Follow-up source data</div>
                     <div class="mt-1 text-[11px] text-emerald-800">Display only. Enter new values in the editable fields below.</div>
-                    <div id="followup-carryforward-summary-body" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+                    <div id="followup-carryforward-summary-body" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 items-start auto-rows-min"></div>
                 </div>
 
                 <!-- Findings -->
