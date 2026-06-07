@@ -51,6 +51,7 @@ app.http('backfeed', {
                 mrn: previousVisit.mrn,
                 hospital: previousVisit.hospital,
                 plan: previousVisit.plan,
+                procedureDate: previousVisit.procedureDate || '',
                 supervisingMd: previousVisit.supervisingMd,
                 priority: previousVisit.priority,
                 procedureStatus: previousVisit.procedureStatus,

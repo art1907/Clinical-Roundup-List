@@ -5472,6 +5472,7 @@
                 cptprimary: 'cptPrimary',
                 icd: 'icdPrimary',
                 icdprimary: 'icdPrimary',
+                proceduredate: 'procedureDate',
                 chargecodes: 'chargeCodesSecondary',
                 chargecodessecondary: 'chargeCodesSecondary',
                 archived: 'archived'
@@ -5479,7 +5480,7 @@
 
             const knownFields = new Set([
                 'id', 'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
-                'pending', 'followUp', 'stat', 'priority', 'procedureStatus', 'cptPrimary', 'icdPrimary',
+                'pending', 'followUp', 'stat', 'priority', 'procedureStatus', 'procedureDate', 'cptPrimary', 'icdPrimary',
                 'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues', 'archived',
                 ...patients.flatMap((p) => Object.keys(p || {}))
             ]);
@@ -6578,10 +6579,31 @@
             });
         }
 
+        function normalizeProcedureDate(value) {
+            const normalized = String(value || '').trim();
+            return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
+        }
+
+        function getProcedureDateFromPlan(planValue = '') {
+            const match = String(planValue || '').match(/\[\[PROC_DATE:(\d{4}-\d{2}-\d{2})\]\]/i);
+            return match ? normalizeProcedureDate(match[1]) : '';
+        }
+
+        function getPlanTextWithoutProcedureDate(planValue = '') {
+            return String(planValue || '')
+                .replace(/\s*\[\[PROC_DATE:\d{4}-\d{2}-\d{2}\]\]\s*/gi, ' ')
+                .replace(/[ \t]+\n/g, '\n')
+                .trim();
+        }
+
+        function getProcedureDateFromRecord(patient = {}) {
+            return normalizeProcedureDate(patient.procedureDate || getProcedureDateFromPlan(patient.plan || ''));
+        }
+
         function lockBackfilledFields(locked) {
             const lockedIds = [
                 'f-room', 'f-date', 'f-hospital', 'f-name', 'f-dob', 'f-mrn',
-                'f-md', 'f-plan', 'f-proc-status', 'f-priority', 'f-cpt-primary',
+                'f-md', 'f-plan', 'f-procedure-date', 'f-proc-status', 'f-priority', 'f-cpt-primary',
                 'f-icd-primary', 'f-charge-codes-secondary', 'f-fu', 'f-pending'
             ];
             lockedIds.forEach((id) => {
@@ -6642,7 +6664,8 @@
             addEntry('Room', sourcePatient.room);
             addEntry('Hospital', sourcePatient.hospital);
             addEntry('Provider', sourcePatient.supervisingMd);
-            addEntry('Plan', sourcePatient.plan);
+            addEntry('Procedure Date', getProcedureDateFromRecord(sourcePatient));
+            addEntry('Plan', getPlanTextWithoutProcedureDate(sourcePatient.plan));
             addEntry('Status', sourcePatient.procedureStatus);
             addEntry('Findings', findingsSummary === '-' ? '' : findingsSummary);
             addEntry('Progress Notes', sourcePatient.progressNotes || '');
@@ -6791,10 +6814,19 @@
                     AuditLogger.logDataAccess(auditUser, id, 'view');
                 }
                 if (p) {
+                    const procedureDateFromRecord = getProcedureDateFromRecord(p);
+                    const normalizedPlan = getPlanTextWithoutProcedureDate(p.plan || '');
                     ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'progress-notes', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
-                        if (el) el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'progress-notes': 'progressNotes', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
+                        if (!el) return;
+                        if (field === 'plan') {
+                            el.value = normalizedPlan;
+                            return;
+                        }
+                        el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'progress-notes': 'progressNotes', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
+                    const procedureDateInput = document.getElementById('f-procedure-date');
+                    if (procedureDateInput) procedureDateInput.value = procedureDateFromRecord;
                     if (dateInput) dateInput.value = p.date || "";
                     if (visitTimeInput) visitTimeInput.value = p.visitTime || '';
                     if (visitKeyInput) visitKeyInput.value = p.visitKey || '';
@@ -7062,6 +7094,7 @@
 
             // New follow-up values should be entered fresh.
             setTextValue('f-plan', '');
+            setTextValue('f-procedure-date', '');
             setTextValue('f-findings-text', '');
             setTextValue('f-progress-notes', '');
             setTextValue('f-pending', '');
@@ -7243,6 +7276,7 @@
                 mrn: document.getElementById('f-mrn')?.value || '',
                 hospital: document.getElementById('f-hospital')?.value || '',
                 plan: document.getElementById('f-plan')?.value || '',
+                procedureDate: document.getElementById('f-procedure-date')?.value || '',
                 supervisingMd: document.getElementById('f-md')?.value || '',
                 pending: document.getElementById('f-pending')?.value || '',
                 followUp: document.getElementById('f-fu')?.value || '',
@@ -8168,6 +8202,8 @@
                     .map(v => v.trim())
                     .filter(Boolean);
             };
+            const normalizedProcedureDate = normalizeProcedureDate(document.getElementById('f-procedure-date')?.value || '');
+            const normalizedPlanInput = getPlanTextWithoutProcedureDate(document.getElementById('f-plan').value);
             
             const data = {
                 room: document.getElementById('f-room').value, 
@@ -8182,7 +8218,8 @@
                 findingsValues: findingsValues,
                 findingsDates: findingsDates,
                 findingsText: document.getElementById('f-findings-text').value,
-                plan: document.getElementById('f-plan').value, 
+                plan: normalizedPlanInput,
+                procedureDate: normalizedProcedureDate,
                 progressNotes: document.getElementById('f-progress-notes').value,
                 supervisingMd: document.getElementById('f-md').value,
                 pending: document.getElementById('f-pending').value, 
@@ -8246,7 +8283,7 @@
                 // User-visible fields only — excludes system/meta fields that change on every save.
                 const USER_DIFF_FIELDS = [
                     'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
-                    'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
+                    'pending', 'followUp', 'procedureStatus', 'procedureDate', 'cptPrimary', 'icdPrimary',
                     'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues',
                     'findingsDates', 'stat', 'priority'
                 ];
@@ -8700,7 +8737,6 @@
             
             if (tab === 'calendar') {
                 document.getElementById('calendar-section')?.classList.remove('hidden');
-                renderCalendar();
             } else if (tab === 'oncall') {
                 document.getElementById('oncall-section')?.classList.remove('hidden');
                 renderOnCallSchedule();
@@ -8793,7 +8829,7 @@
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const holidays = getHolidaysForDate(year, month + 1, d);
                 const shift = onCallSchedule.find(s => s.date === dateStr);
-                const dayPatients = patients.filter(p => p.date === dateStr && !p.archived);
+                const dayPatients = getLatestPatientRows(patients.filter(p => p.date === dateStr && !p.archived));
                 const statPts = dayPatients.filter(p => p.stat === true || p.stat === 'true');
                 const procPts = dayPatients.filter(p => isSurgicalCase(p) && p.stat !== true && p.stat !== 'true');
                 const otherCount = dayPatients.filter(p => !isSurgicalCase(p) && p.stat !== true && p.stat !== 'true').length;
@@ -9072,7 +9108,9 @@
                 if (type === 'stat') {
                     f = f.filter(p => p.stat === true || p.stat === 'true');
                 } else if (type === 'procedures') {
-                    f = f.filter(p => isSurgicalCase(p));
+                    if (currentTab !== 'procedures') {
+                        f = f.filter(p => isSurgicalCase(p));
+                    }
                 } else if (type === 'inprogress') {
                     f = f.filter(p => isActiveSurgicalWorkflowStatus(getPatientStatus(p)));
                 } else if (type === 'pending') {
@@ -11039,7 +11077,11 @@
                     <textarea id="f-findings-text" placeholder="Additional findings" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
                 </div>
 
-                <textarea id="f-plan" placeholder="Plan" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
+                <div class="space-y-2">
+                    <label for="f-procedure-date" class="text-xs font-bold text-slate-600">Intended Procedure Date</label>
+                    <input type="date" id="f-procedure-date" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm">
+                    <textarea id="f-plan" placeholder="Plan" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
+                </div>
 
                 <div>
                     <textarea id="f-progress-notes" placeholder="Progress Notes" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>

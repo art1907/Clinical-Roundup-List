@@ -810,6 +810,32 @@ async function api_fetchAuditLogs(filters = {}) {
 // PATIENTS
 // -----------------------------------------------------------------------------
 
+const PROC_DATE_TOKEN_REGEX = /\[\[PROC_DATE:(\d{4}-\d{2}-\d{2})\]\]/i;
+
+function normalizeProcedureDateToken(value) {
+    const normalized = String(value || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
+}
+
+function extractProcedureDateToken(planValue = '') {
+    const match = String(planValue || '').match(PROC_DATE_TOKEN_REGEX);
+    return match ? normalizeProcedureDateToken(match[1]) : '';
+}
+
+function stripProcedureDateToken(planValue = '') {
+    return String(planValue || '')
+        .replace(/\s*\[\[PROC_DATE:\d{4}-\d{2}-\d{2}\]\]\s*/gi, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim();
+}
+
+function composePlanWithProcedureDateToken(planValue = '', procedureDate = '') {
+    const cleanPlan = stripProcedureDateToken(planValue);
+    const normalizedDate = normalizeProcedureDateToken(procedureDate);
+    if (!normalizedDate) return cleanPlan;
+    return cleanPlan ? `${cleanPlan}\n[[PROC_DATE:${normalizedDate}]]` : `[[PROC_DATE:${normalizedDate}]]`;
+}
+
 async function api_fetchPatients(dateFilter = null) {
     try {
         const listId = M365_CONFIG.sharepoint.lists.patients;
@@ -838,6 +864,7 @@ async function api_fetchPatients(dateFilter = null) {
         console.log(`✅ Fetched ${allItems.length} patient records (all pages)`);
 
         const patients = allItems.map(item => {
+            const rawPlan = item.fields.Plan || '';
             const rawPriority = item.fields.Priority ?? item.fields.Stat ?? item.fields.STAT ?? item.fields.StatPriority ?? item.fields.IsSTAT;
             const statValue = parseBoolish(rawPriority);
             return ({
@@ -860,7 +887,8 @@ async function api_fetchPatients(dateFilter = null) {
                 ? item.fields.FindingsCodes.split(',').map(c => c.trim())
                 : Object.keys(safeJsonParse(item.fields.FindingsData, {}, `FindingsData codes for item ${item.id}`)),
             findingsText: item.fields.FindingsText || '',
-            plan: item.fields.Plan || '',
+            plan: stripProcedureDateToken(rawPlan),
+            procedureDate: extractProcedureDateToken(rawPlan),
             progressNotes: item.fields.ProgressNotes || item.fields.Progress_x0020_Notes || '',
             supervisingMd: item.fields.SupervisingMD || '',
             pending: item.fields.Pending || '',
@@ -1015,7 +1043,7 @@ async function api_savePatient(patientData) {
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
         FindingsDates: patientData.findingsDates ? JSON.stringify(patientData.findingsDates) : '{}',
         FindingsText: patientData.findingsText || '',
-        Plan: patientData.plan || '',
+        Plan: composePlanWithProcedureDateToken(patientData.plan || '', patientData.procedureDate || ''),
         ProgressNotes: patientData.progressNotes || '',
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
@@ -1272,6 +1300,7 @@ async function api_getBackfeedData(mrn) {
         
         if (response.value && response.value.length > 0) {
             const item = response.value[0];
+            const rawPlan = item.fields.Plan || '';
             return {
                 id: item.id,
                 room: item.fields.Room || '',
@@ -1279,7 +1308,8 @@ async function api_getBackfeedData(mrn) {
                 dob: item.fields.DateofBirth || item.fields.DOB || '',
                 mrn: item.fields.MRN || '',
                 hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
-                plan: item.fields.Plan || '',
+                plan: stripProcedureDateToken(rawPlan),
+                procedureDate: extractProcedureDateToken(rawPlan),
                 supervisingMd: item.fields.SupervisingMD || '',
                 cptPrimary: item.fields.CPTPrimary || '',
                 icdPrimary: item.fields.ICDPrimary || '',

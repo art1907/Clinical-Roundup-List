@@ -388,6 +388,30 @@ async function graphRequest(endpoint, method = 'GET', body = null) {
 // PATIENTS
 // -----------------------------------------------------------------------------
 
+function normalizeProcedureDateToken(value) {
+    const normalized = String(value || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
+}
+
+function extractProcedureDateToken(planValue = '') {
+    const match = String(planValue || '').match(/\[\[PROC_DATE:(\d{4}-\d{2}-\d{2})\]\]/i);
+    return match ? normalizeProcedureDateToken(match[1]) : '';
+}
+
+function stripProcedureDateToken(planValue = '') {
+    return String(planValue || '')
+        .replace(/\s*\[\[PROC_DATE:\d{4}-\d{2}-\d{2}\]\]\s*/gi, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim();
+}
+
+function composePlanWithProcedureDateToken(planValue = '', procedureDate = '') {
+    const cleanPlan = stripProcedureDateToken(planValue);
+    const normalizedDate = normalizeProcedureDateToken(procedureDate);
+    if (!normalizedDate) return cleanPlan;
+    return cleanPlan ? `${cleanPlan}\n[[PROC_DATE:${normalizedDate}]]` : `[[PROC_DATE:${normalizedDate}]]`;
+}
+
 async function fetchPatients(dateFilter = null) {
     try {
         const listId = M365_CONFIG.sharepoint.lists.patients;
@@ -402,7 +426,9 @@ async function fetchPatients(dateFilter = null) {
         
         const response = await graphRequest(endpoint);
         
-        const patients = response.value.map(item => ({
+        const patients = response.value.map(item => {
+            const rawPlan = item.fields.Plan || '';
+            return ({
             id: item.id,
             room: item.fields.Room || '',
             date: item.fields.Date || '',
@@ -413,7 +439,8 @@ async function fetchPatients(dateFilter = null) {
             findingsCodes: item.fields.FindingsCodes ? item.fields.FindingsCodes.split(',').map(c => c.trim()) : [],
             findingsValues: item.fields.FindingsData ? JSON.parse(item.fields.FindingsData) : {},
             findingsText: item.fields.FindingsText || '',
-            plan: item.fields.Plan || '',
+            plan: stripProcedureDateToken(rawPlan),
+            procedureDate: extractProcedureDateToken(rawPlan),
             supervisingMd: item.fields.SupervisingMD || '',
             pending: item.fields.Pending || '',
             followUp: item.fields.FollowUp || '',
@@ -424,7 +451,8 @@ async function fetchPatients(dateFilter = null) {
             chargeCodesSecondary: item.fields.ChargeCodesSecondary ? JSON.parse(item.fields.ChargeCodesSecondary) : [],
             archived: item.fields.Archived === 'Yes',
             lastUpdated: item.fields.Modified || item.fields.Created
-        }));
+            });
+        });
         
         // Cache in localStorage
         cacheData('patients', patients);
@@ -445,6 +473,7 @@ async function savePatient(patientData) {
     const visitKey = `${patientData.mrn}|${patientData.date}`;
     
     // Build SharePoint list item fields
+    const normalizedPlan = composePlanWithProcedureDateToken(patientData.plan || '', patientData.procedureDate || '');
     const fields = {
         Room: patientData.room || '',
         Date: patientData.date || '',
@@ -456,7 +485,7 @@ async function savePatient(patientData) {
         FindingsCodes: patientData.findingsCodes ? patientData.findingsCodes.join(',') : '',
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
         FindingsText: patientData.findingsText || '',
-        Plan: patientData.plan || '',
+        Plan: normalizedPlan,
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
@@ -534,6 +563,7 @@ async function getBackfeedData(mrn) {
         
         if (response.value && response.value.length > 0) {
             const item = response.value[0];
+            const rawPlan = item.fields.Plan || '';
             return {
                 id: item.id,
                 room: item.fields.Room || '',
@@ -541,7 +571,8 @@ async function getBackfeedData(mrn) {
                 dob: item.fields.DOB || '',
                 mrn: item.fields.MRN || '',
                 hospital: item.fields.Hospital || '',
-                plan: item.fields.Plan || '',
+                plan: stripProcedureDateToken(rawPlan),
+                procedureDate: extractProcedureDateToken(rawPlan),
                 supervisingMd: item.fields.SupervisingMD || '',
                 cptPrimary: item.fields.CPTPrimary || '',
                 icdPrimary: item.fields.ICDPrimary || '',

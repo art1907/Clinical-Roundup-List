@@ -7,6 +7,30 @@ const { Client } = require('@microsoft/microsoft-graph-client');
 const { DefaultAzureCredential } = require('@azure/identity');
 require('isomorphic-fetch');
 
+function normalizeProcedureDateToken(value) {
+    const normalized = String(value || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
+}
+
+function extractProcedureDateToken(planValue = '') {
+    const match = String(planValue || '').match(/\[\[PROC_DATE:(\d{4}-\d{2}-\d{2})\]\]/i);
+    return match ? normalizeProcedureDateToken(match[1]) : '';
+}
+
+function stripProcedureDateToken(planValue = '') {
+    return String(planValue || '')
+        .replace(/\s*\[\[PROC_DATE:\d{4}-\d{2}-\d{2}\]\]\s*/gi, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim();
+}
+
+function composePlanWithProcedureDateToken(planValue = '', procedureDate = '') {
+    const cleanPlan = stripProcedureDateToken(planValue);
+    const normalizedDate = normalizeProcedureDateToken(procedureDate);
+    if (!normalizedDate) return cleanPlan;
+    return cleanPlan ? `${cleanPlan}\n[[PROC_DATE:${normalizedDate}]]` : `[[PROC_DATE:${normalizedDate}]]`;
+}
+
 class DataService {
     constructor() {
         this.credential = new DefaultAzureCredential();
@@ -297,6 +321,7 @@ class DataService {
     // Helper: Map SharePoint list item to patient object
     mapListItemToPatient(item) {
         const fields = item.fields;
+        const rawPlan = fields.Plan || '';
         
         // Parse JSON fields
         const findingsData = fields.FindingsData ? JSON.parse(fields.FindingsData) : { codes: [], values: {} };
@@ -313,7 +338,8 @@ class DataService {
             findingsCodes: findingsData.codes || [],
             findingsValues: findingsData.values || {},
             findingsText: fields.FindingsText || '',
-            plan: fields.Plan || '',
+            plan: stripProcedureDateToken(rawPlan),
+            procedureDate: extractProcedureDateToken(rawPlan),
             supervisingMd: fields.SupervisingMD || '',
             pending: fields.Pending || '',
             followUp: fields.FollowUp || '',
@@ -344,7 +370,7 @@ class DataService {
             Hospital: patient.hospital || '',
             FindingsData: findingsData,
             FindingsText: patient.findingsText || '',
-            Plan: patient.plan || '',
+            Plan: composePlanWithProcedureDateToken(patient.plan || '', patient.procedureDate || ''),
             SupervisingMD: patient.supervisingMd || '',
             Pending: patient.pending || '',
             FollowUp: patient.followUp || '',
