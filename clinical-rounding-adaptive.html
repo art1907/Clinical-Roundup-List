@@ -3375,6 +3375,29 @@
             const segments = getFindingSegments(patient);
             return segments.length ? segments.join(' | ') : '-';
         }
+
+        function formatFindingsDateSummaryValue(rawDate = '') {
+            const value = String(rawDate || '').trim();
+            if (!value) return '';
+            const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return value;
+            return `${match[2]}/${match[3]}/${match[1]}`;
+        }
+
+        function getFindingsDateSummary(patient, maxDates = 2) {
+            const findingsDates = patient && typeof patient === 'object' && patient.findingsDates && typeof patient.findingsDates === 'object'
+                ? patient.findingsDates
+                : {};
+            const uniqueDates = Array.from(new Set(
+                Object.values(findingsDates)
+                    .map((value) => formatFindingsDateSummaryValue(value))
+                    .filter(Boolean)
+            ));
+            if (!uniqueDates.length) return '';
+            const shown = uniqueDates.slice(0, maxDates);
+            const extra = uniqueDates.length - shown.length;
+            return `${shown.join(' • ')}${extra > 0 ? ` • +${extra} more` : ''}`;
+        }
         
         console.log('Device:', Device.type, `${Device.width}x${Device.height}`);
 
@@ -7077,7 +7100,8 @@
                     }
                     const findingsDisplay = getFindingsDisplay(v);
                     const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
-                    return `<div class="px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[10px] text-slate-500 truncate flex-1 min-w-0">${esc(v.hospital || '')}</span>\n                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 pl-20 text-[10px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 110))}${findingsSummary.length > 110 ? '...' : ''}</div>` : ''}\n                    </div>`;
+                    const findingsDateSummary = getFindingsDateSummary(v, 2);
+                    return `<div class="px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[10px] text-slate-500 truncate flex-1 min-w-0">${esc(v.hospital || '')}</span>\n                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 pl-20 text-[10px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 110))}${findingsSummary.length > 110 ? '...' : ''}</div>` : ''}\n                        ${findingsDateSummary ? `<div class="mt-0.5 pl-20 text-[10px] text-emerald-700 truncate">Dates: ${esc(findingsDateSummary)}</div>` : ''}\n                    </div>`;
                 }).join('');
                 return `<div class="mt-2 border-t border-blue-100 pt-2">
                     <div class="text-[10px] font-bold text-slate-500 mb-1 px-1">📋 Visit history (${visits.length} total)</div>
@@ -7215,7 +7239,8 @@
                     }
                     const findingsDisplay = getFindingsDisplay(v);
                     const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
-                    return `<div class="px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 ml-24 text-[11px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 120))}${findingsSummary.length > 120 ? '...' : ''}</div>` : ''}\n                    </div>`;
+                    const findingsDateSummary = getFindingsDateSummary(v, 2);
+                    return `<div class="px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 ml-24 text-[11px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 120))}${findingsSummary.length > 120 ? '...' : ''}</div>` : ''}\n                        ${findingsDateSummary ? `<div class="mt-0.5 ml-24 text-[10px] text-emerald-700 truncate">Dates: ${esc(findingsDateSummary)}</div>` : ''}\n                    </div>`;
                 }).join('');
                 return `<div class="border-t-2 border-blue-100 bg-slate-50">
                     <div class="text-[10px] font-bold text-slate-500 px-3 pt-2 pb-1">📋 Visit history (${visits.length} total)</div>
@@ -10974,6 +10999,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const safeName = escapeInlineHtml(p.name || 'Anon');
                 const safeDate = escapeInlineHtml(p.date || '');
                 const safeFindingsDisplay = escapeInlineHtml(findingsDisplay);
+                const findingsDateSummary = getFindingsDateSummary(p, 2);
+                const safeFindingsDateSummary = escapeInlineHtml(findingsDateSummary);
                 const safePlan = escapeInlineHtml(p.plan || '-');
                 
                 const isStat = (p.stat === true || p.stat === 'true');
@@ -11004,7 +11031,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${safePersonKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         ${reviewBadge}
                     </td>
-                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top col-findings"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${safeFindingsDisplay}</div></td>` : ''}
+                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top col-findings"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${safeFindingsDisplay}</div>${safeFindingsDateSummary ? `<div class="mt-1 text-[10px] font-semibold text-emerald-700 whitespace-normal break-words ${crossedOutClass}">Dates: ${safeFindingsDateSummary}</div>` : ''}</td>` : ''}
                     <td class="p-3 align-top col-plan">
                         <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${safePlan}</div>
                         <div class="flex items-start">
@@ -11079,12 +11106,14 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
                 const findingsDisplay = getFindingsDisplay(v);
                 const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
+                const findingsDateSummary = getFindingsDateSummary(v, 2);
                 return `<div class="flex items-center gap-2 py-1.5 px-2 rounded-lg ${isCurrentVisit ? 'bg-blue-50 border border-blue-200' : 'hover:bg-white'} cursor-pointer group" onclick="globalThis.openModal('${esc(v.id)}')">
                     <span class="text-[10px] text-slate-400 w-20 flex-shrink-0 font-mono">${esc(v.date)}</span>
                     <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>
                     <span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">${esc(v.hospital || '')}</span>
                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0 whitespace-nowrap">${esc(st)}</span>
                     ${deltaPill}
+                    ${findingsDateSummary ? `<span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex-shrink-0" title="Finding capture date(s)">${esc(findingsDateSummary)}</span>` : ''}
                     ${v.supervisingMd ? `<span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">👨‍⚕️&nbsp;${esc(v.supervisingMd)}</span>` : ''}
                     <span class="text-[10px] text-slate-600 flex-1 min-w-0 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '...' : ''}${findingsSummary ? `<span class="text-slate-400 mx-1">|</span><span class="text-slate-700">Findings: ${esc(findingsSummary.slice(0, 90))}${findingsSummary.length > 90 ? '...' : ''}</span>` : ''}</span>
                     <span class="text-[9px] font-bold opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity flex-shrink-0">open ↗</span>

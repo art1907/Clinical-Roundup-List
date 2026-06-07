@@ -3353,6 +3353,29 @@
             const segments = getFindingSegments(patient);
             return segments.length ? segments.join(' | ') : '-';
         }
+
+        function formatFindingsDateSummaryValue(rawDate = '') {
+            const value = String(rawDate || '').trim();
+            if (!value) return '';
+            const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return value;
+            return `${match[2]}/${match[3]}/${match[1]}`;
+        }
+
+        function getFindingsDateSummary(patient, maxDates = 2) {
+            const findingsDates = patient && typeof patient === 'object' && patient.findingsDates && typeof patient.findingsDates === 'object'
+                ? patient.findingsDates
+                : {};
+            const uniqueDates = Array.from(new Set(
+                Object.values(findingsDates)
+                    .map((value) => formatFindingsDateSummaryValue(value))
+                    .filter(Boolean)
+            ));
+            if (!uniqueDates.length) return '';
+            const shown = uniqueDates.slice(0, maxDates);
+            const extra = uniqueDates.length - shown.length;
+            return `${shown.join(' • ')}${extra > 0 ? ` • +${extra} more` : ''}`;
+        }
         
         console.log('Device:', Device.type, `${Device.width}x${Device.height}`);
 
@@ -9009,6 +9032,7 @@
                 const status = getSafeConfiguredStatus(getPatientStatus(p));
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || STATUS_COLORS['To-Do'];
                 const findingsDisplay = getFindingsDisplay(p);
+                const findingsDateSummary = getFindingsDateSummary(p, 2);
                 const visitTimeDisplay = p.visitTime ? new Date(p.visitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                 const isCrossedOut = isPatientCrossedOut(p.id);
                 const crossedOutClass = isCrossedOut ? 'cross-out-target' : '';
@@ -9030,7 +9054,7 @@
                         <div class="text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}">${p.name || 'Anon'}</div>
                         <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
                     </td>
-                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
+                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div>${findingsDateSummary ? `<div class="mt-1 text-[10px] font-semibold text-emerald-700 whitespace-normal break-words ${crossedOutClass}">Dates: ${findingsDateSummary}</div>` : ''}</td>` : ''}
                     <td class="p-3 pr-5 align-top w-[18%] min-w-[12rem]">
                         <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${p.plan || '-'}</div>
                         <div class="flex items-start">
