@@ -3271,27 +3271,56 @@
             const findingsValues = patient.findingsValues && typeof patient.findingsValues === 'object'
                 ? patient.findingsValues
                 : {};
-            const findingsCodes = Array.isArray(patient.findingsCodes)
-                ? patient.findingsCodes
-                : [];
+            const findingsDates = patient.findingsDates && typeof patient.findingsDates === 'object'
+                ? patient.findingsDates
+                : {};
+            const findingsCodes = Array.from(new Set([
+                ...(Array.isArray(patient.findingsCodes) ? patient.findingsCodes : []),
+                ...Object.keys(findingsValues),
+                ...Object.keys(findingsDates)
+            ].map((code) => String(code || '').trim()).filter(Boolean)));
+
+            const formatFindingDateForDisplay = (rawDate) => {
+                const value = String(rawDate || '').trim();
+                if (!value) return '';
+                const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                if (!match) return value;
+                return `${match[2]}/${match[3]}/${match[1]}`;
+            };
+
+            const getFindingLabelByCodeForDisplay = (code) => {
+                const escapedCode = String(code || '').replaceAll('"', '\\"');
+                const checkbox = document.querySelector(`.findings-checkbox[value="${escapedCode}"]`);
+                const label = checkbox?.closest('div')?.querySelector('span.flex-1')?.textContent;
+                if (label && label.trim()) return label.trim();
+                return String(code || '').replaceAll(/[-_]+/g, ' ').trim();
+            };
 
             const valueSegments = findingsCodes
                 .map((code) => {
                     const rawValue = findingsValues[code];
-                    if (rawValue === null || rawValue === undefined) return '';
+                    const findingDate = formatFindingDateForDisplay(findingsDates[code]);
+                    let segment = '';
                     if (FINDINGS_CUSTOM_CODES.has(code)) {
-                        return formatCustomFindingDisplay(code, rawValue);
-                    }
-                    if (typeof rawValue === 'string') {
-                        return rawValue.trim();
-                    }
-                    if (typeof rawValue === 'object') {
-                        return Object.values(rawValue)
+                        segment = formatCustomFindingDisplay(code, rawValue);
+                    } else if (typeof rawValue === 'string') {
+                        segment = rawValue.trim();
+                    } else if (typeof rawValue === 'object' && rawValue !== null) {
+                        segment = Object.values(rawValue)
                             .map((value) => String(value || '').trim())
                             .filter(Boolean)
                             .join(', ');
+                    } else if (rawValue !== null && rawValue !== undefined) {
+                        segment = String(rawValue).trim();
                     }
-                    return String(rawValue).trim();
+
+                    if (!segment && findingDate) {
+                        segment = `${getFindingLabelByCodeForDisplay(code)} (${findingDate})`;
+                    } else if (segment && findingDate) {
+                        segment = `${segment} (${findingDate})`;
+                    }
+
+                    return segment;
                 })
                 .filter(Boolean);
 
@@ -6880,40 +6909,50 @@
                         createdByField.value = creator || 'Unknown';
                     }
                     
-                    if (p.findingsCodes && p.findingsCodes.length > 0) {
-                        document.querySelectorAll('.findings-checkbox').forEach(cb => {
-                            cb.checked = p.findingsCodes.includes(cb.value);
-                            const isCustomCode = FINDINGS_CUSTOM_CODES.has(cb.value);
-                            const customValue = p.findingsValues ? p.findingsValues[cb.value] : null;
-                            const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
-                            const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
-                            if (isCustomCode && customValue) {
-                                populateCustomFindingFields(cb.value, customValue);
-                            } else if (valueInput) {
-                                if (cb.checked) {
-                                    valueInput.disabled = false;
-                                    if (customValue !== null && customValue !== undefined) {
-                                        valueInput.value = typeof customValue === 'string' ? customValue : JSON.stringify(customValue);
-                                        autoResizeTextarea(valueInput);
-                                    }
-                                } else {
-                                    valueInput.disabled = true;
+                    const findingsCodes = Array.isArray(p.findingsCodes) ? p.findingsCodes : [];
+                    const findingsValuesMap = p.findingsValues && typeof p.findingsValues === 'object' ? p.findingsValues : {};
+                    const findingsDatesMap = p.findingsDates && typeof p.findingsDates === 'object' ? p.findingsDates : {};
+                    const effectiveFindingsCodes = new Set([
+                        ...findingsCodes,
+                        ...Object.keys(findingsValuesMap),
+                        ...Object.keys(findingsDatesMap)
+                    ].map((code) => String(code || '').trim()).filter(Boolean));
+
+                    document.querySelectorAll('.findings-checkbox').forEach(cb => {
+                        const customValue = findingsValuesMap[cb.value];
+                        const hasValue = customValue !== null && customValue !== undefined && String(customValue).trim() !== '';
+                        const hasDate = Boolean(String(findingsDatesMap[cb.value] || '').trim());
+                        cb.checked = effectiveFindingsCodes.has(cb.value) || hasValue || hasDate;
+
+                        const isCustomCode = FINDINGS_CUSTOM_CODES.has(cb.value);
+                        const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
+                        const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
+                        if (isCustomCode && customValue) {
+                            populateCustomFindingFields(cb.value, customValue);
+                        } else if (valueInput) {
+                            if (cb.checked) {
+                                valueInput.disabled = false;
+                                if (customValue !== null && customValue !== undefined) {
+                                    valueInput.value = typeof customValue === 'string' ? customValue : JSON.stringify(customValue);
+                                    autoResizeTextarea(valueInput);
                                 }
+                            } else {
+                                valueInput.disabled = true;
                             }
-                            if (dateInput) {
-                                if (cb.checked) {
-                                    dateInput.disabled = false;
-                                    if (p.findingsDates && p.findingsDates[cb.value]) {
-                                        dateInput.value = p.findingsDates[cb.value];
-                                    }
-                                } else {
-                                    dateInput.disabled = true;
-                                }
-                            }
-                        });
-                        if (typeof globalThis.syncFindingsUI === 'function') {
-                            globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
                         }
+                        if (dateInput) {
+                            if (cb.checked) {
+                                dateInput.disabled = false;
+                                if (findingsDatesMap[cb.value]) {
+                                    dateInput.value = findingsDatesMap[cb.value];
+                                }
+                            } else {
+                                dateInput.disabled = true;
+                            }
+                        }
+                    });
+                    if (typeof globalThis.syncFindingsUI === 'function') {
+                        globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
                     }
                 } else {
                     // New record - check for draft
