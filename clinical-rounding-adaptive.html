@@ -240,6 +240,21 @@
             max-height: 120px;
         }
         
+        .procedure-date {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .procedure-date:not(:disabled):hover {
+            background-color: #dbeafe !important;
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+        
+        .procedure-name-input {
+            min-height: 28px;
+        }
+        
         /* ============================================================================= */
         /* DARK MODE & THEMING */
         /* ============================================================================= */
@@ -278,6 +293,12 @@
         body.dark-mode .text-slate-500 { color: #999; }
         body.dark-mode .text-slate-400 { color: #666; }
         body.dark-mode .text-slate-700 { color: #ddd; }
+        
+        body.dark-mode .procedure-date:not(:disabled):hover {
+            background-color: #1e3a8a !important;
+            border-color: #60a5fa !important;
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.1);
+        }
         
         /* ============================================================================= */
         /* ACCESSIBILITY & TEXT SIZING */
@@ -912,54 +933,6 @@
             margin-left: 0.25rem;
             font-size: 0.75rem;
             opacity: 0.5;
-        }
-
-        .main-census-table {
-            table-layout: fixed;
-            min-width: 76rem;
-            width: 100%;
-        }
-
-        .main-census-table thead th,
-        .main-census-table tbody td {
-            white-space: normal;
-            overflow-wrap: break-word;
-            word-break: normal;
-            vertical-align: top;
-        }
-
-        .main-census-table .col-select { width: 3.25rem; }
-        .main-census-table .col-room { width: 8%; min-width: 5.5rem; }
-        .main-census-table .col-hospital { width: 10%; min-width: 8.5rem; }
-        .main-census-table .col-patient { width: 16%; min-width: 10rem; }
-        .main-census-table .col-findings { width: 26%; }
-        .main-census-table .col-plan { width: 26%; }
-        .main-census-table .col-actions { width: 11.5rem; min-width: 11.5rem; }
-
-        .main-census-table .col-hospital,
-        .main-census-table .col-hospital * {
-            word-break: normal;
-            overflow-wrap: normal;
-            hyphens: auto;
-        }
-
-        .main-census-table thead th:first-child,
-        .main-census-table tbody td:first-child {
-            padding-left: 1rem;
-        }
-
-        .main-census-table thead th:last-child,
-        .main-census-table tbody td:last-child {
-            padding-right: 1rem;
-        }
-
-        .table-action-btn {
-            width: 10.25rem;
-            min-height: 2rem;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
         }
         
         th.sort-asc .sort-indicator::after {
@@ -3278,91 +3251,6 @@
             return segments.join(', ');
         }
 
-        function normalizeFindingScalar(value) {
-            if (value === null || value === undefined) return '';
-            return String(value).trim();
-        }
-
-        function parseGenericFindingValue(rawValue) {
-            const parsed = { note: '' };
-            if (rawValue === null || rawValue === undefined) return parsed;
-
-            if (typeof rawValue === 'string') {
-                parsed.note = rawValue.trim();
-                return parsed;
-            }
-
-            if (typeof rawValue !== 'object') {
-                parsed.note = String(rawValue).trim();
-                return parsed;
-            }
-
-            parsed.note = normalizeFindingScalar(rawValue.note ?? rawValue.text ?? rawValue.comments ?? rawValue.comment);
-
-            if (!parsed.note) {
-                const qualifier = normalizeFindingScalar(rawValue.qualifier ?? rawValue.label ?? rawValue.test ?? rawValue.name);
-                const value = normalizeFindingScalar(rawValue.value ?? rawValue.result ?? rawValue.measure ?? rawValue.measurement);
-                if (qualifier && value) {
-                    parsed.note = `${qualifier}: ${value}`;
-                } else {
-                    parsed.note = qualifier || value;
-                }
-            }
-
-            if (!parsed.note) {
-                const consumedKeys = new Set([
-                    'qualifier', 'label', 'test', 'name', 'value', 'result', 'measure', 'measurement',
-                    'note', 'text', 'comments', 'comment'
-                ]);
-                const extraSegments = Object.entries(rawValue)
-                    .filter(([key, value]) => {
-                        const normalizedKey = String(key || '').toLowerCase();
-                        if (consumedKeys.has(normalizedKey)) return false;
-                        if (value === null || value === undefined) return false;
-                        if (typeof value === 'object') return false;
-                        return String(value).trim() !== '';
-                    })
-                    .map(([key, value]) => `${key}: ${String(value).trim()}`);
-                if (extraSegments.length) {
-                    parsed.note = extraSegments.join(', ');
-                }
-            }
-
-            return parsed;
-        }
-
-        function parseFindingValueEntry(code, rawValue) {
-            if (FINDINGS_CUSTOM_CODES.has(code)) {
-                const customValues = parseCustomFindingValue(code, rawValue);
-                return {
-                    note: normalizeFindingScalar(
-                        rawValue && typeof rawValue === 'object'
-                            ? (rawValue.note ?? rawValue.text ?? rawValue.comments ?? rawValue.comment)
-                            : ''
-                    ),
-                    customValues
-                };
-            }
-
-            return {
-                ...parseGenericFindingValue(rawValue),
-                customValues: null
-            };
-        }
-
-        function hasMeaningfulFindingValue(code, rawValue) {
-            const parsed = parseFindingValueEntry(code, rawValue);
-            if (FINDINGS_CUSTOM_CODES.has(code)) {
-                const hasCustomFields = Object.entries(parsed.customValues || {})
-                    .some(([field, value]) => {
-                        if (['note', 'text', 'comments', 'comment'].includes(String(field || '').toLowerCase())) return false;
-                        return normalizeFindingScalar(value) !== '';
-                    });
-                return hasCustomFields || Boolean(parsed.note);
-            }
-            return Boolean(parsed.note);
-        }
-
         function escapeInlineHtml(value) {
             return String(value == null ? '' : value)
                 .replaceAll('&', '&amp;')
@@ -3378,60 +3266,27 @@
             const findingsValues = patient.findingsValues && typeof patient.findingsValues === 'object'
                 ? patient.findingsValues
                 : {};
-            const findingsDates = patient.findingsDates && typeof patient.findingsDates === 'object'
-                ? patient.findingsDates
-                : {};
-            const findingsCodes = Array.from(new Set([
-                ...(Array.isArray(patient.findingsCodes) ? patient.findingsCodes : []),
-                ...Object.keys(findingsValues),
-                ...Object.keys(findingsDates)
-            ].map((code) => String(code || '').trim()).filter(Boolean)));
-
-            const formatFindingDateForDisplay = (rawDate) => {
-                const value = String(rawDate || '').trim();
-                if (!value) return '';
-                const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-                if (!match) return value;
-                return `${match[2]}/${match[3]}/${match[1]}`;
-            };
-
-            const getFindingLabelByCodeForDisplay = (code) => {
-                const escapedCode = String(code || '').replaceAll('"', '\\"');
-                const checkbox = document.querySelector(`.findings-checkbox[value="${escapedCode}"]`);
-                const label = checkbox?.closest('div')?.querySelector('span.flex-1')?.textContent;
-                if (label && label.trim()) return label.trim();
-                return String(code || '').replaceAll(/[-_]+/g, ' ').trim();
-            };
+            const findingsCodes = Array.isArray(patient.findingsCodes)
+                ? patient.findingsCodes
+                : [];
 
             const valueSegments = findingsCodes
                 .map((code) => {
                     const rawValue = findingsValues[code];
-                    const parsedValue = parseFindingValueEntry(code, rawValue);
-                    const findingDate = formatFindingDateForDisplay(findingsDates[code]);
-                    let segment = '';
-
+                    if (rawValue === null || rawValue === undefined) return '';
                     if (FINDINGS_CUSTOM_CODES.has(code)) {
-                        const customSegment = formatCustomFindingDisplay(code, rawValue);
-                        segment = [customSegment, parsedValue.note]
+                        return formatCustomFindingDisplay(code, rawValue);
+                    }
+                    if (typeof rawValue === 'string') {
+                        return rawValue.trim();
+                    }
+                    if (typeof rawValue === 'object') {
+                        return Object.values(rawValue)
+                            .map((value) => String(value || '').trim())
                             .filter(Boolean)
                             .join(', ');
-                    } else {
-                        segment = [parsedValue.note]
-                            .filter(Boolean)
-                            .join(', ');
-
-                        if (!segment && rawValue !== null && rawValue !== undefined) {
-                            segment = String(rawValue).trim();
-                        }
                     }
-
-                    if (!segment && findingDate) {
-                        segment = `${getFindingLabelByCodeForDisplay(code)} (${findingDate})`;
-                    } else if (segment && findingDate) {
-                        segment = `${segment} (${findingDate})`;
-                    }
-
-                    return segment;
+                    return String(rawValue).trim();
                 })
                 .filter(Boolean);
 
@@ -3463,29 +3318,6 @@
         function getFindingsDisplay(patient) {
             const segments = getFindingSegments(patient);
             return segments.length ? segments.join(' | ') : '-';
-        }
-
-        function formatFindingsDateSummaryValue(rawDate = '') {
-            const value = String(rawDate || '').trim();
-            if (!value) return '';
-            const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-            if (!match) return value;
-            return `${match[2]}/${match[3]}/${match[1]}`;
-        }
-
-        function getFindingsDateSummary(patient, maxDates = 2) {
-            const findingsDates = patient && typeof patient === 'object' && patient.findingsDates && typeof patient.findingsDates === 'object'
-                ? patient.findingsDates
-                : {};
-            const uniqueDates = Array.from(new Set(
-                Object.values(findingsDates)
-                    .map((value) => formatFindingsDateSummaryValue(value))
-                    .filter(Boolean)
-            ));
-            if (!uniqueDates.length) return '';
-            const shown = uniqueDates.slice(0, maxDates);
-            const extra = uniqueDates.length - shown.length;
-            return `${shown.join(' • ')}${extra > 0 ? ` • +${extra} more` : ''}`;
         }
         
         console.log('Device:', Device.type, `${Device.width}x${Device.height}`);
@@ -4261,20 +4093,6 @@
         // PHASE 1: SETTINGS, SEARCH, SHORTCUTS, BATCH OPERATIONS
         // ============================================================================= 
 
-        const DEFAULT_VISIBLE_COLUMNS = ['room', 'hospital', 'findings', 'plan'];
-        const ALLOWED_VISIBLE_COLUMNS = new Set(DEFAULT_VISIBLE_COLUMNS);
-
-        function getSanitizedVisibleColumns() {
-            try {
-                const parsed = JSON.parse(localStorage.getItem('app-visible-columns') || '[]');
-                if (!Array.isArray(parsed)) return [...DEFAULT_VISIBLE_COLUMNS];
-                const safe = parsed.filter(col => ALLOWED_VISIBLE_COLUMNS.has(col));
-                return safe.length ? [...new Set(safe)] : [...DEFAULT_VISIBLE_COLUMNS];
-            } catch {
-                return [...DEFAULT_VISIBLE_COLUMNS];
-            }
-        }
-
         // Load settings from localStorage
         function loadSettings() {
             const theme = localStorage.getItem('app-theme') || 'light';
@@ -4289,7 +4107,7 @@
             }
             
             // Load column visibility
-            const visibleCols = getSanitizedVisibleColumns();
+            const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
             document.querySelectorAll('.column-vis').forEach(cb => {
                 cb.checked = visibleCols.includes(cb.value);
             });
@@ -4333,9 +4151,7 @@
 
         // Column Visibility Management
         globalThis.updateColumnVisibility = () => {
-            const visibleCols = Array.from(document.querySelectorAll('.column-vis:checked'))
-                .map(cb => cb.value)
-                .filter(col => ALLOWED_VISIBLE_COLUMNS.has(col));
+            const visibleCols = Array.from(document.querySelectorAll('.column-vis:checked')).map(cb => cb.value);
             localStorage.setItem('app-visible-columns', JSON.stringify(visibleCols));
             renderUI();
             showToast('👁️ Column visibility updated');
@@ -4875,8 +4691,7 @@
             const isArchived = isArchivedRecord(p);
             
             menu.innerHTML = `
-                <div class="context-menu-item" onclick="globalThis.openModalWithAmendWarning('${patientId}'); closeContextMenu();">✏️ Amend Existing Record</div>
-                <div class="context-menu-item" onclick="globalThis.openFollowUpModal('${patientId}'); closeContextMenu();">➕ Add Follow Up</div>
+                <div class="context-menu-item" onclick="globalThis.openModal('${patientId}'); closeContextMenu();">✏️ Edit</div>
                 <div class="context-menu-item" onclick="globalThis.toggleArchive('${patientId}', ${!isArchived}); closeContextMenu();">${isArchived ? '↩️ Restore' : '📦 Archive'}</div>
                 <div class="context-menu-item danger" onclick="globalThis.deletePatient('${patientId}'); closeContextMenu();">🗑️ Delete</div>
             `;
@@ -5675,7 +5490,7 @@
                     '=== Top ICD Codes ===',
                     ...icdSorted.slice(0, 10).map(([code, count]) => `ICD ${code}: ${count} cases`)
                 ];
-                renderAnalyticsDetails('Diagnosis Code Distribution', billingRows);
+                renderAnalyticsDetails('Billing Code Distribution', billingRows);
                 return;
             }
 
@@ -5834,12 +5649,12 @@
                     { title: 'Active Providers', value: mdSorted.length, subtitle: 'In current cohort' },
                     { title: 'Top Provider', value: mdSorted[0]?.[0] || '—', subtitle: `${mdSorted[0]?.[1].patients.length || 0} patients` },
                     { title: 'Avg Caseload', value: mdSorted.length ? Math.round(data.activePatients.length / mdSorted.length) : 0, subtitle: 'Patients per MD' },
-                    { title: 'Undiagnosed Cases', value: data.activePatients.filter(p => !p.cptPrimary && !p.icdPrimary).length, subtitle: 'No CPT/ICD coded' }
+                    { title: 'Unbilled Cases', value: data.activePatients.filter(p => !p.cptPrimary && !p.icdPrimary).length, subtitle: 'No CPT/ICD coded' }
                 ]);
                 const detailRows = mdSorted.map(([md, info]) => {
                     const ptList = info.patients.slice(0, 5).map(p => `${p.name || 'Anon'} (${p.date}, Rm ${p.room || '—'}, ${getSafeConfiguredStatus(getPatientStatus(p))})`).join(' | ');
                     const more = info.patients.length > 5 ? ` +${info.patients.length - 5} more` : '';
-                    return `${md}: ${info.patients.length} pts | ${info.stat} STAT | ${info.procedures} proc | ${info.pending} pending | ${info.billing} diagnosed → ${ptList}${more}`;
+                    return `${md}: ${info.patients.length} pts | ${info.stat} STAT | ${info.procedures} proc | ${info.pending} pending | ${info.billing} billed → ${ptList}${more}`;
                 });
                 renderAnalyticsDetails('Practitioner Detail Report', detailRows);
                 return;
@@ -5854,15 +5669,15 @@
                 const unbilled = data.activePatients.filter(p => !p.cptPrimary && !p.icdPrimary);
                 const pctComplete = total > 0 ? Math.round((withBoth / total) * 100) : 0;
                 renderAnalyticsCards([
-                    { title: 'Diagnosis Complete', value: `${pctComplete}%`, subtitle: `${withBoth} of ${total} have CPT+ICD` },
+                    { title: 'Billing Complete', value: `${pctComplete}%`, subtitle: `${withBoth} of ${total} have CPT+ICD` },
                     { title: 'Has CPT Code', value: withCpt, subtitle: `${total > 0 ? Math.round((withCpt/total)*100) : 0}% coded` },
                     { title: 'Has ICD Code', value: withIcd, subtitle: `${total > 0 ? Math.round((withIcd/total)*100) : 0}% coded` },
-                    { title: 'Undiagnosed Records', value: unbilled.length, subtitle: 'Needs diagnosis review' }
+                    { title: 'Unbilled Records', value: unbilled.length, subtitle: 'Needs billing review' }
                 ]);
                 const unbilledRows = unbilled.map(p =>
                     `${p.name || 'Anon'} | ${p.date} | MD: ${p.supervisingMd || '—'} | Rm ${p.room || '—'} | ${p.hospital || '—'} | Status: ${getSafeConfiguredStatus(getPatientStatus(p))}`
                 );
-                renderAnalyticsDetails('Undiagnosed / Incompletely Coded Records', unbilledRows.length ? unbilledRows : ['✓ All records have diagnosis codes']);
+                renderAnalyticsDetails('Unbilled / Incompletely Coded Records', unbilledRows.length ? unbilledRows : ['✓ All records have billing codes']);
                 return;
             }
 
@@ -5921,7 +5736,7 @@
                 const cptRows = topCpt.map(([code, cnt]) => `CPT ${code}: ${cnt} procedures`);
                 const icdRows = topIcd.map(([code, cnt]) => `ICD ${code}: ${cnt} diagnoses`);
                 const divider = cptRows.length && icdRows.length ? ['──── ICD Diagnoses ────'] : [];
-                renderAnalyticsDetails('CPT & ICD Code Frequency', [...cptRows, ...divider, ...icdRows].length ? [...cptRows, ...divider, ...icdRows] : ['No diagnosis codes recorded']);
+                renderAnalyticsDetails('CPT & ICD Code Frequency', [...cptRows, ...divider, ...icdRows].length ? [...cptRows, ...divider, ...icdRows] : ['No billing codes recorded']);
             }
         }
 
@@ -5984,7 +5799,6 @@
                 cptprimary: 'cptPrimary',
                 icd: 'icdPrimary',
                 icdprimary: 'icdPrimary',
-                proceduredate: 'procedureDate',
                 chargecodes: 'chargeCodesSecondary',
                 chargecodessecondary: 'chargeCodesSecondary',
                 archived: 'archived'
@@ -5992,7 +5806,7 @@
 
             const knownFields = new Set([
                 'id', 'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
-                'pending', 'followUp', 'stat', 'priority', 'procedureStatus', 'procedureDate', 'cptPrimary', 'icdPrimary',
+                'pending', 'followUp', 'stat', 'priority', 'procedureStatus', 'cptPrimary', 'icdPrimary',
                 'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues', 'archived',
                 ...patients.flatMap((p) => Object.keys(p || {}))
             ]);
@@ -6486,7 +6300,7 @@
                     </div>
                 </div>
                 ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
-                ${getVisibleProgressNotes(p) ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Subjective & Objective Findings:</strong> ${esc(getVisibleProgressNotes(p))}</div>` : ''}
+                ${getVisibleProgressNotes(p) ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Progress Notes:</strong> ${esc(getVisibleProgressNotes(p))}</div>` : ''}
                 ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
                 ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
             </div>`;
@@ -6507,7 +6321,7 @@
                     lines.push(`  [STAT] ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${getPatientStatus(p)}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
                     if (p.plan) lines.push(`    Plan: ${p.plan}`);
                     const visibleProgressNotes = getVisibleProgressNotes(p);
-                    if (visibleProgressNotes) lines.push(`    Subjective & Objective Findings: ${visibleProgressNotes}`);
+                    if (visibleProgressNotes) lines.push(`    Progress Notes: ${visibleProgressNotes}`);
                     if (p.pending) lines.push(`    Pending: ${p.pending}`);
                     if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
                 });
@@ -6519,7 +6333,7 @@
                     lines.push(`  ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${getPatientStatus(p)}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
                     if (p.plan) lines.push(`    Plan: ${p.plan}`);
                     const visibleProgressNotes = getVisibleProgressNotes(p);
-                    if (visibleProgressNotes) lines.push(`    Subjective & Objective Findings: ${visibleProgressNotes}`);
+                    if (visibleProgressNotes) lines.push(`    Progress Notes: ${visibleProgressNotes}`);
                     if (p.pending) lines.push(`    Pending: ${p.pending}`);
                     if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
                 });
@@ -6709,8 +6523,8 @@
                         ${p.supervisingMd ? `<span class="text-[10px] text-slate-500">· ${esc(p.supervisingMd)}</span>` : ''}
                     </div>
                     ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
-                    ${getVisibleProgressNotes(p) ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Subjective & Objective Findings:</strong> ${esc(getVisibleProgressNotes(p))}</div>` : ''}
-                    ${p.findingsText ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Investigations:</strong> ${esc(p.findingsText)}</div>` : ''}
+                    ${getVisibleProgressNotes(p) ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Progress Notes:</strong> ${esc(getVisibleProgressNotes(p))}</div>` : ''}
+                    ${p.findingsText ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Findings:</strong> ${esc(p.findingsText)}</div>` : ''}
                     ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
                     ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
                 </div>
@@ -6761,7 +6575,7 @@
                 'shift-handoff': 'Shift Handoff',
                 'provider-detail': 'Practice by Doctor',
                 'code-utilization': 'Practice by Code',
-                'billing-readiness': 'Diagnosis Readiness Audit',
+                'billing-readiness': 'Billing Readiness Audit',
                 'procedure-pipeline': 'Procedure Pipeline',
                 'followup-worklist': 'Follow-up Worklist',
                 'practice-opportunities': 'Practice Enhancement Opportunities'
@@ -6834,7 +6648,7 @@
                         card('Doctors', providerRows.length, 'With active records'),
                         card('Top Caseload', topProvider?.[0] || '-', `${topProvider?.[1].visits || 0} visits`),
                         card('Avg Visits / Doctor', providerRows.length ? Math.round(data.length / providerRows.length) : 0, 'Current filtered cohort'),
-                        card('Diagnosis Complete', pct(data.filter(p => hasText(p.cptPrimary) && hasText(p.icdPrimary)).length, data.length), 'CPT + ICD present')
+                        card('Billing Complete', pct(data.filter(p => hasText(p.cptPrimary) && hasText(p.icdPrimary)).length, data.length), 'CPT + ICD present')
                     ],
                     sections: [section('Doctor Workload and Coding', ['Doctor', 'Visits', 'Unique MRNs', 'Procedures', 'STAT', 'Pending', 'Follow-up', 'Coded', 'Top CPT'], providerRows.map(([name, row]) => {
                         const [code, count] = topCode(row.cpt);
@@ -6882,12 +6696,12 @@
                 const needsReview = data.filter(p => !hasText(p.cptPrimary) || !hasText(p.icdPrimary));
                 return {
                     cards: [
-                        card('Ready for Diagnosis', complete.length, `${pct(complete.length, data.length)} complete`),
+                        card('Ready to Bill', complete.length, `${pct(complete.length, data.length)} complete`),
                         card('Missing CPT', missingCpt.length, 'Procedure code gap'),
                         card('Missing ICD', missingIcd.length, 'Diagnosis code gap'),
                         card('Needs Review', needsReview.length, 'Before export')
                     ],
-                    sections: [section('Diagnosis Gaps by Record', ['Patient', 'Date', 'Doctor', 'Hospital', 'Missing', 'Status'], needsReview.map(p => {
+                    sections: [section('Billing Gaps by Record', ['Patient', 'Date', 'Doctor', 'Hospital', 'Missing', 'Status'], needsReview.map(p => {
                         const missing = [];
                         if (hasText(p.cptPrimary) === false) missing.push('CPT');
                         if (hasText(p.icdPrimary) === false) missing.push('ICD');
@@ -6960,13 +6774,13 @@
             );
             return {
                 cards: [
-                        card('Undiagnosed Procedures', unbilledProcedure.length, 'Procedure coding completeness'),
+                    card('Unbilled Procedures', unbilledProcedure.length, 'Procedure revenue capture'),
                     card('Post-op No Follow-up', postOpNoFollowup.length, 'Continuity opportunity'),
                     card('High-touch Records', highTouch.length, 'STAT, pending, or aged'),
                     card('Hospitals', hospitalRows.length, 'Current footprint')
                 ],
                 sections: [
-                    section('Practice Opportunities by Hospital', ['Hospital', 'Visits', 'Procedures', 'Undiagnosed / Incomplete', 'Pending', 'Doctors'], hospitalRows.map(([hospital, row]) => [hospital, row.visits, row.procedures, row.unbilled, row.pending, [...row.providers].join(', ') || '-'])),
+                    section('Practice Opportunities by Hospital', ['Hospital', 'Visits', 'Procedures', 'Unbilled / Incomplete', 'Pending', 'Doctors'], hospitalRows.map(([hospital, row]) => [hospital, row.visits, row.procedures, row.unbilled, row.pending, [...row.providers].join(', ') || '-'])),
                     section('Actionable Opportunity Records', ['Patient', 'Date', 'Doctor', 'Hospital', 'Opportunity'], [...unbilledProcedure, ...postOpNoFollowup, ...highTouch].filter((p, idx, arr) => arr.findIndex(x => x.id === p.id) === idx).slice(0, 50).map(p => [
                         p.name || '-', p.date || '-', p.supervisingMd || p.md || '-', p.hospital || '-',
                         [isSurgicalCase(p) && (!hasText(p.cptPrimary) || !hasText(p.icdPrimary)) ? 'complete billing' : '', isDownstreamSurgicalWorkflowStatus(getPatientStatus(p)) && !hasText(p.followUp) ? 'add follow-up' : '', hasText(p.pending) ? 'resolve pending' : '', (globalThis.calculateLOS(p.date) || 0) >= 7 ? 'aged record' : ''].filter(Boolean).join('; ')
@@ -7076,7 +6890,7 @@
                             <thead><tr class="bg-slate-100 text-slate-600">
                                 <th class="px-2 py-2 text-left">Date</th><th class="px-2 py-2 text-left">Patient</th><th class="px-2 py-2 text-left">Room</th>
                                 <th class="px-2 py-2 text-left">MRN</th><th class="px-2 py-2 text-left">Hospital</th><th class="px-2 py-2 text-left">Status</th>
-                                <th class="px-2 py-2 text-left">Plan</th><th class="px-2 py-2 text-left">Subjective & Objective Findings</th><th class="px-2 py-2 text-left">Pending</th><th class="px-2 py-2 text-left">MD</th>
+                                <th class="px-2 py-2 text-left">Plan</th><th class="px-2 py-2 text-left">Progress Notes</th><th class="px-2 py-2 text-left">Pending</th><th class="px-2 py-2 text-left">MD</th>
                             </tr></thead>
                             <tbody class="divide-y divide-slate-100">${rows}</tbody>
                         </table>
@@ -7116,7 +6930,7 @@
                 doc.text(subLine, 14, 22);
 
                 // Table
-                const cols = pdfColumns || ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Subjective & Objective Findings', 'Pending', 'MD'];
+                const cols = pdfColumns || ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Progress Notes', 'Pending', 'MD'];
                 const rows = pdfRows || data.map(p => [
                     p.date || '', p.name || '—', p.room || '', p.mrn || '',
                     p.hospital || '', getPatientStatus(p),
@@ -7133,7 +6947,7 @@
                     bodyStyles: { fontSize: 7.5, cellPadding: 2 },
                     columnStyles: {
                         6: { cellWidth: 42 }, // Plan
-                        7: { cellWidth: 42 }, // Subjective & Objective Findings
+                        7: { cellWidth: 42 }, // Progress Notes
                         8: { cellWidth: 30 }, // Pending
                     },
                     margin: { left: 14, right: 14 },
@@ -7189,8 +7003,7 @@
                     }
                     const findingsDisplay = getFindingsDisplay(v);
                     const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
-                    const findingsDateSummary = getFindingsDateSummary(v, 2);
-                    return `<div class="px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[10px] text-slate-500 truncate flex-1 min-w-0">${esc(v.hospital || '')}</span>\n                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 pl-20 text-[10px] text-slate-600 truncate">Investigations: ${esc(findingsSummary.slice(0, 110))}${findingsSummary.length > 110 ? '...' : ''}</div>` : ''}\n                        ${findingsDateSummary ? `<div class="mt-0.5 pl-20 text-[10px] text-emerald-700 truncate">Dates: ${esc(findingsDateSummary)}</div>` : ''}\n                    </div>`;
+                    return `<div class="px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[10px] text-slate-500 truncate flex-1 min-w-0">${esc(v.hospital || '')}</span>\n                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 pl-20 text-[10px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 110))}${findingsSummary.length > 110 ? '...' : ''}</div>` : ''}\n                    </div>`;
                 }).join('');
                 return `<div class="mt-2 border-t border-blue-100 pt-2">
                     <div class="text-[10px] font-bold text-slate-500 mb-1 px-1">📋 Visit history (${visits.length} total)</div>
@@ -7206,7 +7019,7 @@
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS['To-Do'];
                 const crossedOutCardClass = isPatientCrossedOut(p.id) ? 'crossed-out' : '';
                 const findingsSegments = getFindingSegments(p);
-                const findingsLabel = findingsSegments.length ? `🔍 Investigations · ${findingsSegments.length}` : '🔍 Investigations';
+                const findingsLabel = findingsSegments.length ? `🔍 Findings · ${findingsSegments.length}` : '🔍 Findings';
                 const personKey = getPatientPersonKey(p);
                 const visitCount = getPatientVisitCount(p);
                 const isExpanded = expandedPatientMrns.has(personKey);
@@ -7276,8 +7089,7 @@
                         </div>
                         
                         <div class="card-actions">
-                            <button class="card-action-btn card-edit" onclick="globalThis.openModalWithAmendWarning('${p.id}')">Amend Existing Record</button>
-                            <button class="card-action-btn" style="background:#16a34a;color:#fff;border:1px solid #15803d" onclick="globalThis.openFollowUpModal('${p.id}')">Add Follow Up</button>
+                            <button class="card-action-btn card-edit" onclick="globalThis.openModal('${p.id}')">Edit</button>
                             <button class="card-action-btn card-print" onclick="globalThis.printPatientRecord('${p.id}')">Print</button>
                             ${visitCount > 1 ? `<button class="card-action-btn" style="background:${isExpanded ? '#dbeafe' : '#f1f5f9'};color:${isExpanded ? '#1d4ed8' : '#64748b'};border:1px solid ${isExpanded ? '#bfdbfe' : '#e2e8f0'}" onclick="globalThis.togglePatientHistory('${personKey}')">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         </div>
@@ -7328,8 +7140,7 @@
                     }
                     const findingsDisplay = getFindingsDisplay(v);
                     const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
-                    const findingsDateSummary = getFindingsDateSummary(v, 2);
-                    return `<div class="px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 ml-24 text-[11px] text-slate-600 truncate">Investigations: ${esc(findingsSummary.slice(0, 120))}${findingsSummary.length > 120 ? '...' : ''}</div>` : ''}\n                        ${findingsDateSummary ? `<div class="mt-0.5 ml-24 text-[10px] text-emerald-700 truncate">Dates: ${esc(findingsDateSummary)}</div>` : ''}\n                    </div>`;
+                    return `<div class="px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 ml-24 text-[11px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 120))}${findingsSummary.length > 120 ? '...' : ''}</div>` : ''}\n                    </div>`;
                 }).join('');
                 return `<div class="border-t-2 border-blue-100 bg-slate-50">
                     <div class="text-[10px] font-bold text-slate-500 px-3 pt-2 pb-1">📋 Visit history (${visits.length} total)</div>
@@ -7341,7 +7152,7 @@
                 const status = getSafeConfiguredStatus(getPatientStatus(patient));
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || STATUS_COLORS['To-Do'];
                 const findingsSegments = getFindingSegments(patient);
-                const findingsLabel = findingsSegments.length ? `Investigations · ${findingsSegments.length}` : 'Investigations';
+                const findingsLabel = findingsSegments.length ? `Findings · ${findingsSegments.length}` : 'Findings';
                 const isStat = patient.stat === true || patient.stat === 'true';
                 const isSelected = selectedPatientIds.has(patient.id);
                 const isCrossedOut = isPatientCrossedOut(patient.id);
@@ -7378,8 +7189,7 @@
                         </div>
 
                         <div class="mobile-card-actions">
-                            <button onclick="globalThis.openModalWithAmendWarning('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Amend Existing Record</button>
-                            <button onclick="globalThis.openFollowUpModal('${patient.id}')" class="bg-green-600 text-white hover:bg-green-700">Add Follow Up</button>
+                            <button onclick="globalThis.openModal('${patient.id}')" class="bg-blue-600 text-white hover:bg-blue-700">Edit</button>
                             <button onclick="globalThis.printPatientRecord('${patient.id}')" class="bg-slate-700 text-white hover:bg-slate-800">Print</button>
                             ${visitCountM > 1 ? `<button onclick="globalThis.togglePatientHistory('${personKeyM}')" class="${isExpandedM ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}">${isExpandedM ? '▼' : '▶'} ${visitCountM} visits</button>` : ''}
                         </div>
@@ -7428,8 +7238,7 @@
                                         <div style="font-size: 0.75rem; color: #666;">MRN: ${p.mrn} ${age ? '| Age: ' + age : ''} | Room: ${p.room}</div>
                                     </div>
                                     <div style="display: flex; gap: 0.5rem;">
-                                        <button onclick="globalThis.openModalWithAmendWarning('${p.id}')" style="padding: 0.25rem 0.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Amend Existing Record</button>
-                                        <button onclick="globalThis.openFollowUpModal('${p.id}')" style="padding: 0.25rem 0.5rem; background: #16a34a; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Add Follow Up</button>
+                                        <button onclick="globalThis.openModal('${p.id}')" style="padding: 0.25rem 0.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">Edit</button>
                                     </div>
                                 </div>
                             `;
@@ -7455,31 +7264,10 @@
             });
         }
 
-        function normalizeProcedureDate(value) {
-            const normalized = String(value || '').trim();
-            return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
-        }
-
-        function getProcedureDateFromPlan(planValue = '') {
-            const match = String(planValue || '').match(/\[\[PROC_DATE:(\d{4}-\d{2}-\d{2})\]\]/i);
-            return match ? normalizeProcedureDate(match[1]) : '';
-        }
-
-        function getPlanTextWithoutProcedureDate(planValue = '') {
-            return String(planValue || '')
-                .replace(/\s*\[\[PROC_DATE:\d{4}-\d{2}-\d{2}\]\]\s*/gi, ' ')
-                .replace(/[ \t]+\n/g, '\n')
-                .trim();
-        }
-
-        function getProcedureDateFromRecord(patient = {}) {
-            return normalizeProcedureDate(patient.procedureDate || getProcedureDateFromPlan(patient.plan || ''));
-        }
-
         function lockBackfilledFields(locked) {
             const lockedIds = [
                 'f-room', 'f-date', 'f-hospital', 'f-name', 'f-dob', 'f-mrn',
-                'f-md', 'f-plan', 'f-procedure-date', 'f-proc-status', 'f-priority', 'f-cpt-primary',
+                'f-md', 'f-plan', 'f-proc-status', 'f-priority', 'f-cpt-primary',
                 'f-icd-primary', 'f-charge-codes-secondary', 'f-fu', 'f-pending'
             ];
             lockedIds.forEach((id) => {
@@ -7626,19 +7414,10 @@
                 const input = document.getElementById(inputId);
                 if (!input) return;
                 const currentValue = String(input.value || '').trim();
-                let nextValue = Array.isArray(candidate[fieldName]) ? candidate[fieldName].join(', ') : String(candidate[fieldName] || '').trim();
-                if (inputId === 'f-plan') {
-                    nextValue = getPlanTextWithoutProcedureDate(nextValue);
-                }
+                const nextValue = Array.isArray(candidate[fieldName]) ? candidate[fieldName].join(', ') : String(candidate[fieldName] || '').trim();
                 if (!nextValue || currentValue) return;
                 input.value = nextValue;
             });
-
-            const procedureDateInput = document.getElementById('f-procedure-date');
-            const procedureDateValue = getProcedureDateFromRecord(candidate);
-            if (procedureDateInput && !procedureDateInput.value && procedureDateValue) {
-                procedureDateInput.value = procedureDateValue;
-            }
 
             const statusInput = document.getElementById('f-proc-status');
             if (statusInput && statusInput.value === DEFAULT_RECORD_STATUS && candidate.procedureStatus) {
@@ -7655,88 +7434,6 @@
             showToast(`✓ Backfilled stable fields from ${candidate.name || 'previous visit'}`);
             return true;
         };
-
-        function hideFollowUpCarryForwardSummary() {
-            const panel = document.getElementById('followup-carryforward-summary');
-            const body = document.getElementById('followup-carryforward-summary-body');
-            if (body) body.innerHTML = '';
-            if (panel) panel.classList.add('hidden');
-        }
-
-        function showFollowUpCarryForwardSummary(sourcePatient = {}) {
-            const panel = document.getElementById('followup-carryforward-summary');
-            const body = document.getElementById('followup-carryforward-summary-body');
-            if (!panel || !body) return;
-
-            const normalizeText = (value) => {
-                if (Array.isArray(value)) {
-                    return value.map(v => String(v || '').trim()).filter(Boolean).join(', ');
-                }
-                if (value && typeof value === 'object') {
-                    const serialized = JSON.stringify(value);
-                    return serialized === '{}' || serialized === '[]' ? '' : serialized;
-                }
-                return String(value || '').trim();
-            };
-
-            const entries = [];
-            const addEntry = (label, value) => {
-                const text = normalizeText(value);
-                if (!text) return;
-                entries.push({ label, value: text });
-            };
-
-            const findingsSummary = typeof getFindingsDisplay === 'function'
-                ? String(getFindingsDisplay(sourcePatient) || '').trim()
-                : '';
-            const findingsDatesMap = sourcePatient.findingsDates && typeof sourcePatient.findingsDates === 'object'
-                ? sourcePatient.findingsDates
-                : {};
-            const findingsDateLines = Object.entries(findingsDatesMap)
-                .filter(([, value]) => String(value || '').trim())
-                .map(([code, value]) => {
-                    const checkbox = document.querySelector(`.findings-checkbox[value="${code}"]`);
-                    const labelText = checkbox?.closest('div')?.querySelector('span.flex-1')?.textContent;
-                    const fallbackLabel = String(code || '').replaceAll(/[-_]+/g, ' ').trim();
-                    const label = String(labelText || fallbackLabel || code).trim();
-                    return `${label}: ${String(value || '').trim()}`;
-                });
-            const findingsWithDates = [
-                findingsSummary === '-' ? '' : findingsSummary,
-                findingsDateLines.length ? `Dates: ${findingsDateLines.join(' | ')}` : ''
-            ].filter(Boolean).join('\n');
-
-            addEntry('Room', sourcePatient.room);
-            addEntry('Hospital', sourcePatient.hospital);
-            addEntry('Provider', sourcePatient.supervisingMd);
-            addEntry('Procedure Date', getProcedureDateFromRecord(sourcePatient));
-            addEntry('Plan', getPlanTextWithoutProcedureDate(sourcePatient.plan));
-            addEntry('Status', sourcePatient.procedureStatus);
-            addEntry('Investigations', findingsWithDates);
-            addEntry('Subjective & Objective Findings', getVisibleProgressNotes(sourcePatient));
-            addEntry('Pending', sourcePatient.pending);
-            addEntry('Follow Up', sourcePatient.followUp);
-            addEntry('Secondary Codes', sourcePatient.chargeCodesSecondary);
-            addEntry('ICD', sourcePatient.icdPrimary);
-            addEntry('CPT', sourcePatient.cptPrimary);
-
-            if (!entries.length) {
-                hideFollowUpCarryForwardSummary();
-                return;
-            }
-
-            body.innerHTML = entries.map((entry) => {
-                const shouldExpand = entry.label === 'Investigations' && String(entry.value || '').length > 180;
-                return `
-                <div class="rounded border border-emerald-200 bg-white px-2 py-1.5 self-start ${shouldExpand ? 'sm:col-span-2' : ''}">
-                    <div class="text-[10px] font-bold uppercase tracking-wide text-emerald-800">${escapeInlineHtml(entry.label)}</div>
-                    <div class="text-[11px] leading-5 text-emerald-900 whitespace-pre-wrap">${escapeInlineHtml(entry.value)}</div>
-                </div>
-            `;
-            }).join('');
-
-            panel.classList.remove('hidden');
-        }
 
         globalThis.openModal = (id = null) => {
             const modal = document.getElementById('patient-modal');
@@ -7759,10 +7456,7 @@
             renderPatientChangeHistory(null);
             modal.dataset.returningPatientCandidateId = '';
             modal.dataset.returningPatientBackfilledFrom = '';
-            modal.dataset.amendConfirmed = 'false';
-            modal.dataset.forceNewVisit = 'false';
             hideReturningPatientBackfillPrompt();
-            hideFollowUpCarryForwardSummary();
 
             const setEditMode = (isEditing) => {
                 modal.dataset.findingsEditable = isEditing ? 'true' : 'false';
@@ -7796,6 +7490,18 @@
                 });
                 const findingsText = document.getElementById('f-findings-text');
                 if (findingsText) findingsText.readOnly = !findingsEditable;
+                
+                // Set procedure controls editable state
+                const proceduresEditable = isEditing;
+                document.querySelectorAll('.procedure-checkbox').forEach(cb => {
+                    cb.disabled = !proceduresEditable;
+                });
+                document.querySelectorAll('.procedure-date').forEach(el => {
+                    el.disabled = !proceduresEditable;
+                });
+                document.querySelectorAll('.procedure-name-input').forEach(el => {
+                    el.readOnly = !proceduresEditable;
+                });
             };
 
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
@@ -7868,8 +7574,6 @@
                     AuditLogger.logDataAccess(auditUser, id, 'view');
                 }
                 if (p) {
-                    const procedureDateFromRecord = getProcedureDateFromRecord(p);
-                    const normalizedPlan = getPlanTextWithoutProcedureDate(p.plan || '');
                     ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'progress-notes', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
                         if (!el) return;
@@ -7877,14 +7581,8 @@
                             el.value = getVisibleProgressNotes(p);
                             return;
                         }
-                        if (field === 'plan') {
-                            el.value = normalizedPlan;
-                            return;
-                        }
-                        el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
+                        el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
-                    const procedureDateInput = document.getElementById('f-procedure-date');
-                    if (procedureDateInput) procedureDateInput.value = procedureDateFromRecord;
                     setFormDateReviewMeta(getPatientDateReviewMeta(p));
                     if (dateInput) dateInput.value = p.date || "";
                     if (visitTimeInput) visitTimeInput.value = p.visitTime || '';
@@ -7897,6 +7595,40 @@
                     }
                     if (document.getElementById('f-findings-dates')) {
                         document.getElementById('f-findings-dates').value = p.findingsDates ? JSON.stringify(p.findingsDates) : "";
+                    }
+                    // Load procedure data
+                    if (document.getElementById('f-procedure-codes')) {
+                        document.getElementById('f-procedure-codes').value = p.procedureCodes ? p.procedureCodes.join(',') : "";
+                    }
+                    if (document.getElementById('f-procedure-dates')) {
+                        document.getElementById('f-procedure-dates').value = p.procedureDates ? JSON.stringify(p.procedureDates) : "";
+                    }
+                    if (document.getElementById('f-procedure-values')) {
+                        document.getElementById('f-procedure-values').value = p.procedureValues ? JSON.stringify(p.procedureValues) : "";
+                    }
+                    // Restore procedure checkboxes and values
+                    if (p.procedureCodes && p.procedureCodes.length > 0) {
+                        document.querySelectorAll('.procedure-checkbox').forEach(cb => {
+                            cb.checked = p.procedureCodes.includes(cb.value);
+                            const dateInput = document.querySelector(`input.procedure-date[data-procedure="${cb.value}"]`);
+                            const nameInput = document.querySelector(`input.procedure-name-input[data-procedure="${cb.value}"]`);
+                            
+                            if (cb.checked) {
+                                if (dateInput && p.procedureDates && p.procedureDates[cb.value]) {
+                                    dateInput.value = p.procedureDates[cb.value];
+                                    dateInput.disabled = false;
+                                    dateInput.style.display = 'inline-block';
+                                }
+                                if (nameInput && p.procedureValues && p.procedureValues[cb.value]) {
+                                    nameInput.value = p.procedureValues[cb.value];
+                                    nameInput.disabled = false;
+                                    nameInput.style.display = 'block';
+                                }
+                            }
+                        });
+                        if (typeof globalThis.syncProceduresUI === 'function') {
+                            globalThis.syncProceduresUI({ editable: false });
+                        }
                     }
                     if (statusInput) statusInput.value = getSafeConfiguredStatus(p.procedureStatus);
                     if (statInput) statInput.checked = p.stat === true || p.stat === 'true';
@@ -7920,55 +7652,40 @@
                         createdByField.value = creator || 'Unknown';
                     }
                     
-                    const findingsCodes = Array.isArray(p.findingsCodes) ? p.findingsCodes : [];
-                    const findingsValuesMap = p.findingsValues && typeof p.findingsValues === 'object' ? p.findingsValues : {};
-                    const findingsDatesMap = p.findingsDates && typeof p.findingsDates === 'object' ? p.findingsDates : {};
-                    const effectiveFindingsCodes = new Set([
-                        ...findingsCodes,
-                        ...Object.keys(findingsValuesMap),
-                        ...Object.keys(findingsDatesMap)
-                    ].map((code) => String(code || '').trim()).filter(Boolean));
-
-                    document.querySelectorAll('.findings-checkbox').forEach(cb => {
-                        const customValue = findingsValuesMap[cb.value];
-                        const parsedFindingValue = parseFindingValueEntry(cb.value, customValue);
-                        const hasValue = hasMeaningfulFindingValue(cb.value, customValue);
-                        const hasDate = Boolean(String(findingsDatesMap[cb.value] || '').trim());
-                        cb.checked = effectiveFindingsCodes.has(cb.value) || hasValue || hasDate;
-
-                        const isCustomCode = FINDINGS_CUSTOM_CODES.has(cb.value);
-                        const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
-                        const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
-                            if (dateInput) {
-                                delete dateInput.dataset.userDateConfirmed;
-                            }
-                        if (isCustomCode && customValue !== null && customValue !== undefined) {
-                            populateCustomFindingFields(cb.value, customValue);
-                        } else if (isCustomCode) {
-                            populateCustomFindingFields(cb.value, {});
-                        } else if (valueInput) {
-                            if (cb.checked) {
-                                valueInput.disabled = false;
-                                valueInput.value = parsedFindingValue.note;
-                                autoResizeTextarea(valueInput);
-                            } else {
-                                valueInput.value = '';
-                                valueInput.disabled = true;
-                            }
-                        }
-                        if (dateInput) {
-                            if (cb.checked) {
-                                dateInput.disabled = false;
-                                if (findingsDatesMap[cb.value]) {
-                                    dateInput.value = findingsDatesMap[cb.value];
+                    if (p.findingsCodes && p.findingsCodes.length > 0) {
+                        document.querySelectorAll('.findings-checkbox').forEach(cb => {
+                            cb.checked = p.findingsCodes.includes(cb.value);
+                            const isCustomCode = FINDINGS_CUSTOM_CODES.has(cb.value);
+                            const customValue = p.findingsValues ? p.findingsValues[cb.value] : null;
+                            const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
+                            const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
+                            if (isCustomCode && customValue) {
+                                populateCustomFindingFields(cb.value, customValue);
+                            } else if (valueInput) {
+                                if (cb.checked) {
+                                    valueInput.disabled = false;
+                                    if (customValue !== null && customValue !== undefined) {
+                                        valueInput.value = typeof customValue === 'string' ? customValue : JSON.stringify(customValue);
+                                        autoResizeTextarea(valueInput);
+                                    }
+                                } else {
+                                    valueInput.disabled = true;
                                 }
-                            } else {
-                                dateInput.disabled = true;
                             }
+                            if (dateInput) {
+                                if (cb.checked) {
+                                    dateInput.disabled = false;
+                                    if (p.findingsDates && p.findingsDates[cb.value]) {
+                                        dateInput.value = p.findingsDates[cb.value];
+                                    }
+                                } else {
+                                    dateInput.disabled = true;
+                                }
+                            }
+                        });
+                        if (typeof globalThis.syncFindingsUI === 'function') {
+                            globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
                         }
-                    });
-                    if (typeof globalThis.syncFindingsUI === 'function') {
-                        globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
                     }
                     syncDateReviewUI();
                 } else {
@@ -8002,19 +7719,8 @@
             globalThis.openModal(id);
         };
 
-        globalThis.enableModalEdit = (skipAmendConfirmation = false) => {
+        globalThis.enableModalEdit = () => {
             const modal = document.getElementById('patient-modal');
-            const editId = document.getElementById('edit-id')?.value;
-            if (editId && !skipAmendConfirmation) {
-                const alreadyConfirmed = modal?.dataset.amendConfirmed === 'true';
-                if (!alreadyConfirmed) {
-                    if (typeof globalThis.confirmAmendAction === 'function') {
-                        if (!globalThis.confirmAmendAction()) return false;
-                    }
-                    if (modal) modal.dataset.amendConfirmed = 'true';
-                }
-            }
-
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
             if (modal) modal.dataset.findingsEditable = 'true';
@@ -8045,149 +7751,6 @@
             });
             const findingsText = document.getElementById('f-findings-text');
             if (findingsText) findingsText.readOnly = false;
-            return true;
-        };
-
-        globalThis.confirmAmendAction = () => {
-            const warningText = [
-                'MEDICO-LEGAL DISCLAIMER',
-                '',
-                'You are about to amend an existing clinical record that may already be used for care, billing, audit, and legal documentation.',
-                'Proceed only when clinically necessary and after verifying the correct patient and visit.',
-                'Enter accurate amendments only and avoid altering historical meaning unless required for correction.',
-                '',
-                'By continuing, you confirm you will take extreme care and provide an appropriate reason for the change as required by policy.'
-            ].join('\n');
-
-            const acknowledged = globalThis.confirm(warningText);
-            if (!acknowledged) return false;
-
-            const requiredPhrase = 'AMEND';
-            const typedConfirmation = globalThis.prompt(`Type ${requiredPhrase} to confirm this medico-legal amendment action.`);
-            if (typedConfirmation === null) return false;
-
-            if (String(typedConfirmation || '').trim().toUpperCase() !== requiredPhrase) {
-                if (typeof globalThis.showToast === 'function') {
-                    globalThis.showToast('Amend action cancelled: confirmation phrase did not match.');
-                }
-                return false;
-            }
-
-            return true;
-        };
-
-        globalThis.openModalWithAmendWarning = (id) => {
-            if (!id) {
-                globalThis.openModal(id);
-                return true;
-            }
-
-            if (!globalThis.confirmAmendAction()) {
-                return false;
-            }
-
-            globalThis.openModal(id);
-            const modal = document.getElementById('patient-modal');
-            if (modal) modal.dataset.amendConfirmed = 'true';
-            globalThis.enableModalEdit(true);
-            return true;
-        };
-
-        globalThis.openFollowUpModal = (id) => {
-            const sourcePatient = patients.find((p) => p.id === id);
-            if (!sourcePatient) {
-                showToast('Unable to load source visit for follow up');
-                return false;
-            }
-
-            globalThis.openModal();
-
-            const modal = document.getElementById('patient-modal');
-            if (modal) {
-                modal.dataset.forceNewVisit = 'true';
-                modal.dataset.followUpSourceId = String(sourcePatient.id || '');
-            }
-
-            const setTextValue = (inputId, value) => {
-                const input = document.getElementById(inputId);
-                if (!input) return;
-                input.value = value == null ? '' : value;
-            };
-
-            setTextValue('f-room', sourcePatient.room || '');
-            setTextValue('f-name', sourcePatient.name || '');
-            setTextValue('f-dob', sourcePatient.dob || '');
-            setTextValue('f-mrn', sourcePatient.mrn || '');
-            setTextValue('f-hospital', sourcePatient.hospital || '');
-            setTextValue('f-md', sourcePatient.supervisingMd || '');
-            setTextValue('f-plan', '');
-            setTextValue('f-procedure-date', '');
-            setTextValue('f-cpt-primary', '');
-            setTextValue('f-icd-primary', '');
-            setTextValue('f-charge-codes-secondary', '');
-            setTextValue('f-findings-text', '');
-            setTextValue('f-progress-notes', '');
-            setTextValue('f-pending', '');
-            setTextValue('f-fu', '');
-            setTextValue('f-findings-codes', '');
-            setTextValue('f-findings-values', '{}');
-            setTextValue('f-findings-dates', '{}');
-
-            setTextValue('f-date', sourcePatient.date || new Date().toISOString().split('T')[0]);
-
-            const statusInput = document.getElementById('f-proc-status');
-            if (statusInput) {
-                const hasFollowUpStatus = Array.from(statusInput.options || []).some((opt) => opt.value === 'FOLLOW UP (CONSULT)');
-                statusInput.value = hasFollowUpStatus
-                    ? 'FOLLOW UP (CONSULT)'
-                    : getSafeConfiguredStatus(sourcePatient.procedureStatus || DEFAULT_RECORD_STATUS);
-            }
-
-            const statInput = document.getElementById('f-priority');
-            if (statInput) {
-                statInput.checked = sourcePatient.stat === true || sourcePatient.stat === 'true';
-            }
-
-            setFormDateReviewMeta({});
-
-            document.querySelectorAll('.findings-checkbox').forEach((cb) => {
-                cb.checked = false;
-                const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
-                const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
-
-                if (FINDINGS_CUSTOM_CODES.has(cb.value)) {
-                    populateCustomFindingFields(cb.value, {});
-                }
-
-                if (valueInput) {
-                    valueInput.value = '';
-                    valueInput.disabled = true;
-                }
-
-                if (dateInput) {
-                    dateInput.value = '';
-                    dateInput.disabled = true;
-                    delete dateInput.dataset.userDateConfirmed;
-                }
-            });
-
-            showFollowUpCarryForwardSummary(sourcePatient);
-            if (typeof globalThis.syncFindingsUI === 'function') {
-                globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
-            }
-            syncDateReviewUI();
-
-            const followUpVisitTime = new Date().toISOString();
-            setTextValue('f-visit-time', followUpVisitTime);
-            const visitDate = document.getElementById('f-date')?.value || sourcePatient.date || new Date().toISOString().split('T')[0];
-            const visitMrn = String(document.getElementById('f-mrn')?.value || sourcePatient.mrn || '').trim();
-            const visitKeyBase = visitMrn && visitDate
-                ? `${visitMrn}|${visitDate}`
-                : buildImportIdentityKey({ ...sourcePatient, date: visitDate, visitTime: followUpVisitTime });
-            setTextValue('f-visit-key', `${visitKeyBase}|${followUpVisitTime}`);
-
-            showToast('Follow-up visit draft opened as a new record. Prior values are displayed above; enter new values in the editable fields below.');
-            return true;
         };
 
         const localPatientFiles = new Map();
@@ -8427,10 +7990,6 @@
                 clearDraft();// Clear draft on close
                 const form = document.getElementById('patient-form');
                 if (form) form.reset(); // Clear form on close
-                modal.dataset.amendConfirmed = 'false';
-                modal.dataset.forceNewVisit = 'false';
-                modal.dataset.followUpSourceId = '';
-                hideFollowUpCarryForwardSummary();
             }
         };
         
@@ -8447,12 +8006,12 @@
                 mrn: document.getElementById('f-mrn')?.value || '',
                 hospital: document.getElementById('f-hospital')?.value || '',
                 plan: document.getElementById('f-plan')?.value || '',
-                procedureDate: document.getElementById('f-procedure-date')?.value || '',
                 supervisingMd: document.getElementById('f-md')?.value || '',
                 pending: document.getElementById('f-pending')?.value || '',
                 followUp: document.getElementById('f-fu')?.value || '',
                 cptPrimary: document.getElementById('f-cpt-primary')?.value || '',
                 icdPrimary: document.getElementById('f-icd-primary')?.value || '',
+                procedureCodes: document.getElementById('f-procedure-codes')?.value || '',
                 timestamp: Date.now()
             };
             
@@ -8779,20 +8338,6 @@
 
         const getPatientDateReviewMeta = (patient = {}) => parseProgressNotesWithDateReviewMeta(patient.progressNotes || '').reviewMeta;
 
-        function getFindingDateInputByCode(code = '') {
-            const normalizedCode = String(code || '').trim();
-            if (!normalizedCode) return null;
-            const escapedCode = normalizedCode.replaceAll('"', '\\"');
-            return document.querySelector(`input.findings-date[data-code="${escapedCode}"]`);
-        }
-
-        function getFindingLabelByCode(code = '') {
-            const input = getFindingDateInputByCode(code);
-            const labelText = input?.closest('div')?.querySelector('span.flex-1')?.textContent;
-            const fallbackLabel = String(code || '').replaceAll(/[-_]+/g, ' ').trim();
-            return String(labelText || fallbackLabel || code).trim();
-        }
-
         const buildProgressNotesWithDateReviewMeta = (visibleText = '', reviewMeta = {}) => {
             const cleanedVisibleText = String(visibleText || '').replace(/(?:\r?\n)?\[\[SYS_DATE_REVIEW_META=[^\]]+\]\]\s*$/, '').trimEnd();
             const normalizedMeta = normalizeDateReviewMeta(reviewMeta);
@@ -8815,8 +8360,7 @@
 
             const flaggedFindingCodes = Object.keys(normalizedMeta.findingsDatesDefaulted);
             if (flaggedFindingCodes.length) {
-                const flaggedLabels = flaggedFindingCodes.map((code) => getFindingLabelByCode(code)).join(', ');
-                summaryLines.push(`${flaggedFindingCodes.length} finding date${flaggedFindingCodes.length === 1 ? '' : 's'} defaulted to created-on date. Update the amber-highlighted finding date field${flaggedFindingCodes.length === 1 ? '' : 's'} to clear the review flag. ${flaggedLabels ? `Flagged: ${flaggedLabels}.` : ''}`);
+                summaryLines.push(`${flaggedFindingCodes.length} finding date${flaggedFindingCodes.length === 1 ? '' : 's'} defaulted to created-on date. Update the amber-highlighted finding date field${flaggedFindingCodes.length === 1 ? '' : 's'} to clear the review flag.`);
             }
 
             return summaryLines;
@@ -8914,44 +8458,6 @@
             }
         }
 
-        function applyAmberFindingContextHighlight(input, shouldHighlight) {
-            if (!input) return;
-            const contextCard = input.closest('.border.border-slate-200.rounded.p-2.bg-white') || input.closest('.border');
-            if (!contextCard) return;
-
-            if (shouldHighlight) {
-                contextCard.style.backgroundColor = '#fffbeb';
-                contextCard.style.borderColor = '#f59e0b';
-                contextCard.style.boxShadow = '0 0 0 1px rgba(245, 158, 11, 0.2)';
-                return;
-            }
-
-            contextCard.style.backgroundColor = '';
-            contextCard.style.borderColor = '';
-            contextCard.style.boxShadow = '';
-        }
-
-        globalThis.focusVisitDateField = () => {
-            const input = document.getElementById('f-date');
-            if (!input) return;
-            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            input.focus();
-        };
-
-        globalThis.focusFindingDateField = (code = '') => {
-            const input = getFindingDateInputByCode(code);
-            if (!input) {
-                showToast(`Unable to locate finding date field for ${String(code || 'the selected code')}`);
-                return;
-            }
-            const details = input.closest('details');
-            if (details) details.open = true;
-            input.disabled = false;
-            input.style.display = 'inline-block';
-            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            input.focus();
-        };
-
         function syncDateReviewUI() {
             const reviewMeta = getFormDateReviewMeta();
             const visitDateInput = document.getElementById('f-date');
@@ -8972,8 +8478,7 @@
                     return;
                 }
                 const currentValue = String(findingDateInput?.value || '').trim();
-                const userConfirmedDate = findingDateInput?.dataset.userDateConfirmed === 'true';
-                if (isValidIsoDateString(currentValue) && (currentValue !== reviewMeta.findingsDatesDefaulted[code] || userConfirmedDate)) {
+                if (isValidIsoDateString(currentValue) && currentValue !== reviewMeta.findingsDatesDefaulted[code]) {
                     delete reviewMeta.findingsDatesDefaulted[code];
                 }
             });
@@ -8986,15 +8491,7 @@
             applyAmberDateHighlight(visitDateInput, Boolean(reviewMeta.visitDateDefaultedTo));
             document.querySelectorAll('input.findings-date').forEach((input) => {
                 const code = String(input.dataset.code || '').trim();
-                const isFlagged = Boolean(reviewMeta.findingsDatesDefaulted[code]);
-                applyAmberDateHighlight(input, isFlagged);
-                applyAmberFindingContextHighlight(input, isFlagged);
-            });
-
-            Object.keys(reviewMeta.findingsDatesDefaulted).forEach((code) => {
-                const findingDateInput = getFindingDateInputByCode(code);
-                const details = findingDateInput?.closest('details');
-                if (details) details.open = true;
+                applyAmberDateHighlight(input, Boolean(reviewMeta.findingsDatesDefaulted[code]));
             });
 
             const banner = document.getElementById('date-review-banner');
@@ -9008,18 +8505,7 @@
             }
 
             banner.classList.remove('hidden');
-            const findingActions = Object.keys(reviewMeta.findingsDatesDefaulted).map((code) => `
-                <button type="button" data-finding-code="${escapeInlineHtml(code)}" onclick="globalThis.focusFindingDateField(this.dataset.findingCode)" class="px-2 py-1 rounded border border-amber-300 bg-amber-100 text-amber-900 text-[11px] font-semibold hover:bg-amber-200">
-                    ${escapeInlineHtml(getFindingLabelByCode(code))}
-                </button>
-            `).join('');
-            const visitAction = reviewMeta.visitDateDefaultedTo
-                ? '<button type="button" onclick="globalThis.focusVisitDateField()" class="px-2 py-1 rounded border border-amber-300 bg-amber-100 text-amber-900 text-[11px] font-semibold hover:bg-amber-200">Visit Date</button>'
-                : '';
-            const actionRow = (visitAction || findingActions)
-                ? `<div class="mt-2 flex flex-wrap gap-1.5">${visitAction}${findingActions}</div>`
-                : '';
-            banner.innerHTML = summaryLines.map(line => `<div>${escapeInlineHtml(line)}</div>`).join('') + actionRow;
+            banner.innerHTML = summaryLines.map(line => `<div>${escapeInlineHtml(line)}</div>`).join('');
         }
 
         const normalizeImportedDateValue = (value) => {
@@ -10120,7 +9606,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             history.push({
                 type: 'findings_snapshot',
-                note: 'Investigations snapshot saved',
+                note: 'Findings snapshot saved',
                 author: author || 'unknown',
                 action: 'findings update',
                 timestamp: new Date().toISOString(),
@@ -10190,7 +9676,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             const changedFields = buildFindingsHistoryChips(entry.changedFields, esc);
             const findingsMarkup = getFindingSegments(findingsRecord).length
                 ? renderFindingSegments(findingsRecord, true)
-                : '<div class="text-xs text-slate-400">Investigations cleared</div>';
+                : '<div class="text-xs text-slate-400">Findings cleared</div>';
 
             return `
                 <div class="border border-blue-200 rounded-lg p-3 bg-blue-50">
@@ -10297,6 +9783,15 @@ const findHeaderIndex = (rows, sheetLog) => {
             const findingsValues = valuesInput.value ? JSON.parse(valuesInput.value) : {};
             const datesInput = document.getElementById('f-findings-dates');
             const findingsDates = datesInput.value ? JSON.parse(datesInput.value) : {};
+            
+            // Get procedure data
+            const procCodesInput = document.getElementById('f-procedure-codes');
+            const procedureCodes = procCodesInput?.value ? procCodesInput.value.split(',').map(c => c.trim()).filter(Boolean) : [];
+            const procValuesInput = document.getElementById('f-procedure-values');
+            const procedureValues = procValuesInput?.value ? JSON.parse(procValuesInput.value) : {};
+            const procDatesInput = document.getElementById('f-procedure-dates');
+            const procedureDates = procDatesInput?.value ? JSON.parse(procDatesInput.value) : {};
+            
             const reviewMeta = getFormDateReviewMeta();
             const visibleProgressNotes = document.getElementById('f-progress-notes').value;
             const parseSecondaryCodes = (raw) => {
@@ -10306,8 +9801,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                     .map(v => v.trim())
                     .filter(Boolean);
             };
-            const normalizedProcedureDate = normalizeProcedureDate(document.getElementById('f-procedure-date')?.value || '');
-            const normalizedPlanInput = getPlanTextWithoutProcedureDate(document.getElementById('f-plan').value);
             
             const data = {
                 room: document.getElementById('f-room').value, 
@@ -10322,8 +9815,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                 findingsValues: findingsValues,
                 findingsDates: findingsDates,
                 findingsText: document.getElementById('f-findings-text').value,
-                plan: normalizedPlanInput,
-                procedureDate: normalizedProcedureDate,
+                procedureCodes: procedureCodes,
+                procedureValues: procedureValues,
+                procedureDates: procedureDates,
+                plan: document.getElementById('f-plan').value, 
                 progressNotes: visibleProgressNotes,
                 supervisingMd: document.getElementById('f-md').value,
                 pending: document.getElementById('f-pending').value, 
@@ -10344,8 +9839,6 @@ const findHeaderIndex = (rows, sheetLog) => {
             
             try {
                 const editId = document.getElementById('edit-id').value;
-                const modal = document.getElementById('patient-modal');
-                const forceNewVisit = modal?.dataset.forceNewVisit === 'true';
                 const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
                 const normalizedDateState = applyDateReviewDefaultsToRecord({
                     date: data.date,
@@ -10373,16 +9866,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                 });
                 syncDateReviewUI();
                 if (!data.visitKey) {
-                    if (forceNewVisit && data.mrn && data.date) {
-                        data.visitKey = `${data.mrn}|${data.date}|${data.visitTime}`;
-                    } else {
-                        data.visitKey = data.mrn && data.date
-                            ? `${data.mrn}|${data.date}`
-                            : buildImportIdentityKey(data);
-                    }
+                    data.visitKey = data.mrn && data.date
+                        ? `${data.mrn}|${data.date}`
+                        : buildImportIdentityKey(data);
                 }
                 let resolvedEditId = editId;
-                if (!resolvedEditId && !forceNewVisit) {
+                if (!resolvedEditId) {
                     const matchedIndex = findExistingImportedPatientIndex(patients, data);
                     if (matchedIndex >= 0) {
                         resolvedEditId = patients[matchedIndex].id;
@@ -10394,7 +9883,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
 
                 const previousPatient = resolvedEditId ? (patients.find(p => p.id === resolvedEditId) || null) : null;
-                const changeActionLabel = resolvedEditId ? 'update' : (forceNewVisit ? 'follow-up create' : 'create');
+                const changeActionLabel = resolvedEditId ? 'update' : 'create';
                 const changeNote = await getRequiredChangeNote(changeActionLabel);
                 if (!changeNote) return false;
                 if (normalizedDateState.appliedDefaults.length) {
@@ -10419,7 +9908,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 // User-visible fields only — excludes system/meta fields that change on every save.
                 const USER_DIFF_FIELDS = [
                     'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
-                    'pending', 'followUp', 'procedureStatus', 'procedureDate', 'cptPrimary', 'icdPrimary',
+                    'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
                     'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues',
                     'findingsDates', 'stat', 'priority'
                 ];
@@ -10865,6 +10354,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             
             if (tab === 'calendar') {
                 document.getElementById('calendar-section')?.classList.remove('hidden');
+                renderCalendar();
             } else if (tab === 'oncall') {
                 document.getElementById('oncall-section')?.classList.remove('hidden');
                 renderOnCallSchedule();
@@ -10957,7 +10447,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const holidays = getHolidaysForDate(year, month + 1, d);
                 const shift = onCallSchedule.find(s => s.date === dateStr);
-                const dayPatients = getLatestPatientRows(patients.filter(p => p.date === dateStr && !p.archived));
+                const dayPatients = patients.filter(p => p.date === dateStr && !p.archived);
                 const statPts = dayPatients.filter(p => p.stat === true || p.stat === 'true');
                 const procPts = dayPatients.filter(p => isSurgicalCase(p) && p.stat !== true && p.stat !== 'true');
                 const otherCount = dayPatients.filter(p => !isSurgicalCase(p) && p.stat !== true && p.stat !== 'true').length;
@@ -11073,7 +10563,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             }
             
             // Get visible columns
-            const visibleCols = getSanitizedVisibleColumns();
+            const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
 
             const renderSectionRow = (label, count, isReviewSection) => `
                 <tr class="${isReviewSection ? 'bg-amber-100 border-y border-amber-200' : 'bg-slate-100 border-y border-slate-200'}">
@@ -11089,19 +10579,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const visitTimeDisplay = p.visitTime ? new Date(p.visitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                 const isCrossedOut = isPatientCrossedOut(p.id);
                 const crossedOutClass = isCrossedOut ? 'cross-out-target' : '';
-                const safePatientId = escapeInlineHtml(p.id || '');
-                const safeRoom = escapeInlineHtml(p.room || '');
-                const safeHospital = escapeInlineHtml(p.hospital || 'N/A');
-                const safeName = escapeInlineHtml(p.name || 'Anon');
-                const safeDate = escapeInlineHtml(p.date || '');
-                const safeFindingsDisplay = escapeInlineHtml(findingsDisplay);
-                const findingsDateSummary = getFindingsDateSummary(p, 2);
-                const safeFindingsDateSummary = escapeInlineHtml(findingsDateSummary);
-                const safePlan = escapeInlineHtml(p.plan || '-');
                 
                 const isStat = (p.stat === true || p.stat === 'true');
                 const personKey = getPatientPersonKey(p);
-                const safePersonKey = escapeInlineHtml(personKey || '');
                 const isExpanded = expandedPatientMrns.has(personKey);
                 const visitCount = getPatientVisitCount(p);
                 const statClass = isStat
@@ -11117,30 +10597,29 @@ const findHeaderIndex = (rows, sheetLog) => {
                     : '';
                 
                 const mainRow = `
-                <tr class="transition-colors ${statClass} ${isCrossedOut ? 'crossed-out-row' : ''}" oncontextmenu="globalThis.openContextMenu(event, '${safePatientId}')">
-                    <td class="p-3 align-top col-select"><input type="checkbox" data-patient-checkbox value="${safePatientId}" onchange="updateBatchOpCount()" class="w-5 h-5 rounded cursor-pointer" ${selectedPatientIds.has(p.id)?'checked':''}></td>
-                    ${visibleCols.includes('room') ? `<td class="p-3 align-top col-room"><div class="font-bold text-sm ${textPrimary} ${crossedOutClass}">${safeRoom}</div></td>` : ''}
-                    ${visibleCols.includes('hospital') ? `<td class="p-3 align-top col-hospital"><div class="text-xs font-semibold ${textSecondary} whitespace-normal ${crossedOutClass}">${safeHospital}</div></td>` : ''}
-                    <td class="p-3 align-top col-patient">
-                        <div class="text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}">${safeName}</div>
-                        <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${safeDate}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
-                        ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${safePersonKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
+                <tr class="transition-colors ${statClass} ${isCrossedOut ? 'crossed-out-row' : ''}" oncontextmenu="globalThis.openContextMenu(event, '${p.id}')">
+                    <td class="p-3 align-top"><input type="checkbox" data-patient-checkbox value="${p.id}" onchange="updateBatchOpCount()" class="w-5 h-5 rounded cursor-pointer" ${selectedPatientIds.has(p.id)?'checked':''}></td>
+                    ${visibleCols.includes('room') ? `<td class="p-3 align-top w-20"><div class="font-bold text-sm ${textPrimary} ${crossedOutClass}">${p.room}</div></td>` : ''}
+                    ${visibleCols.includes('hospital') ? `<td class="p-3 align-top w-28"><div class="text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${p.hospital || 'N/A'}</div></td>` : ''}
+                    <td class="p-3 align-top w-48">
+                        <div class="text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}">${p.name || 'Anon'}</div>
+                        <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
+                        ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${personKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
                         ${reviewBadge}
                     </td>
-                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top col-findings"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${safeFindingsDisplay}</div>${safeFindingsDateSummary ? `<div class="mt-1 text-[10px] font-semibold text-emerald-700 whitespace-normal break-words ${crossedOutClass}">Dates: ${safeFindingsDateSummary}</div>` : ''}</td>` : ''}
-                    <td class="p-3 align-top col-plan">
-                        <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${safePlan}</div>
+                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
+                    <td class="p-3 align-top w-[20%] min-w-[16rem]">
+                        <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${p.plan || '-'}</div>
                         <div class="flex items-start">
-                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${safePatientId}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full">
+                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-[16rem]">
                                 ${renderStatusOptionsMarkup(status)}
                             </select>
                         </div>
                     </td>
-                    <td class="p-3 align-top col-actions">
+                    <td class="p-3 align-top w-20">
                         <div class="flex flex-col items-start gap-1">
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${safePatientId}')" class="table-action-btn text-[8px] font-bold leading-tight whitespace-normal ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Amend Existing Record</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openFollowUpModal('${safePatientId}')" class="table-action-btn text-[8px] font-bold leading-tight whitespace-normal bg-green-600 text-white hover:bg-green-700 px-2 py-1 rounded transition-colors">Add Follow Up</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${safePatientId}')" class="table-action-btn text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModal('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Edit</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
                         </div>
                     </td>
                 </tr>`;
@@ -11202,16 +10681,14 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
                 const findingsDisplay = getFindingsDisplay(v);
                 const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
-                const findingsDateSummary = getFindingsDateSummary(v, 2);
                 return `<div class="flex items-center gap-2 py-1.5 px-2 rounded-lg ${isCurrentVisit ? 'bg-blue-50 border border-blue-200' : 'hover:bg-white'} cursor-pointer group" onclick="globalThis.openModal('${esc(v.id)}')">
                     <span class="text-[10px] text-slate-400 w-20 flex-shrink-0 font-mono">${esc(v.date)}</span>
                     <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>
                     <span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">${esc(v.hospital || '')}</span>
                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0 whitespace-nowrap">${esc(st)}</span>
                     ${deltaPill}
-                    ${findingsDateSummary ? `<span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex-shrink-0" title="Finding capture date(s)">${esc(findingsDateSummary)}</span>` : ''}
                     ${v.supervisingMd ? `<span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">👨‍⚕️&nbsp;${esc(v.supervisingMd)}</span>` : ''}
-                    <span class="text-[10px] text-slate-600 flex-1 min-w-0 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '...' : ''}${findingsSummary ? `<span class="text-slate-400 mx-1">|</span><span class="text-slate-700">Investigations: ${esc(findingsSummary.slice(0, 90))}${findingsSummary.length > 90 ? '...' : ''}</span>` : ''}</span>
+                    <span class="text-[10px] text-slate-600 flex-1 min-w-0 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '...' : ''}${findingsSummary ? `<span class="text-slate-400 mx-1">|</span><span class="text-slate-700">Findings: ${esc(findingsSummary.slice(0, 90))}${findingsSummary.length > 90 ? '...' : ''}</span>` : ''}</span>
                     <span class="text-[9px] font-bold opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity flex-shrink-0">open ↗</span>
                     ${isCurrentVisit ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded flex-shrink-0">current</span>' : ''}
                     ${isArchived ? '<span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1 rounded flex-shrink-0">archived</span>' : ''}
@@ -11322,9 +10799,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 if (type === 'stat') {
                     f = f.filter(p => p.stat === true || p.stat === 'true');
                 } else if (type === 'procedures') {
-                    if (currentTab !== 'procedures') {
-                        f = f.filter(p => isSurgicalCase(p));
-                    }
+                    f = f.filter(p => isSurgicalCase(p));
                 } else if (type === 'inprogress') {
                     f = f.filter(p => isActiveSurgicalWorkflowStatus(getPatientStatus(p)));
                 } else if (type === 'pending') {
@@ -11476,22 +10951,22 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <div class="row"><span class="label">Status:</span> <span class="value">${p.procedureStatus || p.status || ''}</span></div>
                                 </div>
                                 <div class="section">
-                                    <h3>Investigations</h3>
-                                    <div class="row"><span class="label">Investigations:</span> <span class="value">${p.findingsText || ''}</span></div>
-                                    <div class="row"><span class="label">Investigation Codes:</span> <span class="value">${(p.findingsCodes && p.findingsCodes.join(', ')) || ''}</span></div>
+                                    <h3>Clinical Findings</h3>
+                                    <div class="row"><span class="label">Findings:</span> <span class="value">${p.findingsText || ''}</span></div>
+                                    <div class="row"><span class="label">Findings Codes:</span> <span class="value">${(p.findingsCodes && p.findingsCodes.join(', ')) || ''}</span></div>
                                 </div>
                                 <div class="section">
                                     <h3>Plan</h3>
                                     <div class="row"><span class="label">Plan:</span> <span class="value">${p.plan || ''}</span></div>
-                                    <div class="row"><span class="label">Subjective & Objective Findings:</span> <span class="value">${getVisibleProgressNotes(p) || ''}</span></div>
+                                    <div class="row"><span class="label">Progress Notes:</span> <span class="value">${getVisibleProgressNotes(p) || ''}</span></div>
                                     <div class="row"><span class="label">Pending:</span> <span class="value">${p.pending || ''}</span></div>
                                     <div class="row"><span class="label">Follow Up:</span> <span class="value">${p.followUp || ''}</span></div>
                                 </div>
                                 <div class="section">
-                                    <h3>Diagnosis</h3>
-                                    <div class="row"><span class="label">Secondary Codes:</span> <span class="value">${(Array.isArray(p.chargeCodesSecondary) ? p.chargeCodesSecondary.join(', ') : (p.chargeCodesSecondary || ''))}</span></div>
-                                    <div class="row"><span class="label">ICD:</span> <span class="value">${p.icdPrimary || ''}</span></div>
+                                    <h3>Billing</h3>
                                     <div class="row"><span class="label">CPT:</span> <span class="value">${p.cptPrimary || ''}</span></div>
+                                    <div class="row"><span class="label">ICD:</span> <span class="value">${p.icdPrimary || ''}</span></div>
+                                    <div class="row"><span class="label">Other Codes:</span> <span class="value">${(Array.isArray(p.chargeCodesSecondary) ? p.chargeCodesSecondary.join(', ') : (p.chargeCodesSecondary || ''))}</span></div>
                                 </div>
                                 <div class="section">
                                     <h3>Attachments</h3>
@@ -11665,7 +11140,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 { key: 'hospital',      label: 'Hospital' },
                 { key: 'plan',          label: 'Plan' },
                 { key: 'supervisingMd', label: 'Supervising MD' },
-                { key: 'findingsText',  label: 'Investigations' },
+                { key: 'findingsText',  label: 'Findings' },
                 { key: 'pending',       label: 'Pending' },
                 { key: 'followUp',      label: 'Follow-Up' },
                 { key: 'procedureStatus', label: 'Status' },
@@ -11680,7 +11155,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 { key: 'hospital',      label: 'Hospital' },
                 { key: 'plan',          label: 'Plan' },
                 { key: 'supervisingMd', label: 'Supervising MD' },
-                { key: 'findingsText',  label: 'Dx/Investigations' },
+                { key: 'findingsText',  label: 'Dx/Findings' },
                 { key: 'pending',       label: 'Pending Tests' },
                 { key: 'followUp',      label: 'Follow-Up' },
             ];
@@ -12419,12 +11894,6 @@ const findHeaderIndex = (rows, sheetLog) => {
             const codesInput = document.getElementById('f-findings-codes');
             const valuesInput = document.getElementById('f-findings-values');
             const datesInput = document.getElementById('f-findings-dates');
-
-            document.querySelectorAll('input.findings-date').forEach((input) => {
-                input.type = 'text';
-                input.placeholder = 'Date (MM/DD/YYYY)';
-                input.inputMode = 'numeric';
-            });
             
             function updateSelectedCodes(options = {}) {
                 const editable = options.editable ?? isFindingsModalEditable();
@@ -12442,7 +11911,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
                     if (dateInput) {
                         dateInput.disabled = !checked || !editable;
-                        dateInput.style.display = checked ? 'block' : 'none';
+                        dateInput.style.display = checked ? 'inline-block' : 'none';
                         if (checked && dateInput.value) dates[code] = dateInput.value;
                     }
 
@@ -12475,8 +11944,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         valueInput.disabled = !checked;
                         valueInput.readOnly = !editable;
                         valueInput.style.display = checked ? 'block' : 'none';
-                        const noteValue = normalizeFindingScalar(valueInput.value);
-                        if (checked && noteValue) values[code] = noteValue;
+                        if (checked && valueInput.value) values[code] = valueInput.value;
                     }
                 });
 
@@ -12498,10 +11966,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 input.addEventListener('focus', (e) => autoResizeTextarea(e.target));
             });
             document.querySelectorAll('input.findings-date').forEach(input => {
-                input.addEventListener('change', (event) => {
-                    event.target.dataset.userDateConfirmed = 'true';
-                    updateSelectedCodes();
-                });
+                input.addEventListener('change', updateSelectedCodes);
             });
             document.getElementById('f-date')?.addEventListener('change', syncDateReviewUI);
             document.querySelectorAll('.findings-custom-input').forEach(input => {
@@ -12563,6 +12028,100 @@ const findHeaderIndex = (rows, sheetLog) => {
             updateSelectedCodes();
 
             // Ensure setTab is defined before calling it
+
+            // ========== Procedures UI Handler ==========
+            function updateSelectedProcedures(options = {}) {
+                const editable = options.editable ?? !document.getElementById('edit-id')?.value || (document.getElementById('patient-modal').classList.contains('hidden') === false);
+                const selected = Array.from(document.querySelectorAll('.procedure-checkbox')).filter(cb => cb.checked).map(cb => cb.value);
+                const codesInput = document.getElementById('f-procedure-codes');
+                if (codesInput) codesInput.value = selected.join(', ');
+                
+                const values = {};
+                const dates = {};
+                
+                document.querySelectorAll('.procedure-checkbox').forEach(cb => {
+                    const procedure = cb.value;
+                    const checked = cb.checked;
+                    const dateInput = document.querySelector(`input.procedure-date[data-procedure="${procedure}"]`);
+                    const nameInput = document.querySelector(`input.procedure-name-input[data-procedure="${procedure}"]`);
+                    
+                    if (dateInput) {
+                        dateInput.disabled = !checked || !editable;
+                        dateInput.style.display = checked ? 'inline-block' : 'none';
+                        if (checked && dateInput.value) {
+                            dates[procedure] = dateInput.value;
+                        }
+                    }
+                    
+                    if (nameInput) {
+                        nameInput.style.display = checked ? 'block' : 'none';
+                        nameInput.disabled = !checked || !editable;
+                        nameInput.readOnly = !editable;
+                        if (checked && nameInput.value) {
+                            values[procedure] = nameInput.value;
+                        }
+                    }
+                });
+                
+                const datesInput = document.getElementById('f-procedure-dates');
+                const valuesInput = document.getElementById('f-procedure-values');
+                if (datesInput) datesInput.value = JSON.stringify(dates);
+                if (valuesInput) valuesInput.value = JSON.stringify(values);
+            }
+            
+            function openProcedureCalendar(procedureName, procedureDate) {
+                if (!procedureDate) {
+                    showToast('📅 Set date first');
+                    return;
+                }
+                // Link to calendar view for the procedure date
+                if (typeof globalThis.setTab === 'function') {
+                    globalThis.setTab('calendar');
+                    // Store the target date for calendar to highlight
+                    window.procedureCalendarHighlightDate = procedureDate;
+                    showToast(`📅 ${procedureName} - ${procedureDate}`);
+                }
+            }
+            
+            // Attach procedure checkbox listeners
+            document.querySelectorAll('.procedure-checkbox').forEach(cb => {
+                cb.addEventListener('change', updateSelectedProcedures);
+            });
+            
+            // Attach date input listeners
+            document.querySelectorAll('input.procedure-date').forEach(input => {
+                input.addEventListener('change', updateSelectedProcedures);
+                input.addEventListener('click', () => {
+                    // When date is clicked, open calendar
+                    const procedure = input.dataset.procedure;
+                    const procedureName = document.querySelector(`.procedure-checkbox[value="${procedure}"]`)?.nextElementSibling?.textContent || procedure;
+                    setTimeout(() => {
+                        if (input.value) {
+                            openProcedureCalendar(procedureName, input.value);
+                        }
+                    }, 300);
+                });
+            });
+            
+            // Attach name input listeners
+            document.querySelectorAll('input.procedure-name-input').forEach(input => {
+                input.addEventListener('change', updateSelectedProcedures);
+                input.addEventListener('input', updateSelectedProcedures);
+            });
+            
+            // Initialize procedure controls (hide until checked)
+            document.querySelectorAll('input.procedure-date').forEach(input => {
+                input.style.display = 'none';
+                input.disabled = true;
+            });
+            document.querySelectorAll('input.procedure-name-input').forEach(input => {
+                input.style.display = 'none';
+                input.disabled = true;
+            });
+            updateSelectedProcedures();
+            
+            globalThis.openProcedureCalendar = openProcedureCalendar;
+            globalThis.syncProceduresUI = updateSelectedProcedures;
             if (typeof globalThis.setTab === 'function') {
                 globalThis.setTab('active');
             } else {
@@ -12667,7 +12226,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <div class="column-toggle">
                         <label><input type="checkbox" class="column-vis" value="room" checked onchange="globalThis.updateColumnVisibility()"> Room</label>
                         <label><input type="checkbox" class="column-vis" value="hospital" checked onchange="globalThis.updateColumnVisibility()"> Hospital</label>
-                        <label><input type="checkbox" class="column-vis" value="findings" checked onchange="globalThis.updateColumnVisibility()"> Investigations</label>
+                        <label><input type="checkbox" class="column-vis" value="findings" checked onchange="globalThis.updateColumnVisibility()"> Findings</label>
                         <label><input type="checkbox" class="column-vis" value="plan" checked onchange="globalThis.updateColumnVisibility()"> Plan</label>
                     </div>
                 </div>
@@ -12987,7 +12546,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         <!-- Tabs: Business Flow Order (Census→Surgical→Calendar→Timeline→Analytics→Reports→Audit→Shifts→Procedures→Review→Archive) -->
         <div class="selection-underlay-target desktop-tab-nav px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" aria-label="Main Navigation" role="tablist">
             <button id="tab-active-btn" onclick="globalThis.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="table-section">Census</button>
-            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="table-section" title="Shows records tagged as surgical by keyword match in Plan/Investigations or by surgical status.">Surgical</button>
+            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="table-section" title="Shows records tagged as surgical by keyword match in Plan/Findings or by surgical status.">Surgical</button>
             <button id="tab-calendar-btn" onclick="globalThis.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-section">Calendar</button>
             <button id="tab-timeline-btn" onclick="globalThis.setTab('timeline')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="timeline-section">Timeline</button>
             <button id="tab-analytics-btn" onclick="globalThis.setTab('analytics')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="analytics-section">Analytics</button>
@@ -13005,7 +12564,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             <!-- Advanced Search Panel -->
             <div id="advanced-search" class="advanced-search selection-underlay-target">
                 <label for="search-box" class="text-xs font-bold text-slate-600 block mb-1">🔍 Search</label>
-                <input type="text" id="search-box" class="search-box" placeholder="Search by name, MRN, room, hospital, or investigations..." onkeyup="globalThis.performSearch(this.value)">
+                <input type="text" id="search-box" class="search-box" placeholder="Search by name, MRN, room, hospital, or findings..." onkeyup="globalThis.performSearch(this.value)">
                 <div class="flex gap-2 mt-2 flex-wrap">
                     <button onclick="globalThis.setQuickFilter('stat')" class="px-2 py-1 bg-red-100 border border-red-300 text-red-700 text-xs rounded hover:bg-red-200">STAT Only 🔴</button>
                     <button onclick="globalThis.setQuickFilter('procedures')" class="px-2 py-1 bg-blue-100 border border-blue-300 text-blue-700 text-xs rounded hover:bg-blue-200">Procedures 🔵</button>
@@ -13038,7 +12597,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <button class="view-btn" onclick="globalThis.setViewMode('grouped')">🏥 By Hospital</button>
                 </div>
 
-                <div class="text-[11px] text-slate-500 mb-2">Surgical logic: keyword match in Plan/Investigations or surgical follow-up status values.</div>
+                <div class="text-[11px] text-slate-500 mb-2">Surgical logic: keyword match in Plan/Findings or surgical follow-up status values.</div>
 
                 <div id="mobile-patient-list" class="mobile-patient-list"></div>
 
@@ -13076,17 +12635,17 @@ const findHeaderIndex = (rows, sheetLog) => {
                     </div>
                 </div>
                 
-                <div class="overflow-x-auto h-full px-2 pb-2">
-                    <table class="main-census-table w-full border-collapse text-sm">
+                <div class="overflow-x-auto h-full">
+                    <table class="w-full min-w-[72rem] border-collapse text-sm h-full table-fixed">
                         <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
-                                <th class="p-3 align-top col-select"><label for="select-all-patients" class="sr-only">Select all patient rows</label><input id="select-all-patients" type="checkbox" data-select-all-checkbox onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer" aria-label="Select all patient rows" title="Select all patient rows"></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable col-room" data-sort-column="room">Room <span class="sort-indicator"></span></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable col-hospital" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable col-patient" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 col-findings">Investigations</th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 sortable col-plan" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
-                                <th class="p-3 align-top text-left font-bold text-slate-700 col-actions">Actions</th>
+                                <th class="p-3 w-12 align-top"><label for="select-all-patients" class="sr-only">Select all patient rows</label><input id="select-all-patients" type="checkbox" data-select-all-checkbox onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer" aria-label="Select all patient rows" title="Select all patient rows"></th>
+                                <th class="p-3 w-20 align-top text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
+                                <th class="p-3 w-28 align-top text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
+                                <th class="p-3 w-48 align-top text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
+                                <th class="p-3 w-[34%] min-w-[18rem] align-top text-left font-bold text-slate-700">Findings</th>
+                                <th class="p-3 w-[20%] min-w-[16rem] align-top text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
+                                <th class="p-3 w-20 align-top text-left font-bold text-slate-700">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="table-body" class="divide-y divide-slate-100"></tbody>
@@ -13202,14 +12761,14 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <option value="hospitals">🏢 Hospital Workload</option>
                                     <option value="risk">⚠️ Risk and Pending Focus</option>
                                     <option value="provider">👨‍⚕️ Provider Performance</option>
-                                    <option value="billing">🩺 Diagnosis & Codes Summary</option>
+                                    <option value="billing">💰 Billing & Codes Summary</option>
                                     <option value="los">📅 Length of Stay Analysis</option>
                                     <option value="followup">📌 Follow-up Workload</option>
                                     <option value="complexity">🔴 Patient Complexity</option>
                                     <option value="performance">📊 Hospital Performance</option>
                                     <optgroup label="── Practice Reports ──">
                                     <option value="provider-detail">🩺 Practitioner Detail Report</option>
-                                    <option value="billing-complete">📋 Diagnosis Completeness Audit</option>
+                                    <option value="billing-complete">📋 Billing Completeness Audit</option>
                                     <option value="admin-daily">🏥 Daily Census Summary</option>
                                     <option value="accounts-summary">💳 Accounts & CPT Breakdown</option>
                                     </optgroup>
@@ -13244,7 +12803,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <optgroup label="Practice Enhancement">
                                     <option value="provider-detail">Practice by Doctor</option>
                                     <option value="code-utilization">Practice by Code</option>
-                                    <option value="billing-readiness">Diagnosis Readiness Audit</option>
+                                    <option value="billing-readiness">Billing Readiness Audit</option>
                                     <option value="procedure-pipeline">Procedure Pipeline</option>
                                     <option value="followup-worklist">Follow-up Worklist</option>
                                     <option value="practice-opportunities">Enhancement Opportunities</option>
@@ -13501,15 +13060,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                         <button id="returning-patient-backfill-apply" type="button" onclick="globalThis.applyReturningPatientBackfill()" class="shrink-0 rounded-md bg-blue-600 px-2.5 py-1 font-semibold text-white hover:bg-blue-700">Use previous visit</button>
                     </div>
                 </div>
-                <div id="followup-carryforward-summary" class="hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-                    <div class="font-bold uppercase tracking-wide">Follow-up source data</div>
-                    <div class="mt-1 text-[11px] text-emerald-800">Only populated values from the source visit are shown below.</div>
-                    <div id="followup-carryforward-summary-body" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 items-start auto-rows-min"></div>
-                </div>
 
-                <!-- Investigations -->
+                <!-- Findings -->
                 <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-3">
-                    <h3 class="text-xs font-bold text-blue-900">Investigations</h3>
+                    <h3 class="text-xs font-bold text-blue-900">Findings</h3>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🩸 CBC</summary>
                         <div class="pl-2 space-y-2 text-xs">
@@ -13517,7 +13071,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85025">
                                     <span class="flex-1 font-medium">CBC w/ diff (85025)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85025" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85025">
                                 </div>
                                 <div class="findings-custom-panel mt-1.5" data-code="cbc-85025">
                                     <details class="border border-slate-300 rounded bg-slate-50">
@@ -13544,7 +13098,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85027">
                                     <span class="flex-1 font-medium">CBC auto (85027)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85027" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85027">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85027" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13552,7 +13106,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85007">
                                     <span class="flex-1 font-medium">Blood smear (85007)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85007" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85007">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85007" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13565,7 +13119,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="bmp-80048">
                                     <span class="flex-1 font-medium">BMP (80048)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="bmp-80048" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="bmp-80048">
                                 </div>
                                 <div class="findings-custom-panel mt-1.5" data-code="bmp-80048">
                                     <details class="border border-slate-300 rounded bg-slate-50">
@@ -13588,7 +13142,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cmp-80053">
                                     <span class="flex-1 font-medium">CMP (80053)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cmp-80053" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cmp-80053">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cmp-80053" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13601,7 +13155,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87086">
                                     <span class="flex-1 font-medium">Urine culture (87086)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87086" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87086">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87086" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13609,7 +13163,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87088">
                                     <span class="flex-1 font-medium">+ organism ID (87088)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87088" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87088">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87088" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13617,7 +13171,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87040">
                                     <span class="flex-1 font-medium">Blood culture (87040)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87040" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87040">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87040" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13625,7 +13179,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87103">
                                     <span class="flex-1 font-medium">Blood fungal (87103)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87103" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87103">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87103" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13638,7 +13192,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-chest">
                                     <span class="flex-1 font-medium">Chest (71045-48)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-chest" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-chest">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-chest" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13646,7 +13200,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-spine">
                                     <span class="flex-1 font-medium">Spine (72020-110)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-spine" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-spine">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-spine" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13654,7 +13208,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-extremity">
                                     <span class="flex-1 font-medium">Extremity (73000+)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-extremity" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-extremity">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-extremity" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13667,7 +13221,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76700">
                                     <span class="flex-1 font-medium">Abd complete (76700)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76700" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76700">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76700" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13675,7 +13229,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76705">
                                     <span class="flex-1 font-medium">Abd limited (76705)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76705" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76705">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76705" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13683,7 +13237,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-93306">
                                     <span class="flex-1 font-medium">Echo (93306)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-93306" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-93306">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-93306" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13696,7 +13250,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-head">
                                     <span class="flex-1 font-medium">Head/Brain (70450-70)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-head" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-head">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-head" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13704,7 +13258,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-chest">
                                     <span class="flex-1 font-medium">Chest (71250-75)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-chest" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-chest">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-chest" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13712,7 +13266,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-abd">
                                     <span class="flex-1 font-medium">Abdomen (74150-78)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-abd" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-abd">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-abd" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13720,7 +13274,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-pelvis">
                                     <span class="flex-1 font-medium">Pelvis (72192-94)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-pelvis" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-pelvis">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-pelvis" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13733,7 +13287,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-brain">
                                     <span class="flex-1 font-medium">Brain (70551-53)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-brain" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-brain">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-brain" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13741,7 +13295,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-c-spine">
                                     <span class="flex-1 font-medium">C-Spine (72141-42)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-c-spine" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-c-spine">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-c-spine" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13749,7 +13303,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-l-spine">
                                     <span class="flex-1 font-medium">L-Spine (72148-49)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-l-spine" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-l-spine">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-l-spine" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13757,7 +13311,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-abd">
                                     <span class="flex-1 font-medium">Abdomen (74181-83)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-abd" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-abd">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-abd" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13770,7 +13324,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78306">
                                     <span class="flex-1 font-medium">Bone scan (78306)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78306" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78306">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78306" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13778,7 +13332,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78451">
                                     <span class="flex-1 font-medium">Cardiac perf (78451-54)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78451" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78451">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78451" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13786,7 +13340,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78815">
                                     <span class="flex-1 font-medium">PET scan (78815)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78815" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78815">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78815" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13794,7 +13348,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-thyroid">
                                     <span class="flex-1 font-medium">Thyroid (78012-14)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-thyroid" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
+                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-thyroid">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-thyroid" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13803,26 +13357,116 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <input type="hidden" id="f-findings-codes">
                     <input type="hidden" id="f-findings-values">
                     <input type="hidden" id="f-findings-dates">
-                    <textarea id="f-findings-text" placeholder="Additional comments" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
+                    <textarea id="f-findings-text" placeholder="Additional findings" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
                 </div>
 
-                <div class="space-y-2">
-                    <label for="f-procedure-date" class="text-xs font-bold text-slate-600">Intended Procedure Date</label>
-                    <input type="date" id="f-procedure-date" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm">
-                    <textarea id="f-plan" placeholder="Plan" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
+                <textarea id="f-plan" placeholder="Plan" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
+
+                <!-- Procedures Section -->
+                <div class="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
+                    <h3 class="text-xs font-bold text-purple-900">🏥 Procedures</h3>
+                    <p class="text-xs text-purple-700">Procedures identified from Plan text</p>
+                    <details class="space-y-2">
+                        <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">📋 Procedure Name</summary>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="cystoscopy">
+                                    <span class="flex-1 font-medium">Cystoscopy</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="cystoscopy">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="cystoscopy" placeholder="Procedure notes..." style="display: none;">
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="turbt">
+                                    <span class="flex-1 font-medium">TURBT</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="turbt">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="turbt" placeholder="Procedure notes..." style="display: none;">
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="stent">
+                                    <span class="flex-1 font-medium">Stent Placement</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="stent">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="stent" placeholder="Procedure notes..." style="display: none;">
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="lithotripsy">
+                                    <span class="flex-1 font-medium">Lithotripsy</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="lithotripsy">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="lithotripsy" placeholder="Procedure notes..." style="display: none;">
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="ureteral-reimplantation">
+                                    <span class="flex-1 font-medium">Ureteral Reimplantation</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="ureteral-reimplantation">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="ureteral-reimplantation" placeholder="Procedure notes..." style="display: none;">
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="nephrectomy">
+                                    <span class="flex-1 font-medium">Nephrectomy</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="nephrectomy">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="nephrectomy" placeholder="Procedure notes..." style="display: none;">
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="prostatectomy">
+                                    <span class="flex-1 font-medium">Prostatectomy</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="prostatectomy">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="prostatectomy" placeholder="Procedure notes..." style="display: none;">
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="laser">
+                                    <span class="flex-1 font-medium">Laser Procedure</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="laser">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="laser" placeholder="Procedure notes..." style="display: none;">
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="biopsy">
+                                    <span class="flex-1 font-medium">Biopsy</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="biopsy">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="biopsy" placeholder="Procedure notes..." style="display: none;">
+                            </div>
+                            <div class="border border-slate-200 rounded p-2 bg-white">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="other-surgery">
+                                    <span class="flex-1 font-medium">Other Surgery</span>
+                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="other-surgery">
+                                </div>
+                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="other-surgery" placeholder="Specify procedure..." style="display: none;">
+                            </div>
+                        </div>
+                    </details>
+                    <input type="hidden" id="f-procedure-codes">
+                    <input type="hidden" id="f-procedure-dates">
+                    <input type="hidden" id="f-procedure-values">
                 </div>
 
                 <div>
-                    <textarea id="f-progress-notes" placeholder="Subjective & Objective Findings" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>
-                    <div class="mt-1 text-[11px] text-slate-400">Subjective & Objective Findings = ongoing clinical narrative</div>
+                    <textarea id="f-progress-notes" placeholder="Progress Notes" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>
+                    <div class="mt-1 text-[11px] text-slate-400">Progress Notes = ongoing clinical narrative</div>
                 </div>
 
-                <!-- Diagnosis -->
+                <!-- Billing -->
                 <div class="bg-amber-50 p-4 rounded-lg border border-amber-200 space-y-2">
-                    <h3 class="text-xs font-bold text-amber-900">🩺 Diagnosis</h3>
-                    <input type="text" id="f-charge-codes-secondary" placeholder="Secondary Codes" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
-                    <input type="text" id="f-icd-primary" placeholder="ICD-10 (N39.0)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
+                    <h3 class="text-xs font-bold text-amber-900">💰 Billing</h3>
                     <input type="text" id="f-cpt-primary" placeholder="CPT (52204)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
+                    <input type="text" id="f-icd-primary" placeholder="ICD-10 (N39.0)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
+                    <input type="text" id="f-charge-codes-secondary" placeholder="Secondary codes" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
                 </div>
 
                 <input type="text" id="f-fu" placeholder="Follow-Up" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200">
@@ -13859,7 +13503,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             <div class="flex-shrink-0 relative">
                 <div class="flex gap-2 p-3 border-t border-slate-200 bg-slate-50">
-                    <button id="modal-edit-btn" type="button" onclick="globalThis.enableModalEdit()" class="hidden flex-1 px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded hover:bg-blue-700 transition-colors">Amend Existing Record</button>
+                    <button id="modal-edit-btn" type="button" onclick="globalThis.enableModalEdit()" class="hidden flex-1 px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded hover:bg-blue-700 transition-colors">Edit</button>
                     <button id="modal-archive-btn" type="button" onclick="globalThis.archiveFromModal()" class="hidden flex-1 px-4 py-2 bg-slate-700 text-white font-bold text-xs rounded hover:bg-slate-800 transition-colors">Archive</button>
                     <button id="modal-delete-btn" type="button" onclick="globalThis.deleteFromModal()" class="hidden flex-1 px-4 py-2 bg-red-600 text-white font-bold text-xs rounded hover:bg-red-700 transition-colors">Delete</button>
                 </div>
