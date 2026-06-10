@@ -35,6 +35,7 @@ jobs:
         run: |
           mkdir -p _site
           cp clinical-rounding-adaptive.html _site/index.html
+          cp clinical-rounding-adaptive.html _site/clinical-rounding-adaptive.html
           cp m365-integration.js _site/ 2>/dev/null || true
           cp -r Images _site/ 2>/dev/null || true
           echo "Files prepared for deployment:"
