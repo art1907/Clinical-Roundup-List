@@ -6105,6 +6105,45 @@
             return matches.length > 0 ? matches : [{ key: 'other', label: 'Surgical', color: 'bg-blue-100 text-blue-700' }];
         }
 
+        function normalizeProcedureDateValue(value) {
+            const text = String(value || '').trim();
+            if (!text) return '';
+
+            const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (isoMatch) {
+                const parsed = new Date(`${text}T00:00:00`);
+                return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text ? text : '';
+            }
+
+            const usMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (!usMatch) return '';
+            const month = Number(usMatch[1]);
+            const day = Number(usMatch[2]);
+            const year = Number(usMatch[3]);
+            const parsed = new Date(year, month - 1, day);
+            if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return '';
+            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        }
+
+        function formatProcedureLabel(procedure = '') {
+            return String(procedure || 'Procedure')
+                .split('-')
+                .filter(Boolean)
+                .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ') || 'Procedure';
+        }
+
+        function getProcedureDateEntries(patient = {}) {
+            if (!patient || patient.archived || !patient.procedureDates || typeof patient.procedureDates !== 'object') return [];
+            return Object.entries(patient.procedureDates)
+                .map(([procedure, rawDate]) => ({ procedure, date: normalizeProcedureDateValue(rawDate), rawDate: String(rawDate || '').trim() }))
+                .filter(entry => entry.date);
+        }
+
+        function isDatedProcedureCase(patient) {
+            return isSurgicalCase(patient) && getProcedureDateEntries(patient).length > 0;
+        }
+
         let activeProcTypeFilter = 'all';
 
         globalThis.filterProcedures = (type) => {
@@ -6121,8 +6160,8 @@
             const container = document.getElementById('procedure-log-content');
             if (!container) return;
 
-            let procs = patients.filter(p => !p.archived && isSurgicalCase(p));
-            procs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            let procs = patients.filter(p => !p.archived && isDatedProcedureCase(p));
+            procs.sort((a, b) => (getProcedureDateEntries(b)[0]?.date || '').localeCompare(getProcedureDateEntries(a)[0]?.date || ''));
 
             if (activeProcTypeFilter && activeProcTypeFilter !== 'all') {
                 const rule = PROC_TYPE_RULES.find(r => r.key === activeProcTypeFilter);
@@ -6130,13 +6169,14 @@
             }
 
             if (!procs.length) {
-                container.innerHTML = `<div class="text-center text-slate-400 py-12 text-sm">No procedures found.<br><span class="text-xs">Detected when plan/findings contain keywords (cysto, stent, TURBT…) or a surgical workflow status is set.</span></div>`;
+                container.innerHTML = `<div class="text-center text-slate-400 py-12 text-sm">No dated procedures found.<br><span class="text-xs">Select a procedure and enter its procedure date to add it here.</span></div>`;
                 return;
             }
 
             const esc = v => String(v == null ? '' : v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 
             const rows = procs.map(p => {
+                const procedureDate = getProcedureDateEntries(p)[0]?.date || '';
                 const typeBadges = detectProcTypes(p).map(t =>
                     `<span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${t.color} mr-0.5">${t.label}</span>`
                 ).join('');
@@ -6146,7 +6186,7 @@
                 const statFlag = (p.stat === true || p.stat === 'true') ? '<span class="text-red-600 font-bold mr-1">🔴</span>' : '';
                 return `
                     <tr class="hover:bg-blue-50 cursor-pointer border-b border-slate-100" onclick="globalThis.openModal('${esc(p.id)}')" title="Open patient record">
-                        <td class="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">${esc(p.date || '')}</td>
+                        <td class="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">${esc(procedureDate)}</td>
                         <td class="px-3 py-2 text-xs font-bold text-blue-700 whitespace-nowrap">${statFlag}<span class="hover:underline">${esc(p.name || '—')}</span></td>
                         <td class="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">${esc(p.room || '')}</td>
                         <td class="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">${esc(p.mrn || '')}</td>
@@ -6301,7 +6341,7 @@
                     </div>
                 </div>
                 ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
-                ${getVisibleProgressNotes(p) ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Progress Notes:</strong> ${esc(getVisibleProgressNotes(p))}</div>` : ''}
+                ${getVisibleProgressNotes(p) ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Subjective & Objective Findings:</strong> ${esc(getVisibleProgressNotes(p))}</div>` : ''}
                 ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
                 ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
             </div>`;
@@ -6322,7 +6362,7 @@
                     lines.push(`  [STAT] ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${getPatientStatus(p)}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
                     if (p.plan) lines.push(`    Plan: ${p.plan}`);
                     const visibleProgressNotes = getVisibleProgressNotes(p);
-                    if (visibleProgressNotes) lines.push(`    Progress Notes: ${visibleProgressNotes}`);
+                    if (visibleProgressNotes) lines.push(`    Subjective & Objective Findings: ${visibleProgressNotes}`);
                     if (p.pending) lines.push(`    Pending: ${p.pending}`);
                     if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
                 });
@@ -6334,7 +6374,7 @@
                     lines.push(`  ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${getPatientStatus(p)}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
                     if (p.plan) lines.push(`    Plan: ${p.plan}`);
                     const visibleProgressNotes = getVisibleProgressNotes(p);
-                    if (visibleProgressNotes) lines.push(`    Progress Notes: ${visibleProgressNotes}`);
+                    if (visibleProgressNotes) lines.push(`    Subjective & Objective Findings: ${visibleProgressNotes}`);
                     if (p.pending) lines.push(`    Pending: ${p.pending}`);
                     if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
                 });
@@ -6524,8 +6564,8 @@
                         ${p.supervisingMd ? `<span class="text-[10px] text-slate-500">· ${esc(p.supervisingMd)}</span>` : ''}
                     </div>
                     ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
-                    ${getVisibleProgressNotes(p) ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Progress Notes:</strong> ${esc(getVisibleProgressNotes(p))}</div>` : ''}
-                    ${p.findingsText ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Findings:</strong> ${esc(p.findingsText)}</div>` : ''}
+                    ${getVisibleProgressNotes(p) ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Subjective & Objective Findings:</strong> ${esc(getVisibleProgressNotes(p))}</div>` : ''}
+                    ${p.findingsText ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Investigations:</strong> ${esc(p.findingsText)}</div>` : ''}
                     ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
                     ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
                 </div>
@@ -6891,7 +6931,7 @@
                             <thead><tr class="bg-slate-100 text-slate-600">
                                 <th class="px-2 py-2 text-left">Date</th><th class="px-2 py-2 text-left">Patient</th><th class="px-2 py-2 text-left">Room</th>
                                 <th class="px-2 py-2 text-left">MRN</th><th class="px-2 py-2 text-left">Hospital</th><th class="px-2 py-2 text-left">Status</th>
-                                <th class="px-2 py-2 text-left">Plan</th><th class="px-2 py-2 text-left">Progress Notes</th><th class="px-2 py-2 text-left">Pending</th><th class="px-2 py-2 text-left">MD</th>
+                                <th class="px-2 py-2 text-left">Plan</th><th class="px-2 py-2 text-left">Subjective & Objective Findings</th><th class="px-2 py-2 text-left">Pending</th><th class="px-2 py-2 text-left">MD</th>
                             </tr></thead>
                             <tbody class="divide-y divide-slate-100">${rows}</tbody>
                         </table>
@@ -6931,7 +6971,7 @@
                 doc.text(subLine, 14, 22);
 
                 // Table
-                const cols = pdfColumns || ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Progress Notes', 'Pending', 'MD'];
+                const cols = pdfColumns || ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Subjective & Objective Findings', 'Pending', 'MD'];
                 const rows = pdfRows || data.map(p => [
                     p.date || '', p.name || '—', p.room || '', p.mrn || '',
                     p.hospital || '', getPatientStatus(p),
@@ -6948,7 +6988,7 @@
                     bodyStyles: { fontSize: 7.5, cellPadding: 2 },
                     columnStyles: {
                         6: { cellWidth: 42 }, // Plan
-                        7: { cellWidth: 42 }, // Progress Notes
+                        7: { cellWidth: 42 }, // Subjective & Objective Findings
                         8: { cellWidth: 30 }, // Pending
                     },
                     margin: { left: 14, right: 14 },
@@ -7004,7 +7044,7 @@
                     }
                     const findingsDisplay = getFindingsDisplay(v);
                     const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
-                    return `<div class="px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[10px] text-slate-500 truncate flex-1 min-w-0">${esc(v.hospital || '')}</span>\n                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 pl-20 text-[10px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 110))}${findingsSummary.length > 110 ? '...' : ''}</div>` : ''}\n                    </div>`;
+                    return `<div class="px-2 py-1.5 rounded cursor-pointer ${isCurrent ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100'}" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[10px] font-mono text-slate-400 w-20 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[10px] text-slate-500 truncate flex-1 min-w-0">${esc(v.hospital || '')}</span>\n                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 pl-20 text-[10px] text-slate-600 truncate">Investigations: ${esc(findingsSummary.slice(0, 110))}${findingsSummary.length > 110 ? '...' : ''}</div>` : ''}\n                    </div>`;
                 }).join('');
                 return `<div class="mt-2 border-t border-blue-100 pt-2">
                     <div class="text-[10px] font-bold text-slate-500 mb-1 px-1">📋 Visit history (${visits.length} total)</div>
@@ -7020,7 +7060,7 @@
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS['To-Do'];
                 const crossedOutCardClass = isPatientCrossedOut(p.id) ? 'crossed-out' : '';
                 const findingsSegments = getFindingSegments(p);
-                const findingsLabel = findingsSegments.length ? `🔍 Findings · ${findingsSegments.length}` : '🔍 Findings';
+                const findingsLabel = findingsSegments.length ? `🔍 Investigations · ${findingsSegments.length}` : '🔍 Investigations';
                 const personKey = getPatientPersonKey(p);
                 const visitCount = getPatientVisitCount(p);
                 const isExpanded = expandedPatientMrns.has(personKey);
@@ -7142,7 +7182,7 @@
                     }
                     const findingsDisplay = getFindingsDisplay(v);
                     const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
-                    return `<div class="px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 ml-24 text-[11px] text-slate-600 truncate">Findings: ${esc(findingsSummary.slice(0, 120))}${findingsSummary.length > 120 ? '...' : ''}</div>` : ''}\n                    </div>`;
+                    return `<div class="px-3 py-2 ${isCurrent ? 'bg-blue-50' : 'bg-white'} border-b border-slate-100 cursor-pointer active:bg-slate-50" onclick="globalThis.openModal('${esc(v.id)}')">\n                        <div class="flex items-center gap-2 min-w-0">\n                            <span class="text-[11px] font-mono text-slate-400 w-24 flex-shrink-0">${esc(v.date)}</span>\n                            <span class="text-[11px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>\n                            <span class="text-[11px] font-bold px-2 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0">${esc(st)}</span>\n                            ${delta}\n                            ${isCurrent ? '<span class="text-[10px] font-bold text-blue-600 flex-shrink-0">current</span>' : ''}\n                        </div>\n                        ${findingsSummary ? `<div class="mt-1 ml-24 text-[11px] text-slate-600 truncate">Investigations: ${esc(findingsSummary.slice(0, 120))}${findingsSummary.length > 120 ? '...' : ''}</div>` : ''}\n                    </div>`;
                 }).join('');
                 return `<div class="border-t-2 border-blue-100 bg-slate-50">
                     <div class="text-[10px] font-bold text-slate-500 px-3 pt-2 pb-1">📋 Visit history (${visits.length} total)</div>
@@ -7154,7 +7194,7 @@
                 const status = getSafeConfiguredStatus(getPatientStatus(patient));
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || STATUS_COLORS['To-Do'];
                 const findingsSegments = getFindingSegments(patient);
-                const findingsLabel = findingsSegments.length ? `Findings · ${findingsSegments.length}` : 'Findings';
+                const findingsLabel = findingsSegments.length ? `Investigations · ${findingsSegments.length}` : 'Investigations';
                 const isStat = patient.stat === true || patient.stat === 'true';
                 const isSelected = selectedPatientIds.has(patient.id);
                 const isCrossedOut = isPatientCrossedOut(patient.id);
@@ -7272,7 +7312,8 @@
             const lockedIds = [
                 'f-room', 'f-date', 'f-hospital', 'f-name', 'f-dob', 'f-mrn',
                 'f-md', 'f-plan', 'f-proc-status', 'f-priority', 'f-cpt-primary',
-                'f-icd-primary', 'f-charge-codes-secondary', 'f-fu', 'f-pending'
+                'f-icd-primary', 'f-charge-codes-secondary', 'f-followup-labs',
+                'f-followup-imaging', 'f-followup-consultation', 'f-followup-text', 'f-pending'
             ];
             lockedIds.forEach((id) => {
                 const el = document.getElementById(id);
@@ -7347,6 +7388,54 @@
             if (patient.room) parts.push(`Room ${patient.room}`);
             if (patient.hospital) parts.push(patient.hospital);
             return parts.join(' | ');
+        }
+
+        function buildFollowUpSummary({ labs = '', imaging = '', consultation = '', text = '' } = {}) {
+            return [
+                ['Labs', labs],
+                ['Imaging', imaging],
+                ['Consultation', consultation],
+                ['Notes', text]
+            ]
+                .map(([label, value]) => [label, String(value || '').trim()])
+                .filter(([, value]) => value)
+                .map(([label, value]) => `${label}: ${value}`)
+                .join('\n');
+        }
+
+        function parseFollowUpSummary(patient = {}) {
+            const structured = {
+                labs: String(patient.followUpLabs || '').trim(),
+                imaging: String(patient.followUpImaging || '').trim(),
+                consultation: String(patient.followUpConsultation || '').trim(),
+                text: String(patient.followUpText || '').trim()
+            };
+            if (structured.labs || structured.imaging || structured.consultation || structured.text) {
+                return structured;
+            }
+
+            const followUpText = String(patient.followUp || '').trim();
+            if (!followUpText) return structured;
+
+            const parsed = { ...structured };
+            let consumedStructuredLine = false;
+            const freeTextLines = [];
+            followUpText.split(/\r?\n/).forEach((line) => {
+                const match = String(line || '').match(/^\s*(Labs|Imaging|Consultation|Notes)\s*:\s*(.*)$/i);
+                if (!match) {
+                    freeTextLines.push(line);
+                    return;
+                }
+                consumedStructuredLine = true;
+                const key = match[1].toLowerCase() === 'notes' ? 'text' : match[1].toLowerCase();
+                parsed[key] = [parsed[key], match[2].trim()].filter(Boolean).join('\n');
+            });
+            if (!consumedStructuredLine) {
+                parsed.text = followUpText;
+            } else if (freeTextLines.some(line => String(line || '').trim())) {
+                parsed.text = [parsed.text, freeTextLines.join('\n').trim()].filter(Boolean).join('\n');
+            }
+            return parsed;
         }
 
         function hideReturningPatientBackfillPrompt() {
@@ -7580,15 +7669,24 @@
                     AuditLogger.logDataAccess(auditUser, id, 'view');
                 }
                 if (p) {
-                    ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'progress-notes', 'md', 'pending', 'fu', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
+                    ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'progress-notes', 'md', 'pending', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
                         if (!el) return;
                         if (field === 'progress-notes') {
                             el.value = getVisibleProgressNotes(p);
                             return;
                         }
-                        el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'fu': 'followUp', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
+                        el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
+                    const followUpFields = parseFollowUpSummary(p);
+                    const setFollowUpField = (inputId, value) => {
+                        const input = document.getElementById(inputId);
+                        if (input) input.value = value || '';
+                    };
+                    setFollowUpField('f-followup-labs', followUpFields.labs);
+                    setFollowUpField('f-followup-imaging', followUpFields.imaging);
+                    setFollowUpField('f-followup-consultation', followUpFields.consultation);
+                    setFollowUpField('f-followup-text', followUpFields.text);
                     setFormDateReviewMeta(getPatientDateReviewMeta(p));
                     if (dateInput) dateInput.value = p.date || "";
                     if (visitTimeInput) visitTimeInput.value = p.visitTime || '';
@@ -7865,7 +7963,10 @@
             setTextValue('f-findings-text', '');
             setTextValue('f-progress-notes', '');
             setTextValue('f-pending', '');
-            setTextValue('f-fu', '');
+            setTextValue('f-followup-labs', '');
+            setTextValue('f-followup-imaging', '');
+            setTextValue('f-followup-consultation', '');
+            setTextValue('f-followup-text', '');
             setTextValue('f-findings-codes', '');
             setTextValue('f-findings-values', '{}');
             setTextValue('f-findings-dates', '{}');
@@ -8150,7 +8251,10 @@
                 plan: document.getElementById('f-plan')?.value || '',
                 supervisingMd: document.getElementById('f-md')?.value || '',
                 pending: document.getElementById('f-pending')?.value || '',
-                followUp: document.getElementById('f-fu')?.value || '',
+                followUpLabs: document.getElementById('f-followup-labs')?.value || '',
+                followUpImaging: document.getElementById('f-followup-imaging')?.value || '',
+                followUpConsultation: document.getElementById('f-followup-consultation')?.value || '',
+                followUpText: document.getElementById('f-followup-text')?.value || '',
                 cptPrimary: document.getElementById('f-cpt-primary')?.value || '',
                 icdPrimary: document.getElementById('f-icd-primary')?.value || '',
                 procedureCodes: document.getElementById('f-procedure-codes')?.value || '',
@@ -8184,7 +8288,10 @@
                     Object.keys(draft).forEach(key => {
                         const fieldId = 'f-' + key.replaceAll(/([A-Z])/g, '-$1').toLowerCase()
                             .replace('supervising-md', 'md')
-                            .replace('follow-up', 'fu')
+                            .replace('follow-up-labs', 'followup-labs')
+                            .replace('follow-up-imaging', 'followup-imaging')
+                            .replace('follow-up-consultation', 'followup-consultation')
+                            .replace('follow-up-text', 'followup-text')
                             .replace('cpt-primary', 'cpt-primary')
                             .replace('icd-primary', 'icd-primary');
                         const field = document.getElementById(fieldId);
@@ -10075,6 +10182,16 @@ const findHeaderIndex = (rows, sheetLog) => {
             const procedureValues = procValuesInput?.value ? JSON.parse(procValuesInput.value) : {};
             const procDatesInput = document.getElementById('f-procedure-dates');
             const procedureDates = procDatesInput?.value ? JSON.parse(procDatesInput.value) : {};
+            const followUpLabs = document.getElementById('f-followup-labs')?.value || '';
+            const followUpImaging = document.getElementById('f-followup-imaging')?.value || '';
+            const followUpConsultation = document.getElementById('f-followup-consultation')?.value || '';
+            const followUpText = document.getElementById('f-followup-text')?.value || '';
+            const followUpSummary = buildFollowUpSummary({
+                labs: followUpLabs,
+                imaging: followUpImaging,
+                consultation: followUpConsultation,
+                text: followUpText
+            });
             
             const reviewMeta = getFormDateReviewMeta();
             const visibleProgressNotes = document.getElementById('f-progress-notes').value;
@@ -10106,7 +10223,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                 progressNotes: visibleProgressNotes,
                 supervisingMd: document.getElementById('f-md').value,
                 pending: document.getElementById('f-pending').value, 
-                followUp: document.getElementById('f-fu').value,
+                followUp: followUpSummary,
+                followUpLabs,
+                followUpImaging,
+                followUpConsultation,
+                followUpText,
                 procedureStatus: document.getElementById('f-proc-status').value,
                 stat: document.getElementById('f-priority')?.checked || false,
                 cptPrimary: document.getElementById('f-cpt-primary').value,
@@ -10198,7 +10319,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                     'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
                     'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
                     'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues',
-                    'findingsDates', 'stat', 'priority'
+                    'findingsDates', 'followUpLabs', 'followUpImaging', 'followUpConsultation',
+                    'followUpText', 'stat', 'priority'
                 ];
 
                 const diffAndLog = (previous, next, recordId) => {
@@ -10757,8 +10879,16 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const shift = onCallSchedule.find(s => s.date === dateStr);
                 const dayPatients = patients.filter(p => p.date === dateStr && !p.archived);
                 const statPts = dayPatients.filter(p => p.stat === true || p.stat === 'true');
-                const procPts = dayPatients.filter(p => isSurgicalCase(p) && p.stat !== true && p.stat !== 'true');
-                const otherCount = dayPatients.filter(p => !isSurgicalCase(p) && p.stat !== true && p.stat !== 'true').length;
+                const procEvents = patients
+                    .filter(p => !p.archived && isSurgicalCase(p))
+                    .flatMap(p => getProcedureDateEntries(p)
+                        .filter(entry => entry.date === dateStr)
+                        .map(entry => ({ patient: p, ...entry })));
+                const otherCount = dayPatients.filter(p => {
+                    const isStat = p.stat === true || p.stat === 'true';
+                    const hasProcedureOnThisDate = getProcedureDateEntries(p).some(entry => entry.date === dateStr);
+                    return !isStat && !hasProcedureOnThisDate;
+                }).length;
 
                 const isHoliday = holidays.length > 0;
                 const dow = new Date(year, month, d).getDay();
@@ -10785,8 +10915,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                     `<div class="font-bold bg-red-600 text-white px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-red-700 truncate" onclick="globalThis.openModal('${p.id}')" title="STAT: ${p.name}">🔴 ${p.name}</div>`
                 ).join('');
 
-                const procHtml = procPts.map(p =>
-                    `<div class="font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-blue-200 truncate" onclick="globalThis.openModal('${p.id}')" title="${p.hospital || ''}: ${p.plan || ''}">${p.name}</div>`
+                const procHtml = procEvents.map(event =>
+                    `<div class="font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-blue-200 hover:underline truncate" onclick="globalThis.openModal('${event.patient.id}')" title="Procedure: ${formatProcedureLabel(event.procedure)} - ${event.patient.hospital || ''}: ${event.patient.plan || ''}">🔗 ${event.patient.name} - ${formatProcedureLabel(event.procedure)}</div>`
                 ).join('');
 
                 let othersHtml = '';
@@ -10997,7 +11127,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0 whitespace-nowrap">${esc(st)}</span>
                     ${deltaPill}
                     ${v.supervisingMd ? `<span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">👨‍⚕️&nbsp;${esc(v.supervisingMd)}</span>` : ''}
-                    <span class="text-[10px] text-slate-600 flex-1 min-w-0 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '...' : ''}${findingsSummary ? `<span class="text-slate-400 mx-1">|</span><span class="text-slate-700">Findings: ${esc(findingsSummary.slice(0, 90))}${findingsSummary.length > 90 ? '...' : ''}</span>` : ''}</span>
+                    <span class="text-[10px] text-slate-600 flex-1 min-w-0 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '...' : ''}${findingsSummary ? `<span class="text-slate-400 mx-1">|</span><span class="text-slate-700">Investigations: ${esc(findingsSummary.slice(0, 90))}${findingsSummary.length > 90 ? '...' : ''}</span>` : ''}</span>
                     <span class="text-[9px] font-bold opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity flex-shrink-0">open ↗</span>
                     ${isCurrentVisit ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded flex-shrink-0">current</span>' : ''}
                     ${isArchived ? '<span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1 rounded flex-shrink-0">archived</span>' : ''}
@@ -11260,22 +11390,22 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <div class="row"><span class="label">Status:</span> <span class="value">${p.procedureStatus || p.status || ''}</span></div>
                                 </div>
                                 <div class="section">
-                                    <h3>Clinical Findings</h3>
-                                    <div class="row"><span class="label">Findings:</span> <span class="value">${p.findingsText || ''}</span></div>
-                                    <div class="row"><span class="label">Findings Codes:</span> <span class="value">${(p.findingsCodes && p.findingsCodes.join(', ')) || ''}</span></div>
+                                    <h3>Investigations</h3>
+                                    <div class="row"><span class="label">Additional Findings:</span> <span class="value">${p.findingsText || ''}</span></div>
+                                    <div class="row"><span class="label">Investigation Codes:</span> <span class="value">${(p.findingsCodes && p.findingsCodes.join(', ')) || ''}</span></div>
                                 </div>
                                 <div class="section">
                                     <h3>Plan</h3>
                                     <div class="row"><span class="label">Plan:</span> <span class="value">${p.plan || ''}</span></div>
-                                    <div class="row"><span class="label">Progress Notes:</span> <span class="value">${getVisibleProgressNotes(p) || ''}</span></div>
+                                    <div class="row"><span class="label">Subjective & Objective Findings:</span> <span class="value">${getVisibleProgressNotes(p) || ''}</span></div>
                                     <div class="row"><span class="label">Pending:</span> <span class="value">${p.pending || ''}</span></div>
                                     <div class="row"><span class="label">Follow Up:</span> <span class="value">${p.followUp || ''}</span></div>
                                 </div>
                                 <div class="section">
-                                    <h3>Billing</h3>
-                                    <div class="row"><span class="label">CPT:</span> <span class="value">${p.cptPrimary || ''}</span></div>
+                                    <h3>Diagnosis</h3>
+                                    <div class="row"><span class="label">Secondary Codes:</span> <span class="value">${(Array.isArray(p.chargeCodesSecondary) ? p.chargeCodesSecondary.join(', ') : (p.chargeCodesSecondary || ''))}</span></div>
                                     <div class="row"><span class="label">ICD:</span> <span class="value">${p.icdPrimary || ''}</span></div>
-                                    <div class="row"><span class="label">Other Codes:</span> <span class="value">${(Array.isArray(p.chargeCodesSecondary) ? p.chargeCodesSecondary.join(', ') : (p.chargeCodesSecondary || ''))}</span></div>
+                                    <div class="row"><span class="label">CPT:</span> <span class="value">${p.cptPrimary || ''}</span></div>
                                 </div>
                                 <div class="section">
                                     <h3>Attachments</h3>
@@ -11449,7 +11579,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 { key: 'hospital',      label: 'Hospital' },
                 { key: 'plan',          label: 'Plan' },
                 { key: 'supervisingMd', label: 'Supervising MD' },
-                { key: 'findingsText',  label: 'Findings' },
+                { key: 'findingsText',  label: 'Investigations' },
                 { key: 'pending',       label: 'Pending' },
                 { key: 'followUp',      label: 'Follow-Up' },
                 { key: 'procedureStatus', label: 'Status' },
@@ -11464,7 +11594,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 { key: 'hospital',      label: 'Hospital' },
                 { key: 'plan',          label: 'Plan' },
                 { key: 'supervisingMd', label: 'Supervising MD' },
-                { key: 'findingsText',  label: 'Dx/Findings' },
+                { key: 'findingsText',  label: 'Diagnosis/Investigations' },
                 { key: 'pending',       label: 'Pending Tests' },
                 { key: 'followUp',      label: 'Follow-Up' },
             ];
@@ -12848,7 +12978,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         <!-- Tabs: Business Flow Order (Census→Surgical→Calendar→Timeline→Analytics→Reports→Audit→Shifts→Procedures→Review→Archive) -->
         <div class="selection-underlay-target desktop-tab-nav px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" aria-label="Main Navigation" role="tablist">
             <button id="tab-active-btn" onclick="globalThis.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="table-section">Census</button>
-            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="table-section" title="Shows records tagged as surgical by keyword match in Plan/Findings or by surgical status.">Surgical</button>
+            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="table-section" title="Shows records tagged as surgical by keyword match in Plan/Investigations or by surgical status.">Surgical</button>
             <button id="tab-calendar-btn" onclick="globalThis.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-section">Calendar</button>
             <button id="tab-timeline-btn" onclick="globalThis.setTab('timeline')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="timeline-section">Timeline</button>
             <button id="tab-analytics-btn" onclick="globalThis.setTab('analytics')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="analytics-section">Analytics</button>
@@ -12899,7 +13029,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <button class="view-btn" onclick="globalThis.setViewMode('grouped')">🏥 By Hospital</button>
                 </div>
 
-                <div class="text-[11px] text-slate-500 mb-2">Surgical logic: keyword match in Plan/Findings or surgical follow-up status values.</div>
+                <div class="text-[11px] text-slate-500 mb-2">Surgical logic: keyword match in Plan/Investigations or surgical follow-up status values.</div>
 
                 <div id="mobile-patient-list" class="mobile-patient-list"></div>
 
@@ -13063,7 +13193,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <option value="hospitals">🏢 Hospital Workload</option>
                                     <option value="risk">⚠️ Risk and Pending Focus</option>
                                     <option value="provider">👨‍⚕️ Provider Performance</option>
-                                    <option value="billing">💰 Billing & Codes Summary</option>
+                                    <option value="billing">🧾 Diagnosis & Codes Summary</option>
                                     <option value="los">📅 Length of Stay Analysis</option>
                                     <option value="followup">📌 Follow-up Workload</option>
                                     <option value="complexity">🔴 Patient Complexity</option>
@@ -13363,9 +13493,14 @@ const findHeaderIndex = (rows, sheetLog) => {
                     </div>
                 </div>
 
-                <!-- Findings -->
+                <div>
+                    <textarea id="f-progress-notes" placeholder="Subjective & Objective Findings" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>
+                    <div class="mt-1 text-[11px] text-slate-400">Subjective & Objective Findings = ongoing clinical narrative</div>
+                </div>
+
+                <!-- Investigations -->
                 <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-3">
-                    <h3 class="text-xs font-bold text-blue-900">Findings</h3>
+                    <h3 class="text-xs font-bold text-blue-900">Investigations</h3>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🩸 CBC</summary>
                         <div class="pl-2 space-y-2 text-xs">
@@ -13391,7 +13526,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                                 <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="mono" placeholder="Mono %">
                                                 <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="eosino" placeholder="Eosino %">
                                             </div>
-                                            <textarea class="findings-custom-input w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85025" data-field="comments" placeholder="Comments (if any)" rows="2"></textarea>
+                                            <textarea class="findings-custom-input w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85025" data-field="comments" placeholder="Additional Findings" rows="2"></textarea>
                                         </div>
                                     </details>
                                 </div>
@@ -13659,7 +13794,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <input type="hidden" id="f-findings-codes">
                     <input type="hidden" id="f-findings-values">
                     <input type="hidden" id="f-findings-dates">
-                    <textarea id="f-findings-text" placeholder="Additional findings" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
+                    <textarea id="f-findings-text" placeholder="Additional Findings" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
                 </div>
 
                 <textarea id="f-plan" placeholder="Plan" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
@@ -13754,20 +13889,22 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <input type="hidden" id="f-procedure-values">
                 </div>
 
-                <div>
-                    <textarea id="f-progress-notes" placeholder="Progress Notes" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>
-                    <div class="mt-1 text-[11px] text-slate-400">Progress Notes = ongoing clinical narrative</div>
-                </div>
-
-                <!-- Billing -->
+                <!-- Diagnosis -->
                 <div class="bg-amber-50 p-4 rounded-lg border border-amber-200 space-y-2">
-                    <h3 class="text-xs font-bold text-amber-900">💰 Billing</h3>
-                    <input type="text" id="f-cpt-primary" placeholder="CPT (52204)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
-                    <input type="text" id="f-icd-primary" placeholder="ICD-10 (N39.0)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
+                    <h3 class="text-xs font-bold text-amber-900">🧾 Diagnosis</h3>
                     <input type="text" id="f-charge-codes-secondary" placeholder="Secondary codes" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
+                    <input type="text" id="f-icd-primary" placeholder="ICD-10 (N39.0)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
+                    <input type="text" id="f-cpt-primary" placeholder="CPT (52204)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
                 </div>
 
-                <input type="text" id="f-fu" placeholder="Follow-Up" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <!-- Follow-Up -->
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
+                    <h3 class="text-xs font-bold text-slate-700">📌 Follow-Up</h3>
+                    <input type="text" id="f-followup-labs" placeholder="Labs" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200">
+                    <input type="text" id="f-followup-imaging" placeholder="Imaging" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200">
+                    <input type="text" id="f-followup-consultation" placeholder="Consultation" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200">
+                    <textarea id="f-followup-text" placeholder="Free text follow-up notes" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200" rows="2"></textarea>
+                </div>
 
                 <textarea id="f-pending" placeholder="Pending Tests" class="w-full p-3 bg-amber-50 rounded-lg border border-amber-200 text-sm" rows="2"></textarea>
 
