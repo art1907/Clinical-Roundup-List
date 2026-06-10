@@ -241,7 +241,7 @@
         }
         
         .procedure-date {
-            cursor: pointer;
+            cursor: text;
             transition: all 0.2s ease;
         }
         
@@ -7460,6 +7460,8 @@
             renderPatientChangeHistory(null);
             modal.dataset.returningPatientCandidateId = '';
             modal.dataset.returningPatientBackfilledFrom = '';
+            modal.dataset.pendingDateReviewReasons = '[]';
+            modal.dataset.dateReviewScanning = 'false';
             hideReturningPatientBackfillPrompt();
 
             const setEditMode = (isEditing) => {
@@ -8121,6 +8123,10 @@
         globalThis.closeModal = () => {
             const modal = document.getElementById('patient-modal');
             if (modal) {
+                if (modal.dataset.dateReviewScanning === 'true') {
+                    showToast('Amended record is being scanned. Close will unlock after the date review check finishes.');
+                    return;
+                }
                 modal.classList.add('hidden');
                 document.body.classList.remove('no-scroll');
                 clearDraft();// Clear draft on close
@@ -8502,6 +8508,96 @@
             return summaryLines;
         };
 
+        function escapeCssSelectorValue(value) {
+            const text = String(value || '');
+            if (globalThis.CSS && typeof globalThis.CSS.escape === 'function') {
+                return globalThis.CSS.escape(text);
+            }
+            return text.replace(/[^A-Za-z0-9_-]/g, '\\$&');
+        }
+
+        function getFindingDateReviewLabel(code) {
+            const normalizedCode = String(code || '').trim();
+            if (!normalizedCode) return 'Finding date';
+            const checkbox = document.querySelector(`input.findings-checkbox[value="${escapeCssSelectorValue(normalizedCode)}"]`);
+            const labelText = checkbox?.closest('label')?.innerText || checkbox?.parentElement?.innerText || '';
+            const cleanedLabel = String(labelText || '')
+                .replace(/\s+/g, ' ')
+                .replace(/^[^A-Za-z0-9]+/, '')
+                .trim();
+            return cleanedLabel || normalizedCode.toUpperCase();
+        }
+
+        function getDateReviewIssueItems(meta = {}) {
+            const normalizedMeta = normalizeDateReviewMeta(meta);
+            const items = [];
+            if (normalizedMeta.visitDateDefaultedTo) {
+                items.push({
+                    type: 'visit',
+                    key: 'visit-date',
+                    label: 'Visit Date',
+                    value: normalizedMeta.visitDateDefaultedTo,
+                    selector: '#f-date',
+                    hint: 'Visit Date was missing or invalid, so it was defaulted to the record created-on date. Correct the date if this is wrong, or confirm it is clinically correct.'
+                });
+            }
+            Object.keys(normalizedMeta.findingsDatesDefaulted).sort().forEach((code) => {
+                const label = getFindingDateReviewLabel(code);
+                items.push({
+                    type: 'finding',
+                    key: code,
+                    label: `${label} Date`,
+                    value: normalizedMeta.findingsDatesDefaulted[code],
+                    selector: `input.findings-date[data-code="${escapeCssSelectorValue(code)}"]`,
+                    hint: `${label} date was missing or invalid, so it was defaulted to the record created-on date. Correct the date if this investigation was done on a different day, or confirm this date is clinically correct.`
+                });
+            });
+            return items;
+        }
+
+        function setDateReviewScanning(isScanning, message = 'Amended record is being scanned for remaining date review items...') {
+            const modal = document.getElementById('patient-modal');
+            const closeBtn = document.getElementById('patient-modal-close');
+            if (modal) modal.dataset.dateReviewScanning = isScanning ? 'true' : 'false';
+            if (closeBtn) {
+                closeBtn.disabled = Boolean(isScanning);
+                closeBtn.classList.toggle('opacity-50', Boolean(isScanning));
+                closeBtn.classList.toggle('cursor-not-allowed', Boolean(isScanning));
+                closeBtn.title = isScanning ? message : '';
+            }
+            const banner = document.getElementById('date-review-banner');
+            if (banner && isScanning) {
+                banner.classList.remove('hidden');
+                banner.innerHTML = `<div class="rounded border border-blue-200 bg-blue-50 px-3 py-2 font-semibold text-blue-800">${escapeInlineHtml(message)}</div>`;
+            }
+        }
+
+        function addPendingDateReviewReason(note) {
+            const modal = document.getElementById('patient-modal');
+            if (!modal || !note) return;
+            let existing = [];
+            try {
+                existing = JSON.parse(modal.dataset.pendingDateReviewReasons || '[]');
+            } catch (error) {
+                existing = [];
+            }
+            existing.push(String(note).trim());
+            modal.dataset.pendingDateReviewReasons = JSON.stringify(existing.filter(Boolean));
+        }
+
+        function consumePendingDateReviewReasons() {
+            const modal = document.getElementById('patient-modal');
+            if (!modal) return [];
+            let existing = [];
+            try {
+                existing = JSON.parse(modal.dataset.pendingDateReviewReasons || '[]');
+            } catch (error) {
+                existing = [];
+            }
+            modal.dataset.pendingDateReviewReasons = '[]';
+            return Array.isArray(existing) ? existing.map(item => String(item || '').trim()).filter(Boolean) : [];
+        }
+
         const applyDateReviewDefaultsToRecord = ({ date = '', findingsDates = {}, findingsCodes = [], reviewMeta = {}, createdOnDate = '' } = {}) => {
             const normalizedMeta = normalizeDateReviewMeta(reviewMeta);
             const effectiveCreatedOnDate = normalizedMeta.createdOnDate || (isValidIsoDateString(createdOnDate) ? createdOnDate : getTodayDateString());
@@ -8633,16 +8729,68 @@
             const banner = document.getElementById('date-review-banner');
             if (!banner) return;
 
-            const summaryLines = getDateReviewSummaryLines(reviewMeta);
-            if (!summaryLines.length) {
+            const issueItems = getDateReviewIssueItems(reviewMeta);
+            if (!issueItems.length) {
                 banner.classList.add('hidden');
                 banner.innerHTML = '';
+                setDateReviewScanning(false);
                 return;
             }
 
+            const currentIssue = issueItems[0];
             banner.classList.remove('hidden');
-            banner.innerHTML = summaryLines.map(line => `<div>${escapeInlineHtml(line)}</div>`).join('');
+            banner.innerHTML = `
+                <div class="space-y-2">
+                    <div class="font-bold">Date Review Needed (${issueItems.length} item${issueItems.length === 1 ? '' : 's'} remaining)</div>
+                    <div><span class="font-semibold">Current item:</span> ${escapeInlineHtml(currentIssue.label)} = <span class="font-mono">${escapeInlineHtml(currentIssue.value)}</span></div>
+                    <div>${escapeInlineHtml(currentIssue.hint)}</div>
+                    ${issueItems.length > 1 ? `<div class="text-[11px] text-amber-800">Resolve this item first. The record will rescan before the next item is shown.</div>` : ''}
+                    <div class="flex flex-wrap gap-2 pt-1">
+                        <button type="button" onclick="globalThis.focusDateReviewIssue('${escapeInlineHtml(currentIssue.key)}')" class="rounded bg-amber-200 px-2.5 py-1 font-bold text-amber-950 hover:bg-amber-300">Edit highlighted date</button>
+                        <button type="button" onclick="globalThis.confirmDateReviewIssue('${escapeInlineHtml(currentIssue.key)}')" class="rounded bg-blue-600 px-2.5 py-1 font-bold text-white hover:bg-blue-700">Confirm this date is correct</button>
+                    </div>
+                </div>`;
         }
+
+        globalThis.focusDateReviewIssue = (issueKey) => {
+            const issue = getDateReviewIssueItems(getFormDateReviewMeta()).find(item => item.key === issueKey) || getDateReviewIssueItems(getFormDateReviewMeta())[0];
+            if (!issue) return false;
+            const input = document.querySelector(issue.selector);
+            if (!input) return false;
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            input.focus();
+            showToast(`Review ${issue.label}`);
+            return true;
+        };
+
+        globalThis.confirmDateReviewIssue = async (issueKey) => {
+            const reviewMeta = getFormDateReviewMeta();
+            const issueItems = getDateReviewIssueItems(reviewMeta);
+            const issue = issueItems.find(item => item.key === issueKey) || issueItems[0];
+            if (!issue) return false;
+
+            const note = await getRequiredChangeNote(`date review confirmation - ${issue.label}`);
+            if (!note) return false;
+
+            if (issue.type === 'visit') {
+                reviewMeta.visitDateDefaultedTo = '';
+            } else if (issue.type === 'finding') {
+                delete reviewMeta.findingsDatesDefaulted[issue.key];
+            }
+            addPendingDateReviewReason(`${issue.label} (${issue.value}) confirmed during date review: ${note}`);
+            if (!hasDateReviewIssues(reviewMeta)) {
+                reviewMeta.createdOnDate = '';
+            }
+            setFormDateReviewMeta(reviewMeta);
+            setDateReviewScanning(true);
+            setTimeout(() => {
+                syncDateReviewUI();
+                setDateReviewScanning(false);
+                const remaining = getDateReviewIssueItems(getFormDateReviewMeta()).length;
+                showToast(remaining ? `Date review rescan found ${remaining} item${remaining === 1 ? '' : 's'} remaining` : 'Date review complete');
+            }, 500);
+            return true;
+        };
 
         const normalizeImportedDateValue = (value) => {
             if (value instanceof Date && !Number.isNaN(value.getTime())) {
@@ -10019,6 +10167,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
 
                 const previousPatient = resolvedEditId ? (patients.find(p => p.id === resolvedEditId) || null) : null;
+                const hadDateReviewIssuesAtSave = hasDateReviewIssues(reviewMeta);
                 const changeActionLabel = resolvedEditId ? 'update' : 'create';
                 const changeNote = await getRequiredChangeNote(changeActionLabel);
                 if (!changeNote) return false;
@@ -10027,6 +10176,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
                 data.notesHistory = normalizePatientChangeHistory(previousPatient);
                 data.notesHistory = appendFindingsSnapshotHistory(data.notesHistory, previousPatient, data, auditUser);
+                consumePendingDateReviewReasons().forEach((dateReviewNote) => {
+                    data.notesHistory = appendPatientChangeNote(data.notesHistory, dateReviewNote, auditUser, 'date review confirmation');
+                });
                 data.notesHistory = appendPatientChangeNote(data.notesHistory, changeNote, auditUser, changeActionLabel);
                 data.lastChangeNote = changeNote;
                 data.lastChangeNoteAt = new Date().toISOString();
@@ -10096,7 +10248,17 @@ const findHeaderIndex = (rows, sheetLog) => {
                     renderUI();
                     clearDraft(); // Clear draft on successful save
                     showToast("✓ Saved (Local)");
-                    setTimeout(() => globalThis.closeModal(), 100); // Slight delay to let toast show
+                    const remainingDateReviewIssues = getDateReviewIssueItems(getFormDateReviewMeta()).length;
+                    if (hadDateReviewIssuesAtSave && remainingDateReviewIssues) {
+                        setDateReviewScanning(true);
+                        setTimeout(() => {
+                            syncDateReviewUI();
+                            setDateReviewScanning(false);
+                            showToast(`Date review rescan found ${remainingDateReviewIssues} item${remainingDateReviewIssues === 1 ? '' : 's'} remaining`);
+                        }, 500);
+                    } else {
+                        setTimeout(() => globalThis.closeModal(), 100); // Slight delay to let toast show
+                    }
                     if (currentTab === 'audit' && typeof globalThis.loadAuditLogs === 'function') {
                         await globalThis.loadAuditLogs();
                     }
@@ -10128,7 +10290,17 @@ const findHeaderIndex = (rows, sheetLog) => {
                             diffAndLog(previousPatient, data, recordId);
                             clearDraft(); // Clear draft on successful save
                             showToast("✓ Saved");
-                            setTimeout(() => globalThis.closeModal(), 100); // Slight delay to let toast show
+                            const remainingDateReviewIssues = getDateReviewIssueItems(getFormDateReviewMeta()).length;
+                            if (hadDateReviewIssuesAtSave && remainingDateReviewIssues) {
+                                setDateReviewScanning(true);
+                                setTimeout(() => {
+                                    syncDateReviewUI();
+                                    setDateReviewScanning(false);
+                                    showToast(`Date review rescan found ${remainingDateReviewIssues} item${remainingDateReviewIssues === 1 ? '' : 's'} remaining`);
+                                }, 500);
+                            } else {
+                                setTimeout(() => globalThis.closeModal(), 100); // Slight delay to let toast show
+                            }
                             // Refetch data to update UI
                             if (typeof globalThis.m365FetchPatients === 'function') {
                                 console.log('🔄 Refetching patients...');
@@ -10752,11 +10924,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                             </select>
                         </div>
                     </td>
-                    <td class="p-3 align-top w-32">
-                        <div class="flex flex-col items-start gap-1">
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${p.id}')" class="min-w-[6rem] text-center text-[8px] font-bold leading-tight whitespace-normal ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-2 py-1 rounded transition-colors">Amend Existing Record</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openFollowUpModal('${p.id}')" class="min-w-[6rem] text-center text-[8px] font-bold leading-tight whitespace-normal bg-green-600 text-white hover:bg-green-700 px-2 py-1 rounded transition-colors">Add Follow Up</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="min-w-[3.75rem] text-center text-[8px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-2 py-1 rounded transition-colors">Print</button>
+                    <td class="p-3 align-top w-52 min-w-[12rem]">
+                        <div class="flex flex-col items-stretch gap-1.5 w-full">
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${p.id}')" class="w-full text-center text-[10px] font-bold leading-snug whitespace-normal ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-3 py-1.5 rounded transition-colors">Amend Existing Record</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openFollowUpModal('${p.id}')" class="w-full text-center text-[10px] font-bold leading-snug whitespace-normal bg-green-600 text-white hover:bg-green-700 px-3 py-1.5 rounded transition-colors">Add Follow Up</button>
+                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="w-full text-center text-[10px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-3 py-1.5 rounded transition-colors">Print</button>
                         </div>
                     </td>
                 </tr>`;
@@ -12102,10 +12274,28 @@ const findHeaderIndex = (rows, sheetLog) => {
                 input.addEventListener('input', (e) => autoResizeTextarea(e.target));
                 input.addEventListener('focus', (e) => autoResizeTextarea(e.target));
             });
+            function rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit) {
+                if (!hadIssuesBeforeEdit) return;
+                setDateReviewScanning(true);
+                setTimeout(() => {
+                    syncDateReviewUI();
+                    setDateReviewScanning(false);
+                    const remaining = getDateReviewIssueItems(getFormDateReviewMeta()).length;
+                    showToast(remaining ? `Date review rescan found ${remaining} item${remaining === 1 ? '' : 's'} remaining` : 'Date review complete');
+                }, 500);
+            }
             document.querySelectorAll('input.findings-date').forEach(input => {
-                input.addEventListener('change', updateSelectedCodes);
+                input.addEventListener('change', () => {
+                    const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
+                    updateSelectedCodes();
+                    rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit);
+                });
             });
-            document.getElementById('f-date')?.addEventListener('change', syncDateReviewUI);
+            document.getElementById('f-date')?.addEventListener('change', () => {
+                const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
+                syncDateReviewUI();
+                rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit);
+            });
             document.querySelectorAll('.findings-custom-input').forEach(input => {
                 input.addEventListener('change', updateSelectedCodes);
                 input.addEventListener('input', updateSelectedCodes);
@@ -12757,7 +12947,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <th class="p-3 w-48 align-top text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-[34%] min-w-[18rem] align-top text-left font-bold text-slate-700">Findings</th>
                                 <th class="p-3 w-[20%] min-w-[16rem] align-top text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
-                                <th class="p-3 w-32 align-top text-left font-bold text-slate-700">Actions</th>
+                                <th class="p-3 w-52 min-w-[12rem] align-top text-left font-bold text-slate-700">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="table-body" class="divide-y divide-slate-100"></tbody>
@@ -13095,7 +13285,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <h2 class="text-lg font-bold">Record Entry</h2>
                     <p class="text-xs text-slate-500 mt-0.5">💡 Press Enter or Ctrl+S to save • Esc to close</p>
                 </div>
-                <button onclick="globalThis.closeModal()" aria-label="Close" class="w-9 h-9 flex items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-500 hover:text-white transition-colors text-xl font-bold leading-none">×</button>
+                <button id="patient-modal-close" onclick="globalThis.closeModal()" aria-label="Close" class="w-9 h-9 flex items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-500 hover:text-white transition-colors text-xl font-bold leading-none">×</button>
             </div>
             
             <form id="patient-form" novalidate onsubmit="return globalThis.savePatient(event);" class="flex-1 overflow-y-auto flex flex-col min-h-0">
@@ -13482,7 +13672,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="cystoscopy">
                                 <span class="flex-1 font-medium">Cystoscopy</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="cystoscopy">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="cystoscopy" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="cystoscopy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
@@ -13490,7 +13680,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="turbt">
                                 <span class="flex-1 font-medium">TURBT</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="turbt">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="turbt" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="turbt" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
@@ -13498,7 +13688,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="stent">
                                 <span class="flex-1 font-medium">Stent Placement</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="stent">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="stent" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="stent" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
@@ -13506,7 +13696,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="lithotripsy">
                                 <span class="flex-1 font-medium">Lithotripsy</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="lithotripsy">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="lithotripsy" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="lithotripsy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
@@ -13514,7 +13704,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="ureteral-reimplantation">
                                 <span class="flex-1 font-medium">Ureteral Reimplantation</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="ureteral-reimplantation">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="ureteral-reimplantation" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="ureteral-reimplantation" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
@@ -13522,7 +13712,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="nephrectomy">
                                 <span class="flex-1 font-medium">Nephrectomy</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="nephrectomy">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="nephrectomy" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="nephrectomy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
@@ -13530,7 +13720,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="prostatectomy">
                                 <span class="flex-1 font-medium">Prostatectomy</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="prostatectomy">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="prostatectomy" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="prostatectomy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
@@ -13538,7 +13728,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="laser">
                                 <span class="flex-1 font-medium">Laser Procedure</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="laser">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="laser" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="laser" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
@@ -13546,7 +13736,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="biopsy">
                                 <span class="flex-1 font-medium">Biopsy</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="biopsy">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="biopsy" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="biopsy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
@@ -13554,7 +13744,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" class="procedure-checkbox w-4 h-4" value="other-surgery">
                                 <span class="flex-1 font-medium">Other Surgery</span>
-                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="other-surgery">
+                                <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="other-surgery" placeholder="MM/DD/YYYY">
                             </div>
                             <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="other-surgery" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
