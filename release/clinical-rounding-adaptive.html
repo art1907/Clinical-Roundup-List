@@ -3262,7 +3262,7 @@
         }
 
         function parseGenericFindingValue(rawValue) {
-            const parsed = { qualifier: '', value: '', note: '' };
+            const parsed = { note: '' };
             if (rawValue === null || rawValue === undefined) return parsed;
 
             if (typeof rawValue === 'string') {
@@ -3275,14 +3275,21 @@
                 return parsed;
             }
 
-            parsed.qualifier = normalizeFindingScalar(rawValue.qualifier ?? rawValue.label ?? rawValue.test ?? rawValue.name);
-            parsed.value = normalizeFindingScalar(rawValue.value ?? rawValue.result ?? rawValue.measure ?? rawValue.measurement);
             parsed.note = normalizeFindingScalar(rawValue.note ?? rawValue.text ?? rawValue.comments ?? rawValue.comment);
 
             if (!parsed.note) {
+                const qualifier = normalizeFindingScalar(rawValue.qualifier ?? rawValue.label ?? rawValue.test ?? rawValue.name);
+                const value = normalizeFindingScalar(rawValue.value ?? rawValue.result ?? rawValue.measure ?? rawValue.measurement);
+                if (qualifier && value) {
+                    parsed.note = `${qualifier}: ${value}`;
+                } else {
+                    parsed.note = qualifier || value;
+                }
+            }
+
+            if (!parsed.note) {
                 const consumedKeys = new Set([
-                    'qualifier', 'label', 'test', 'name',
-                    'value', 'result', 'measure', 'measurement',
+                    'qualifier', 'label', 'test', 'name', 'value', 'result', 'measure', 'measurement',
                     'note', 'text', 'comments', 'comment'
                 ]);
                 const extraSegments = Object.entries(rawValue)
@@ -3306,9 +3313,11 @@
             if (FINDINGS_CUSTOM_CODES.has(code)) {
                 const customValues = parseCustomFindingValue(code, rawValue);
                 return {
-                    qualifier: normalizeFindingScalar(customValues.qualifier),
-                    value: normalizeFindingScalar(customValues.value),
-                    note: normalizeFindingScalar(customValues.note),
+                    note: normalizeFindingScalar(
+                        rawValue && typeof rawValue === 'object'
+                            ? (rawValue.note ?? rawValue.text ?? rawValue.comments ?? rawValue.comment)
+                            : ''
+                    ),
                     customValues
                 };
             }
@@ -3324,19 +3333,12 @@
             if (FINDINGS_CUSTOM_CODES.has(code)) {
                 const hasCustomFields = Object.entries(parsed.customValues || {})
                     .some(([field, value]) => {
-                        if (['qualifier', 'value', 'note'].includes(field)) return false;
+                        if (['note', 'text', 'comments', 'comment'].includes(String(field || '').toLowerCase())) return false;
                         return normalizeFindingScalar(value) !== '';
                     });
-                return hasCustomFields || Boolean(parsed.qualifier || parsed.value || parsed.note);
+                return hasCustomFields || Boolean(parsed.note);
             }
-            return Boolean(parsed.qualifier || parsed.value || parsed.note);
-        }
-
-        function formatQualifierValueDisplay(qualifier, value) {
-            const normalizedQualifier = normalizeFindingScalar(qualifier);
-            const normalizedValue = normalizeFindingScalar(value);
-            if (normalizedQualifier && normalizedValue) return `${normalizedQualifier}: ${normalizedValue}`;
-            return normalizedQualifier || normalizedValue;
+            return Boolean(parsed.note);
         }
 
         function escapeInlineHtml(value) {
@@ -3388,13 +3390,11 @@
 
                     if (FINDINGS_CUSTOM_CODES.has(code)) {
                         const customSegment = formatCustomFindingDisplay(code, rawValue);
-                        const qualifierValueSegment = formatQualifierValueDisplay(parsedValue.qualifier, parsedValue.value);
-                        segment = [customSegment, qualifierValueSegment, parsedValue.note]
+                        segment = [customSegment, parsedValue.note]
                             .filter(Boolean)
                             .join(', ');
                     } else {
-                        const qualifierValueSegment = formatQualifierValueDisplay(parsedValue.qualifier, parsedValue.value);
-                        segment = [qualifierValueSegment, parsedValue.note]
+                        segment = [parsedValue.note]
                             .filter(Boolean)
                             .join(', ');
 
@@ -7040,9 +7040,6 @@
                         const isCustomCode = FINDINGS_CUSTOM_CODES.has(cb.value);
                         const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
                         const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
-                        const qualifierRow = document.querySelector(`.findings-qualifier-row[data-code="${cb.value}"]`);
-                        const qualifierInput = document.querySelector(`input.findings-qualifier[data-code="${cb.value}"]`);
-                        const qualifierValueInput = document.querySelector(`input.findings-qualifier-value[data-code="${cb.value}"]`);
                         if (isCustomCode && customValue !== null && customValue !== undefined) {
                             populateCustomFindingFields(cb.value, customValue);
                         } else if (isCustomCode) {
@@ -7056,17 +7053,6 @@
                                 valueInput.value = '';
                                 valueInput.disabled = true;
                             }
-                        }
-                        if (qualifierRow) {
-                            qualifierRow.style.display = cb.checked ? 'grid' : 'none';
-                        }
-                        if (qualifierInput) {
-                            qualifierInput.disabled = !cb.checked;
-                            qualifierInput.value = cb.checked ? parsedFindingValue.qualifier : '';
-                        }
-                        if (qualifierValueInput) {
-                            qualifierValueInput.disabled = !cb.checked;
-                            qualifierValueInput.value = cb.checked ? parsedFindingValue.value : '';
                         }
                         if (dateInput) {
                             if (cb.checked) {
@@ -7311,9 +7297,6 @@
                 cb.checked = false;
                 const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
                 const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
-                const qualifierInput = document.querySelector(`input.findings-qualifier[data-code="${cb.value}"]`);
-                const qualifierValueInput = document.querySelector(`input.findings-qualifier-value[data-code="${cb.value}"]`);
-                const qualifierRow = document.querySelector(`.findings-qualifier-row[data-code="${cb.value}"]`);
 
                 if (FINDINGS_CUSTOM_CODES.has(cb.value)) {
                     populateCustomFindingFields(cb.value, {});
@@ -7325,17 +7308,6 @@
                 if (dateInput) {
                     dateInput.value = '';
                     dateInput.disabled = true;
-                }
-                if (qualifierInput) {
-                    qualifierInput.value = '';
-                    qualifierInput.disabled = true;
-                }
-                if (qualifierValueInput) {
-                    qualifierValueInput.value = '';
-                    qualifierValueInput.disabled = true;
-                }
-                if (qualifierRow) {
-                    qualifierRow.style.display = 'none';
                 }
             });
 
@@ -9936,28 +9908,11 @@
             const valuesInput = document.getElementById('f-findings-values');
             const datesInput = document.getElementById('f-findings-dates');
 
-            function ensureFindingsQualifierFields() {
-                checkboxes.forEach((cb) => {
-                    const code = cb.value;
-                    const card = cb.closest('.border.border-slate-200.rounded.p-2.bg-white');
-                    if (!card) return;
-                    if (card.querySelector(`.findings-qualifier-row[data-code="${code}"]`)) return;
-
-                    const anchor = card.querySelector(`textarea.findings-value[data-code="${code}"]`) ||
-                        card.querySelector(`.findings-custom-panel[data-code="${code}"]`);
-                    if (!anchor) return;
-
-                    const row = document.createElement('div');
-                    row.className = 'findings-qualifier-row mt-1.5 grid grid-cols-1 md:grid-cols-2 gap-2';
-                    row.dataset.code = code;
-                    row.innerHTML = `
-                        <input type="text" class="findings-qualifier w-full text-xs px-2 py-1 border rounded" data-code="${code}" placeholder="Qualifier (e.g., WCC, Left)">
-                        <input type="text" class="findings-qualifier-value w-full text-xs px-2 py-1 border rounded" data-code="${code}" placeholder="Value (e.g., 11.2, Positive)">
-                    `;
-                    anchor.insertAdjacentElement('afterend', row);
-                });
-            }
-            ensureFindingsQualifierFields();
+            document.querySelectorAll('input.findings-date').forEach((input) => {
+                input.type = 'text';
+                input.placeholder = 'Date (MM/DD/YYYY)';
+                input.inputMode = 'numeric';
+            });
             
             function updateSelectedCodes(options = {}) {
                 const editable = options.editable ?? isFindingsModalEditable();
@@ -9972,27 +9927,10 @@
                     const valueInput = document.querySelector(`textarea.findings-value[data-code="${code}"]`);
                     const dateInput = document.querySelector(`input.findings-date[data-code="${code}"]`);
                     const customPanel = document.querySelector(`.findings-custom-panel[data-code="${code}"]`);
-                    const qualifierRow = document.querySelector(`.findings-qualifier-row[data-code="${code}"]`);
-                    const qualifierInput = document.querySelector(`input.findings-qualifier[data-code="${code}"]`);
-                    const qualifierValueInput = document.querySelector(`input.findings-qualifier-value[data-code="${code}"]`);
-                    const qualifier = normalizeFindingScalar(qualifierInput?.value);
-                    const qualifierValue = normalizeFindingScalar(qualifierValueInput?.value);
-
-                    if (qualifierRow) {
-                        qualifierRow.style.display = checked ? 'grid' : 'none';
-                    }
-                    if (qualifierInput) {
-                        qualifierInput.disabled = !checked;
-                        qualifierInput.readOnly = !editable;
-                    }
-                    if (qualifierValueInput) {
-                        qualifierValueInput.disabled = !checked;
-                        qualifierValueInput.readOnly = !editable;
-                    }
 
                     if (dateInput) {
                         dateInput.disabled = !checked || !editable;
-                        dateInput.style.display = checked ? 'inline-block' : 'none';
+                        dateInput.style.display = checked ? 'block' : 'none';
                         if (checked && dateInput.value) dates[code] = dateInput.value;
                     }
 
@@ -10011,14 +9949,6 @@
                                 hasCustomValue = true;
                             }
                         });
-                        if (checked && qualifier) {
-                            customValues.qualifier = qualifier;
-                            hasCustomValue = true;
-                        }
-                        if (checked && qualifierValue) {
-                            customValues.value = qualifierValue;
-                            hasCustomValue = true;
-                        }
                         if (hasCustomValue) {
                             values[code] = customValues;
                         }
@@ -10034,22 +9964,7 @@
                         valueInput.readOnly = !editable;
                         valueInput.style.display = checked ? 'block' : 'none';
                         const noteValue = normalizeFindingScalar(valueInput.value);
-                        if (checked && (qualifier || qualifierValue || noteValue)) {
-                            if (qualifier || qualifierValue) {
-                                const entry = {};
-                                if (qualifier) entry.qualifier = qualifier;
-                                if (qualifierValue) entry.value = qualifierValue;
-                                if (noteValue) entry.note = noteValue;
-                                values[code] = entry;
-                            } else {
-                                values[code] = noteValue;
-                            }
-                        }
-                    } else if (checked && (qualifier || qualifierValue)) {
-                        const entry = {};
-                        if (qualifier) entry.qualifier = qualifier;
-                        if (qualifierValue) entry.value = qualifierValue;
-                        values[code] = entry;
+                        if (checked && noteValue) values[code] = noteValue;
                     }
                 });
 
@@ -10073,10 +9988,6 @@
                 input.addEventListener('change', updateSelectedCodes);
             });
             document.querySelectorAll('.findings-custom-input').forEach(input => {
-                input.addEventListener('change', updateSelectedCodes);
-                input.addEventListener('input', updateSelectedCodes);
-            });
-            document.querySelectorAll('input.findings-qualifier, input.findings-qualifier-value').forEach(input => {
                 input.addEventListener('change', updateSelectedCodes);
                 input.addEventListener('input', updateSelectedCodes);
             });
@@ -10125,12 +10036,6 @@
             });
             document.querySelectorAll('.findings-custom-panel').forEach(panel => {
                 panel.style.display = 'none';
-            });
-            document.querySelectorAll('.findings-qualifier-row').forEach(row => {
-                row.style.display = 'none';
-            });
-            document.querySelectorAll('input.findings-qualifier, input.findings-qualifier-value').forEach(input => {
-                input.disabled = true;
             });
             updateSelectedCodes();
 
@@ -11063,7 +10968,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85025">
                                     <span class="flex-1 font-medium">CBC w/ diff (85025)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85025">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85025" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <div class="findings-custom-panel mt-1.5" data-code="cbc-85025">
                                     <details class="border border-slate-300 rounded bg-slate-50">
@@ -11090,7 +10995,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85027">
                                     <span class="flex-1 font-medium">CBC auto (85027)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85027">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85027" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85027" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11098,7 +11003,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85007">
                                     <span class="flex-1 font-medium">Blood smear (85007)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85007">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85007" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85007" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11111,7 +11016,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="bmp-80048">
                                     <span class="flex-1 font-medium">BMP (80048)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="bmp-80048">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="bmp-80048" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <div class="findings-custom-panel mt-1.5" data-code="bmp-80048">
                                     <details class="border border-slate-300 rounded bg-slate-50">
@@ -11134,7 +11039,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cmp-80053">
                                     <span class="flex-1 font-medium">CMP (80053)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cmp-80053">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cmp-80053" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cmp-80053" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11147,7 +11052,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87086">
                                     <span class="flex-1 font-medium">Urine culture (87086)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87086">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87086" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87086" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11155,7 +11060,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87088">
                                     <span class="flex-1 font-medium">+ organism ID (87088)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87088">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87088" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87088" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11163,7 +11068,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87040">
                                     <span class="flex-1 font-medium">Blood culture (87040)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87040">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87040" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87040" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11171,7 +11076,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87103">
                                     <span class="flex-1 font-medium">Blood fungal (87103)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87103">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87103" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87103" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11184,7 +11089,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-chest">
                                     <span class="flex-1 font-medium">Chest (71045-48)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-chest">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-chest" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-chest" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11192,7 +11097,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-spine">
                                     <span class="flex-1 font-medium">Spine (72020-110)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-spine">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-spine" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-spine" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11200,7 +11105,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-extremity">
                                     <span class="flex-1 font-medium">Extremity (73000+)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-extremity">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-extremity" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-extremity" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11213,7 +11118,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76700">
                                     <span class="flex-1 font-medium">Abd complete (76700)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76700">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76700" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76700" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11221,7 +11126,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76705">
                                     <span class="flex-1 font-medium">Abd limited (76705)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76705">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76705" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76705" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11229,7 +11134,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-93306">
                                     <span class="flex-1 font-medium">Echo (93306)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-93306">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-93306" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-93306" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11242,7 +11147,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-head">
                                     <span class="flex-1 font-medium">Head/Brain (70450-70)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-head">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-head" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-head" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11250,7 +11155,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-chest">
                                     <span class="flex-1 font-medium">Chest (71250-75)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-chest">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-chest" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-chest" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11258,7 +11163,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-abd">
                                     <span class="flex-1 font-medium">Abdomen (74150-78)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-abd">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-abd" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-abd" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11266,7 +11171,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-pelvis">
                                     <span class="flex-1 font-medium">Pelvis (72192-94)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-pelvis">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-pelvis" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-pelvis" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11279,7 +11184,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-brain">
                                     <span class="flex-1 font-medium">Brain (70551-53)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-brain">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-brain" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-brain" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11287,7 +11192,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-c-spine">
                                     <span class="flex-1 font-medium">C-Spine (72141-42)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-c-spine">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-c-spine" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-c-spine" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11295,7 +11200,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-l-spine">
                                     <span class="flex-1 font-medium">L-Spine (72148-49)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-l-spine">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-l-spine" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-l-spine" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11303,7 +11208,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-abd">
                                     <span class="flex-1 font-medium">Abdomen (74181-83)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-abd">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-abd" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-abd" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11316,7 +11221,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78306">
                                     <span class="flex-1 font-medium">Bone scan (78306)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78306">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78306" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78306" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11324,7 +11229,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78451">
                                     <span class="flex-1 font-medium">Cardiac perf (78451-54)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78451">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78451" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78451" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11332,7 +11237,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78815">
                                     <span class="flex-1 font-medium">PET scan (78815)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78815">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78815" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78815" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
@@ -11340,7 +11245,7 @@
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-thyroid">
                                     <span class="flex-1 font-medium">Thyroid (78012-14)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-thyroid">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-thyroid" placeholder="Date (MM/DD/YYYY)" inputmode="numeric">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-thyroid" placeholder="Results..." rows="1" style="min-height: 28px; max-height: 120px;"></textarea>
                             </div>
