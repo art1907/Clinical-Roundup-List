@@ -7710,23 +7710,21 @@
                     if (document.getElementById('f-procedure-values')) {
                         document.getElementById('f-procedure-values').value = p.procedureValues ? JSON.stringify(p.procedureValues) : "";
                     }
+                    const procedureNotesInput = document.getElementById('f-procedure-notes');
+                    if (procedureNotesInput) {
+                        procedureNotesInput.value = p.procedureValues?.notes || p.procedureValues?.__freeText || '';
+                    }
                     // Restore procedure checkboxes and values
                     if (p.procedureCodes && p.procedureCodes.length > 0) {
                         document.querySelectorAll('.procedure-checkbox').forEach(cb => {
                             cb.checked = p.procedureCodes.includes(cb.value);
                             const dateInput = document.querySelector(`input.procedure-date[data-procedure="${cb.value}"]`);
-                            const notesInput = document.querySelector(`textarea.procedure-notes[data-procedure="${cb.value}"]`);
                             
                             if (cb.checked) {
                                 if (dateInput && p.procedureDates && p.procedureDates[cb.value]) {
                                     dateInput.value = p.procedureDates[cb.value];
                                     dateInput.disabled = false;
                                     dateInput.style.display = 'inline-block';
-                                }
-                                if (notesInput && p.procedureValues && p.procedureValues[cb.value]) {
-                                    notesInput.value = p.procedureValues[cb.value];
-                                    notesInput.disabled = false;
-                                    notesInput.style.display = 'block';
                                 }
                             }
                         });
@@ -8734,11 +8732,12 @@
 
             selectedCodes.forEach((code) => {
                 const findingsDateValue = String(nextFindingsDates[code] || '').trim();
-                if (!isValidIsoDateString(findingsDateValue)) {
+                const normalizedFindingsDate = normalizeProcedureDateValue(findingsDateValue);
+                if (!normalizedFindingsDate) {
                     nextFindingsDates[code] = effectiveCreatedOnDate;
                     normalizedMeta.findingsDatesDefaulted[code] = effectiveCreatedOnDate;
                     appliedDefaults.push(`findings:${code}`);
-                } else if (normalizedMeta.findingsDatesDefaulted[code] && findingsDateValue !== normalizedMeta.findingsDatesDefaulted[code]) {
+                } else if (normalizedMeta.findingsDatesDefaulted[code] && normalizedFindingsDate !== normalizedMeta.findingsDatesDefaulted[code]) {
                     delete normalizedMeta.findingsDatesDefaulted[code];
                 }
             });
@@ -8817,7 +8816,8 @@
                     return;
                 }
                 const currentValue = String(findingDateInput?.value || '').trim();
-                if (isValidIsoDateString(currentValue) && currentValue !== reviewMeta.findingsDatesDefaulted[code]) {
+                const normalizedCurrentValue = normalizeProcedureDateValue(currentValue);
+                if (normalizedCurrentValue && normalizedCurrentValue !== reviewMeta.findingsDatesDefaulted[code]) {
                     delete reviewMeta.findingsDatesDefaulted[code];
                 }
             });
@@ -11391,7 +11391,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 </div>
                                 <div class="section">
                                     <h3>Investigations</h3>
-                                    <div class="row"><span class="label">Additional Findings:</span> <span class="value">${p.findingsText || ''}</span></div>
+                                    <div class="row"><span class="label">Additional Comments:</span> <span class="value">${p.findingsText || ''}</span></div>
                                     <div class="row"><span class="label">Investigation Codes:</span> <span class="value">${(p.findingsCodes && p.findingsCodes.join(', ')) || ''}</span></div>
                                 </div>
                                 <div class="section">
@@ -12500,7 +12500,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                     const procedure = cb.value;
                     const checked = cb.checked;
                     const dateInput = document.querySelector(`input.procedure-date[data-procedure="${procedure}"]`);
-                    const notesInput = document.querySelector(`textarea.procedure-notes[data-procedure="${procedure}"]`);
                     
                     if (dateInput) {
                         dateInput.disabled = !checked || !editable;
@@ -12509,16 +12508,13 @@ const findHeaderIndex = (rows, sheetLog) => {
                             dates[procedure] = dateInput.value;
                         }
                     }
-                    
-                    if (notesInput) {
-                        notesInput.disabled = !checked || !editable;
-                        notesInput.readOnly = !editable;
-                        notesInput.style.display = checked ? 'block' : 'none';
-                        if (checked && notesInput.value) {
-                            values[procedure] = notesInput.value;
-                        }
-                    }
                 });
+                const procedureNotesInput = document.getElementById('f-procedure-notes');
+                if (procedureNotesInput) {
+                    procedureNotesInput.disabled = !editable;
+                    procedureNotesInput.readOnly = !editable;
+                    if (procedureNotesInput.value.trim()) values.notes = procedureNotesInput.value;
+                }
                 
                 const datesInput = document.getElementById('f-procedure-dates');
                 const valuesInput = document.getElementById('f-procedure-values');
@@ -13508,7 +13504,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85025">
                                     <span class="flex-1 font-medium">CBC w/ diff (85025)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85025">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85025" placeholder="MM/DD/YYYY">
                                 </div>
                                 <div class="findings-custom-panel mt-1.5" data-code="cbc-85025">
                                     <details class="border border-slate-300 rounded bg-slate-50">
@@ -13526,7 +13522,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                                 <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="mono" placeholder="Mono %">
                                                 <input type="text" class="findings-custom-input w-full text-xs px-2 py-1 border rounded" data-code="cbc-85025" data-field="eosino" placeholder="Eosino %">
                                             </div>
-                                            <textarea class="findings-custom-input w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85025" data-field="comments" placeholder="Additional Findings" rows="2"></textarea>
+                                            <textarea class="findings-custom-input w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85025" data-field="comments" placeholder="Additional Comments" rows="2"></textarea>
                                         </div>
                                     </details>
                                 </div>
@@ -13535,7 +13531,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85027">
                                     <span class="flex-1 font-medium">CBC auto (85027)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85027">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85027" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85027" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13543,7 +13539,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cbc-85007">
                                     <span class="flex-1 font-medium">Blood smear (85007)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85007">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cbc-85007" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cbc-85007" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13556,7 +13552,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="bmp-80048">
                                     <span class="flex-1 font-medium">BMP (80048)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="bmp-80048">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="bmp-80048" placeholder="MM/DD/YYYY">
                                 </div>
                                 <div class="findings-custom-panel mt-1.5" data-code="bmp-80048">
                                     <details class="border border-slate-300 rounded bg-slate-50">
@@ -13579,7 +13575,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="cmp-80053">
                                     <span class="flex-1 font-medium">CMP (80053)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="cmp-80053">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="cmp-80053" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="cmp-80053" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13592,7 +13588,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87086">
                                     <span class="flex-1 font-medium">Urine culture (87086)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87086">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87086" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87086" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13600,7 +13596,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="urine-87088">
                                     <span class="flex-1 font-medium">+ organism ID (87088)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87088">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="urine-87088" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="urine-87088" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13608,7 +13604,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87040">
                                     <span class="flex-1 font-medium">Blood culture (87040)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87040">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87040" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87040" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13616,7 +13612,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="blood-87103">
                                     <span class="flex-1 font-medium">Blood fungal (87103)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87103">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="blood-87103" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="blood-87103" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13629,7 +13625,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-chest">
                                     <span class="flex-1 font-medium">Chest (71045-48)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-chest">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-chest" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-chest" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13637,7 +13633,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-spine">
                                     <span class="flex-1 font-medium">Spine (72020-110)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-spine">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-spine" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-spine" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13645,7 +13641,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-extremity">
                                     <span class="flex-1 font-medium">Extremity (73000+)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-extremity">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-extremity" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-extremity" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13658,7 +13654,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76700">
                                     <span class="flex-1 font-medium">Abd complete (76700)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76700">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76700" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76700" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13666,7 +13662,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76705">
                                     <span class="flex-1 font-medium">Abd limited (76705)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76705">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76705" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76705" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13674,7 +13670,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-93306">
                                     <span class="flex-1 font-medium">Echo (93306)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-93306">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-93306" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-93306" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13687,7 +13683,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-head">
                                     <span class="flex-1 font-medium">Head/Brain (70450-70)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-head">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-head" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-head" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13695,7 +13691,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-chest">
                                     <span class="flex-1 font-medium">Chest (71250-75)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-chest">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-chest" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-chest" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13703,7 +13699,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-abd">
                                     <span class="flex-1 font-medium">Abdomen (74150-78)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-abd">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-abd" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-abd" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13711,7 +13707,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-pelvis">
                                     <span class="flex-1 font-medium">Pelvis (72192-94)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-pelvis">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-pelvis" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-pelvis" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13724,7 +13720,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-brain">
                                     <span class="flex-1 font-medium">Brain (70551-53)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-brain">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-brain" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-brain" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13732,7 +13728,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-c-spine">
                                     <span class="flex-1 font-medium">C-Spine (72141-42)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-c-spine">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-c-spine" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-c-spine" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13740,7 +13736,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-l-spine">
                                     <span class="flex-1 font-medium">L-Spine (72148-49)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-l-spine">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-l-spine" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-l-spine" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13748,7 +13744,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-abd">
                                     <span class="flex-1 font-medium">Abdomen (74181-83)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-abd">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-abd" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-abd" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13761,7 +13757,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78306">
                                     <span class="flex-1 font-medium">Bone scan (78306)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78306">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78306" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78306" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13769,7 +13765,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78451">
                                     <span class="flex-1 font-medium">Cardiac perf (78451-54)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78451">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78451" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78451" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13777,7 +13773,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78815">
                                     <span class="flex-1 font-medium">PET scan (78815)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78815">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78815" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78815" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13785,7 +13781,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <div class="flex items-center gap-2 mb-1.5">
                                     <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-thyroid">
                                     <span class="flex-1 font-medium">Thyroid (78012-14)</span>
-                                    <input type="date" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-thyroid">
+                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-thyroid" placeholder="MM/DD/YYYY">
                                 </div>
                                 <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-thyroid" placeholder="Results..." rows="1"></textarea>
                             </div>
@@ -13794,13 +13790,15 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <input type="hidden" id="f-findings-codes">
                     <input type="hidden" id="f-findings-values">
                     <input type="hidden" id="f-findings-dates">
-                    <textarea id="f-findings-text" placeholder="Additional Findings" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
+                    <textarea id="f-findings-text" placeholder="Additional Comments" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
                 </div>
 
-                <textarea id="f-plan" placeholder="Plan" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-700">📋 Plan</h3>
+                    <textarea id="f-plan" placeholder="Plan" class="w-full p-3 bg-white rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
 
-                <!-- Procedures Section -->
-                <div class="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
+                    <!-- Procedures Section -->
+                    <div class="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
                     <h3 class="text-xs font-bold text-purple-900">🏥 Procedures</h3>
                     <div class="pl-2 space-y-2 text-xs">
                         <div>
@@ -13809,7 +13807,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">Cystoscopy</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="cystoscopy" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="cystoscopy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -13817,7 +13814,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">TURBT</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="turbt" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="turbt" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -13825,7 +13821,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">Stent Placement</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="stent" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="stent" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -13833,7 +13828,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">Lithotripsy</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="lithotripsy" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="lithotripsy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -13841,7 +13835,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">Ureteral Reimplantation</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="ureteral-reimplantation" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="ureteral-reimplantation" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -13849,7 +13842,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">Nephrectomy</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="nephrectomy" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="nephrectomy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -13857,7 +13849,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">Prostatectomy</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="prostatectomy" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="prostatectomy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -13865,7 +13856,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">Laser Procedure</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="laser" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="laser" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -13873,7 +13863,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">Biopsy</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="biopsy" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="biopsy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -13881,12 +13870,13 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <span class="flex-1 font-medium">Other Surgery</span>
                                 <input type="text" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="other-surgery" placeholder="MM/DD/YYYY">
                             </div>
-                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="other-surgery" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
                     </div>
                     <input type="hidden" id="f-procedure-codes">
                     <input type="hidden" id="f-procedure-dates">
                     <input type="hidden" id="f-procedure-values">
+                    <textarea id="f-procedure-notes" class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none" placeholder="Procedure notes..." rows="2"></textarea>
+                    </div>
                 </div>
 
                 <!-- Diagnosis -->
