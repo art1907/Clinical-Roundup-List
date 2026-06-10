@@ -12031,7 +12031,7 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             // ========== Procedures UI Handler ==========
             function updateSelectedProcedures(options = {}) {
-                const editable = options.editable ?? !document.getElementById('edit-id')?.value || (document.getElementById('patient-modal').classList.contains('hidden') === false);
+                const editable = options.editable ?? (document.getElementById('patient-modal').classList.contains('hidden') === false);
                 const selected = Array.from(document.querySelectorAll('.procedure-checkbox')).filter(cb => cb.checked).map(cb => cb.value);
                 const codesInput = document.getElementById('f-procedure-codes');
                 if (codesInput) codesInput.value = selected.join(', ');
