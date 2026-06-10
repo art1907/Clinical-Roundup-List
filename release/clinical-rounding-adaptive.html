@@ -5322,7 +5322,7 @@
                     '=== Top ICD Codes ===',
                     ...icdSorted.slice(0, 10).map(([code, count]) => `ICD ${code}: ${count} cases`)
                 ];
-                renderAnalyticsDetails('Billing Code Distribution', billingRows);
+                renderAnalyticsDetails('Diagnosis Code Distribution', billingRows);
                 return;
             }
 
@@ -6019,7 +6019,7 @@
                     </div>
                 </div>
                 ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
-                ${p.progressNotes ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Progress Notes:</strong> ${esc(p.progressNotes)}</div>` : ''}
+                ${p.progressNotes ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Subjective & Objective Findings:</strong> ${esc(p.progressNotes)}</div>` : ''}
                 ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
                 ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
             </div>`;
@@ -6039,7 +6039,7 @@
                 statPts.forEach(p => {
                     lines.push(`  [STAT] ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${getPatientStatus(p)}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
                     if (p.plan) lines.push(`    Plan: ${p.plan}`);
-                    if (p.progressNotes) lines.push(`    Progress Notes: ${p.progressNotes}`);
+                    if (p.progressNotes) lines.push(`    Subjective & Objective Findings: ${p.progressNotes}`);
                     if (p.pending) lines.push(`    Pending: ${p.pending}`);
                     if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
                 });
@@ -6050,7 +6050,7 @@
                 groups[hosp].forEach(p => {
                     lines.push(`  ${p.name} | Rm ${p.room||'?'} | MRN ${p.mrn||'?'} | ${getPatientStatus(p)}${p.supervisingMd ? ' | MD: '+p.supervisingMd : ''}`);
                     if (p.plan) lines.push(`    Plan: ${p.plan}`);
-                    if (p.progressNotes) lines.push(`    Progress Notes: ${p.progressNotes}`);
+                    if (p.progressNotes) lines.push(`    Subjective & Objective Findings: ${p.progressNotes}`);
                     if (p.pending) lines.push(`    Pending: ${p.pending}`);
                     if (p.followUp) lines.push(`    Follow-up: ${p.followUp}`);
                 });
@@ -6240,8 +6240,8 @@
                         ${p.supervisingMd ? `<span class="text-[10px] text-slate-500">· ${esc(p.supervisingMd)}</span>` : ''}
                     </div>
                     ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
-                    ${p.progressNotes ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Progress Notes:</strong> ${esc(p.progressNotes)}</div>` : ''}
-                    ${p.findingsText ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Findings:</strong> ${esc(p.findingsText)}</div>` : ''}
+                    ${p.progressNotes ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Subjective & Objective Findings:</strong> ${esc(p.progressNotes)}</div>` : ''}
+                    ${p.findingsText ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Investigations:</strong> ${esc(p.findingsText)}</div>` : ''}
                     ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
                     ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
                 </div>
@@ -6322,7 +6322,7 @@
                             <thead><tr class="bg-slate-100 text-slate-600">
                                 <th class="px-2 py-2 text-left">Date</th><th class="px-2 py-2 text-left">Patient</th><th class="px-2 py-2 text-left">Room</th>
                                 <th class="px-2 py-2 text-left">MRN</th><th class="px-2 py-2 text-left">Hospital</th><th class="px-2 py-2 text-left">Status</th>
-                                <th class="px-2 py-2 text-left">Plan</th><th class="px-2 py-2 text-left">Progress Notes</th><th class="px-2 py-2 text-left">Pending</th><th class="px-2 py-2 text-left">MD</th>
+                                <th class="px-2 py-2 text-left">Plan</th><th class="px-2 py-2 text-left">Subjective & Objective Findings</th><th class="px-2 py-2 text-left">Pending</th><th class="px-2 py-2 text-left">MD</th>
                             </tr></thead>
                             <tbody class="divide-y divide-slate-100">${rows}</tbody>
                         </table>
@@ -6362,7 +6362,7 @@
                 doc.text(subLine, 14, 22);
 
                 // Table
-                const cols = ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Progress Notes', 'Pending', 'MD'];
+                const cols = ['Date', 'Patient', 'Room', 'MRN', 'Hospital', 'Status', 'Plan', 'Subjective & Objective Findings', 'Pending', 'MD'];
                 const rows = data.map(p => [
                     p.date || '', p.name || '—', p.room || '', p.mrn || '',
                     p.hospital || '', getPatientStatus(p),
@@ -6379,7 +6379,7 @@
                     bodyStyles: { fontSize: 7.5, cellPadding: 2 },
                     columnStyles: {
                         6: { cellWidth: 42 }, // Plan
-                        7: { cellWidth: 42 }, // Progress Notes
+                        7: { cellWidth: 42 }, // Subjective & Objective Findings
                         8: { cellWidth: 30 }, // Pending
                     },
                     margin: { left: 14, right: 14 },
@@ -6422,7 +6422,7 @@
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS['To-Do'];
                 const crossedOutCardClass = isPatientCrossedOut(p.id) ? 'crossed-out' : '';
                 const findingsSegments = getFindingSegments(p);
-                const findingsLabel = findingsSegments.length ? `🔍 Findings · ${findingsSegments.length}` : '🔍 Findings';
+                const findingsLabel = findingsSegments.length ? `🔍 Investigations · ${findingsSegments.length}` : '🔍 Investigations';
                 
                 return `
                     <div class="patient-card ${statClass} ${crossedOutCardClass}">
@@ -6522,7 +6522,7 @@
                 const status = getSafeConfiguredStatus(getPatientStatus(patient));
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || STATUS_COLORS['To-Do'];
                 const findingsSegments = getFindingSegments(patient);
-                const findingsLabel = findingsSegments.length ? `Findings · ${findingsSegments.length}` : 'Findings';
+                const findingsLabel = findingsSegments.length ? `Investigations · ${findingsSegments.length}` : 'Investigations';
                 const isStat = patient.stat === true || patient.stat === 'true';
                 const isSelected = selectedPatientIds.has(patient.id);
                 const isCrossedOut = isPatientCrossedOut(patient.id);
@@ -6735,13 +6735,13 @@
             addEntry('Procedure Date', getProcedureDateFromRecord(sourcePatient));
             addEntry('Plan', getPlanTextWithoutProcedureDate(sourcePatient.plan));
             addEntry('Status', sourcePatient.procedureStatus);
-            addEntry('Findings', findingsWithDates);
-            addEntry('Progress Notes', sourcePatient.progressNotes || '');
+            addEntry('Investigations', findingsWithDates);
+            addEntry('Subjective & Objective Findings', sourcePatient.progressNotes || '');
             addEntry('Pending', sourcePatient.pending);
             addEntry('Follow Up', sourcePatient.followUp);
-            addEntry('CPT Primary', sourcePatient.cptPrimary);
-            addEntry('ICD Primary', sourcePatient.icdPrimary);
-            addEntry('Charge Codes Secondary', sourcePatient.chargeCodesSecondary);
+            addEntry('Secondary Codes', sourcePatient.chargeCodesSecondary);
+            addEntry('ICD', sourcePatient.icdPrimary);
+            addEntry('CPT', sourcePatient.cptPrimary);
 
             if (!entries.length) {
                 hideFollowUpCarryForwardSummary();
@@ -6749,7 +6749,7 @@
             }
 
             body.innerHTML = entries.map((entry) => {
-                const shouldExpand = entry.label === 'Findings' && String(entry.value || '').length > 180;
+                const shouldExpand = entry.label === 'Investigations' && String(entry.value || '').length > 180;
                 return `
                 <div class="rounded border border-emerald-200 bg-white px-2 py-1.5 self-start ${shouldExpand ? 'sm:col-span-2' : ''}">
                     <div class="text-[10px] font-bold uppercase tracking-wide text-emerald-800">${escapeInlineHtml(entry.label)}</div>
@@ -9343,22 +9343,22 @@
                                     <div class="row"><span class="label">Status:</span> <span class="value">${p.procedureStatus || p.status || ''}</span></div>
                                 </div>
                                 <div class="section">
-                                    <h3>Clinical Findings</h3>
-                                    <div class="row"><span class="label">Findings:</span> <span class="value">${p.findingsText || ''}</span></div>
-                                    <div class="row"><span class="label">Findings Codes:</span> <span class="value">${(p.findingsCodes && p.findingsCodes.join(', ')) || ''}</span></div>
+                                    <h3>Investigations</h3>
+                                    <div class="row"><span class="label">Investigations:</span> <span class="value">${p.findingsText || ''}</span></div>
+                                    <div class="row"><span class="label">Investigation Codes:</span> <span class="value">${(p.findingsCodes && p.findingsCodes.join(', ')) || ''}</span></div>
                                 </div>
                                 <div class="section">
                                     <h3>Plan</h3>
                                     <div class="row"><span class="label">Plan:</span> <span class="value">${p.plan || ''}</span></div>
-                                    <div class="row"><span class="label">Progress Notes:</span> <span class="value">${p.progressNotes || ''}</span></div>
+                                    <div class="row"><span class="label">Subjective & Objective Findings:</span> <span class="value">${p.progressNotes || ''}</span></div>
                                     <div class="row"><span class="label">Pending:</span> <span class="value">${p.pending || ''}</span></div>
                                     <div class="row"><span class="label">Follow Up:</span> <span class="value">${p.followUp || ''}</span></div>
                                 </div>
                                 <div class="section">
-                                    <h3>Billing</h3>
-                                    <div class="row"><span class="label">CPT:</span> <span class="value">${p.cptPrimary || ''}</span></div>
+                                    <h3>Diagnosis</h3>
+                                    <div class="row"><span class="label">Secondary Codes:</span> <span class="value">${(Array.isArray(p.chargeCodesSecondary) ? p.chargeCodesSecondary.join(', ') : (p.chargeCodesSecondary || ''))}</span></div>
                                     <div class="row"><span class="label">ICD:</span> <span class="value">${p.icdPrimary || ''}</span></div>
-                                    <div class="row"><span class="label">Other Codes:</span> <span class="value">${(Array.isArray(p.chargeCodesSecondary) ? p.chargeCodesSecondary.join(', ') : (p.chargeCodesSecondary || ''))}</span></div>
+                                    <div class="row"><span class="label">CPT:</span> <span class="value">${p.cptPrimary || ''}</span></div>
                                 </div>
                                 <div class="section">
                                     <h3>Attachments</h3>
@@ -10046,7 +10046,7 @@
                     <div class="column-toggle">
                         <label><input type="checkbox" class="column-vis" value="room" checked onchange="globalThis.updateColumnVisibility()"> Room</label>
                         <label><input type="checkbox" class="column-vis" value="hospital" checked onchange="globalThis.updateColumnVisibility()"> Hospital</label>
-                        <label><input type="checkbox" class="column-vis" value="findings" checked onchange="globalThis.updateColumnVisibility()"> Findings</label>
+                        <label><input type="checkbox" class="column-vis" value="findings" checked onchange="globalThis.updateColumnVisibility()"> Investigations</label>
                         <label><input type="checkbox" class="column-vis" value="plan" checked onchange="globalThis.updateColumnVisibility()"> Plan</label>
                     </div>
                 </div>
@@ -10366,7 +10366,7 @@
         <!-- Tabs -->
         <nav class="selection-underlay-target desktop-tab-nav px-2 py-2 bg-white border-b border-slate-100 flex gap-1 flex-shrink-0 overflow-x-auto" aria-label="Main Navigation">
             <button id="tab-active-btn" onclick="globalThis.setTab('active')" class="flex-shrink-0 px-2 py-2 rounded bg-blue-600 text-white font-bold text-xs uppercase" role="tab" aria-selected="true" aria-controls="active-panel">Census</button>
-            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedures-panel" title="Shows records tagged as surgical by keyword match in Plan/Findings or by surgical status.">Surgical</button>
+            <button id="tab-procedures-btn" onclick="globalThis.setTab('procedures')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="procedures-panel" title="Shows records tagged as surgical by keyword match in Plan/Investigations or by surgical status.">Surgical</button>
             <button id="tab-calendar-btn" onclick="globalThis.setTab('calendar')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="calendar-panel">Calendar</button>
             <button id="tab-timeline-btn" onclick="globalThis.setTab('timeline')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="timeline-panel">Timeline</button>
             <button id="tab-analytics-btn" onclick="globalThis.setTab('analytics')" class="flex-shrink-0 px-2 py-2 rounded text-slate-400 font-bold text-xs uppercase" role="tab" aria-selected="false" aria-controls="analytics-panel">Analytics</button>
@@ -10384,7 +10384,7 @@
             <!-- Advanced Search Panel -->
             <div id="advanced-search" class="advanced-search selection-underlay-target">
                 <label for="search-box" class="text-xs font-bold text-slate-600 block mb-1">🔍 Search</label>
-                <input type="text" id="search-box" class="search-box" placeholder="Search by name, MRN, room, hospital, or findings..." onkeyup="globalThis.performSearch(this.value)">
+                <input type="text" id="search-box" class="search-box" placeholder="Search by name, MRN, room, hospital, or investigations..." onkeyup="globalThis.performSearch(this.value)">
                 <div class="flex gap-2 mt-2 flex-wrap">
                     <button onclick="globalThis.setQuickFilter('stat')" class="px-2 py-1 bg-red-100 border border-red-300 text-red-700 text-xs rounded hover:bg-red-200">STAT Only 🔴</button>
                     <button onclick="globalThis.setQuickFilter('procedures')" class="px-2 py-1 bg-blue-100 border border-blue-300 text-blue-700 text-xs rounded hover:bg-blue-200">Procedures 🔵</button>
@@ -10417,7 +10417,7 @@
                     <button class="view-btn" onclick="globalThis.setViewMode('grouped')">🏥 By Hospital</button>
                 </div>
 
-                <div class="text-[11px] text-slate-500 mb-2">Surgical logic: keyword match in Plan/Findings or surgical follow-up status values.</div>
+                <div class="text-[11px] text-slate-500 mb-2">Surgical logic: keyword match in Plan/Investigations or surgical follow-up status values.</div>
 
                 <div id="mobile-patient-list" class="mobile-patient-list"></div>
 
@@ -10463,7 +10463,7 @@
                                 <th class="p-3 w-20 align-top text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-28 align-top text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-48 align-top text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
-                                <th class="p-3 w-[34%] min-w-[18rem] align-top text-left font-bold text-slate-700">Findings</th>
+                                <th class="p-3 w-[34%] min-w-[18rem] align-top text-left font-bold text-slate-700">Investigations</th>
                                 <th class="p-3 w-[20%] min-w-[16rem] align-top text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-20 align-top text-left font-bold text-slate-700">Actions</th>
                             </tr>
@@ -10581,7 +10581,7 @@
                                     <option value="hospitals">🏢 Hospital Workload</option>
                                     <option value="risk">⚠️ Risk and Pending Focus</option>
                                     <option value="provider">👨‍⚕️ Provider Performance</option>
-                                    <option value="billing">💰 Billing & Codes Summary</option>
+                                    <option value="billing">🩺 Diagnosis & Codes Summary</option>
                                     <option value="los">📅 Length of Stay Analysis</option>
                                     <option value="followup">📌 Follow-up Workload</option>
                                     <option value="complexity">🔴 Patient Complexity</option>
@@ -10860,9 +10860,9 @@
                     <div id="followup-carryforward-summary-body" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 items-start auto-rows-min"></div>
                 </div>
 
-                <!-- Findings -->
+                <!-- Investigations -->
                 <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-3">
-                    <h3 class="text-xs font-bold text-blue-900">Findings</h3>
+                    <h3 class="text-xs font-bold text-blue-900">Investigations</h3>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🩸 CBC</summary>
                         <div class="pl-2 space-y-2 text-xs">
@@ -11156,7 +11156,7 @@
                     <input type="hidden" id="f-findings-codes">
                     <input type="hidden" id="f-findings-values">
                     <input type="hidden" id="f-findings-dates">
-                    <textarea id="f-findings-text" placeholder="Additional findings" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
+                    <textarea id="f-findings-text" placeholder="Additional comments" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
                 </div>
 
                 <div class="space-y-2">
@@ -11166,16 +11166,16 @@
                 </div>
 
                 <div>
-                    <textarea id="f-progress-notes" placeholder="Progress Notes" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>
-                    <div class="mt-1 text-[11px] text-slate-400">Progress Notes = ongoing clinical narrative</div>
+                    <textarea id="f-progress-notes" placeholder="Subjective & Objective Findings" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>
+                    <div class="mt-1 text-[11px] text-slate-400">Subjective & Objective Findings = ongoing clinical narrative</div>
                 </div>
 
-                <!-- Billing -->
+                <!-- Diagnosis -->
                 <div class="bg-amber-50 p-4 rounded-lg border border-amber-200 space-y-2">
-                    <h3 class="text-xs font-bold text-amber-900">💰 Billing</h3>
-                    <input type="text" id="f-cpt-primary" placeholder="CPT (52204)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
+                    <h3 class="text-xs font-bold text-amber-900">🩺 Diagnosis</h3>
+                    <input type="text" id="f-charge-codes-secondary" placeholder="Secondary Codes" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
                     <input type="text" id="f-icd-primary" placeholder="ICD-10 (N39.0)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
-                    <input type="text" id="f-charge-codes-secondary" placeholder="Secondary codes" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
+                    <input type="text" id="f-cpt-primary" placeholder="CPT (52204)" class="w-full p-2.5 bg-white rounded text-xs border border-amber-200">
                 </div>
 
                 <input type="text" id="f-fu" placeholder="Follow-Up" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200">
