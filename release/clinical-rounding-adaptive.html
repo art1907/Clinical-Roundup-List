@@ -3256,6 +3256,89 @@
             return segments.join(', ');
         }
 
+        function normalizeFindingScalar(value) {
+            if (value === null || value === undefined) return '';
+            return String(value).trim();
+        }
+
+        function parseGenericFindingValue(rawValue) {
+            const parsed = { qualifier: '', value: '', note: '' };
+            if (rawValue === null || rawValue === undefined) return parsed;
+
+            if (typeof rawValue === 'string') {
+                parsed.note = rawValue.trim();
+                return parsed;
+            }
+
+            if (typeof rawValue !== 'object') {
+                parsed.note = String(rawValue).trim();
+                return parsed;
+            }
+
+            parsed.qualifier = normalizeFindingScalar(rawValue.qualifier ?? rawValue.label ?? rawValue.test ?? rawValue.name);
+            parsed.value = normalizeFindingScalar(rawValue.value ?? rawValue.result ?? rawValue.measure ?? rawValue.measurement);
+            parsed.note = normalizeFindingScalar(rawValue.note ?? rawValue.text ?? rawValue.comments ?? rawValue.comment);
+
+            if (!parsed.note) {
+                const consumedKeys = new Set([
+                    'qualifier', 'label', 'test', 'name',
+                    'value', 'result', 'measure', 'measurement',
+                    'note', 'text', 'comments', 'comment'
+                ]);
+                const extraSegments = Object.entries(rawValue)
+                    .filter(([key, value]) => {
+                        const normalizedKey = String(key || '').toLowerCase();
+                        if (consumedKeys.has(normalizedKey)) return false;
+                        if (value === null || value === undefined) return false;
+                        if (typeof value === 'object') return false;
+                        return String(value).trim() !== '';
+                    })
+                    .map(([key, value]) => `${key}: ${String(value).trim()}`);
+                if (extraSegments.length) {
+                    parsed.note = extraSegments.join(', ');
+                }
+            }
+
+            return parsed;
+        }
+
+        function parseFindingValueEntry(code, rawValue) {
+            if (FINDINGS_CUSTOM_CODES.has(code)) {
+                const customValues = parseCustomFindingValue(code, rawValue);
+                return {
+                    qualifier: normalizeFindingScalar(customValues.qualifier),
+                    value: normalizeFindingScalar(customValues.value),
+                    note: normalizeFindingScalar(customValues.note),
+                    customValues
+                };
+            }
+
+            return {
+                ...parseGenericFindingValue(rawValue),
+                customValues: null
+            };
+        }
+
+        function hasMeaningfulFindingValue(code, rawValue) {
+            const parsed = parseFindingValueEntry(code, rawValue);
+            if (FINDINGS_CUSTOM_CODES.has(code)) {
+                const hasCustomFields = Object.entries(parsed.customValues || {})
+                    .some(([field, value]) => {
+                        if (['qualifier', 'value', 'note'].includes(field)) return false;
+                        return normalizeFindingScalar(value) !== '';
+                    });
+                return hasCustomFields || Boolean(parsed.qualifier || parsed.value || parsed.note);
+            }
+            return Boolean(parsed.qualifier || parsed.value || parsed.note);
+        }
+
+        function formatQualifierValueDisplay(qualifier, value) {
+            const normalizedQualifier = normalizeFindingScalar(qualifier);
+            const normalizedValue = normalizeFindingScalar(value);
+            if (normalizedQualifier && normalizedValue) return `${normalizedQualifier}: ${normalizedValue}`;
+            return normalizedQualifier || normalizedValue;
+        }
+
         function escapeInlineHtml(value) {
             return String(value == null ? '' : value)
                 .replaceAll('&', '&amp;')
@@ -3299,19 +3382,25 @@
             const valueSegments = findingsCodes
                 .map((code) => {
                     const rawValue = findingsValues[code];
+                    const parsedValue = parseFindingValueEntry(code, rawValue);
                     const findingDate = formatFindingDateForDisplay(findingsDates[code]);
                     let segment = '';
+
                     if (FINDINGS_CUSTOM_CODES.has(code)) {
-                        segment = formatCustomFindingDisplay(code, rawValue);
-                    } else if (typeof rawValue === 'string') {
-                        segment = rawValue.trim();
-                    } else if (typeof rawValue === 'object' && rawValue !== null) {
-                        segment = Object.values(rawValue)
-                            .map((value) => String(value || '').trim())
+                        const customSegment = formatCustomFindingDisplay(code, rawValue);
+                        const qualifierValueSegment = formatQualifierValueDisplay(parsedValue.qualifier, parsedValue.value);
+                        segment = [customSegment, qualifierValueSegment, parsedValue.note]
                             .filter(Boolean)
                             .join(', ');
-                    } else if (rawValue !== null && rawValue !== undefined) {
-                        segment = String(rawValue).trim();
+                    } else {
+                        const qualifierValueSegment = formatQualifierValueDisplay(parsedValue.qualifier, parsedValue.value);
+                        segment = [qualifierValueSegment, parsedValue.note]
+                            .filter(Boolean)
+                            .join(', ');
+
+                        if (!segment && rawValue !== null && rawValue !== undefined) {
+                            segment = String(rawValue).trim();
+                        }
                     }
 
                     if (!segment && findingDate) {
@@ -6943,25 +7032,41 @@
 
                     document.querySelectorAll('.findings-checkbox').forEach(cb => {
                         const customValue = findingsValuesMap[cb.value];
-                        const hasValue = customValue !== null && customValue !== undefined && String(customValue).trim() !== '';
+                        const parsedFindingValue = parseFindingValueEntry(cb.value, customValue);
+                        const hasValue = hasMeaningfulFindingValue(cb.value, customValue);
                         const hasDate = Boolean(String(findingsDatesMap[cb.value] || '').trim());
                         cb.checked = effectiveFindingsCodes.has(cb.value) || hasValue || hasDate;
 
                         const isCustomCode = FINDINGS_CUSTOM_CODES.has(cb.value);
                         const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
                         const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
-                        if (isCustomCode && customValue) {
+                        const qualifierRow = document.querySelector(`.findings-qualifier-row[data-code="${cb.value}"]`);
+                        const qualifierInput = document.querySelector(`input.findings-qualifier[data-code="${cb.value}"]`);
+                        const qualifierValueInput = document.querySelector(`input.findings-qualifier-value[data-code="${cb.value}"]`);
+                        if (isCustomCode && customValue !== null && customValue !== undefined) {
                             populateCustomFindingFields(cb.value, customValue);
+                        } else if (isCustomCode) {
+                            populateCustomFindingFields(cb.value, {});
                         } else if (valueInput) {
                             if (cb.checked) {
                                 valueInput.disabled = false;
-                                if (customValue !== null && customValue !== undefined) {
-                                    valueInput.value = typeof customValue === 'string' ? customValue : JSON.stringify(customValue);
-                                    autoResizeTextarea(valueInput);
-                                }
+                                valueInput.value = parsedFindingValue.note;
+                                autoResizeTextarea(valueInput);
                             } else {
+                                valueInput.value = '';
                                 valueInput.disabled = true;
                             }
+                        }
+                        if (qualifierRow) {
+                            qualifierRow.style.display = cb.checked ? 'grid' : 'none';
+                        }
+                        if (qualifierInput) {
+                            qualifierInput.disabled = !cb.checked;
+                            qualifierInput.value = cb.checked ? parsedFindingValue.qualifier : '';
+                        }
+                        if (qualifierValueInput) {
+                            qualifierValueInput.disabled = !cb.checked;
+                            qualifierValueInput.value = cb.checked ? parsedFindingValue.value : '';
                         }
                         if (dateInput) {
                             if (cb.checked) {
@@ -7206,6 +7311,9 @@
                 cb.checked = false;
                 const valueInput = document.querySelector(`textarea.findings-value[data-code="${cb.value}"]`);
                 const dateInput = document.querySelector(`input.findings-date[data-code="${cb.value}"]`);
+                const qualifierInput = document.querySelector(`input.findings-qualifier[data-code="${cb.value}"]`);
+                const qualifierValueInput = document.querySelector(`input.findings-qualifier-value[data-code="${cb.value}"]`);
+                const qualifierRow = document.querySelector(`.findings-qualifier-row[data-code="${cb.value}"]`);
 
                 if (FINDINGS_CUSTOM_CODES.has(cb.value)) {
                     populateCustomFindingFields(cb.value, {});
@@ -7217,6 +7325,17 @@
                 if (dateInput) {
                     dateInput.value = '';
                     dateInput.disabled = true;
+                }
+                if (qualifierInput) {
+                    qualifierInput.value = '';
+                    qualifierInput.disabled = true;
+                }
+                if (qualifierValueInput) {
+                    qualifierValueInput.value = '';
+                    qualifierValueInput.disabled = true;
+                }
+                if (qualifierRow) {
+                    qualifierRow.style.display = 'none';
                 }
             });
 
@@ -9816,6 +9935,29 @@
             const codesInput = document.getElementById('f-findings-codes');
             const valuesInput = document.getElementById('f-findings-values');
             const datesInput = document.getElementById('f-findings-dates');
+
+            function ensureFindingsQualifierFields() {
+                checkboxes.forEach((cb) => {
+                    const code = cb.value;
+                    const card = cb.closest('.border.border-slate-200.rounded.p-2.bg-white');
+                    if (!card) return;
+                    if (card.querySelector(`.findings-qualifier-row[data-code="${code}"]`)) return;
+
+                    const anchor = card.querySelector(`textarea.findings-value[data-code="${code}"]`) ||
+                        card.querySelector(`.findings-custom-panel[data-code="${code}"]`);
+                    if (!anchor) return;
+
+                    const row = document.createElement('div');
+                    row.className = 'findings-qualifier-row mt-1.5 grid grid-cols-1 md:grid-cols-2 gap-2';
+                    row.dataset.code = code;
+                    row.innerHTML = `
+                        <input type="text" class="findings-qualifier w-full text-xs px-2 py-1 border rounded" data-code="${code}" placeholder="Qualifier (e.g., WCC, Left)">
+                        <input type="text" class="findings-qualifier-value w-full text-xs px-2 py-1 border rounded" data-code="${code}" placeholder="Value (e.g., 11.2, Positive)">
+                    `;
+                    anchor.insertAdjacentElement('afterend', row);
+                });
+            }
+            ensureFindingsQualifierFields();
             
             function updateSelectedCodes(options = {}) {
                 const editable = options.editable ?? isFindingsModalEditable();
@@ -9830,6 +9972,23 @@
                     const valueInput = document.querySelector(`textarea.findings-value[data-code="${code}"]`);
                     const dateInput = document.querySelector(`input.findings-date[data-code="${code}"]`);
                     const customPanel = document.querySelector(`.findings-custom-panel[data-code="${code}"]`);
+                    const qualifierRow = document.querySelector(`.findings-qualifier-row[data-code="${code}"]`);
+                    const qualifierInput = document.querySelector(`input.findings-qualifier[data-code="${code}"]`);
+                    const qualifierValueInput = document.querySelector(`input.findings-qualifier-value[data-code="${code}"]`);
+                    const qualifier = normalizeFindingScalar(qualifierInput?.value);
+                    const qualifierValue = normalizeFindingScalar(qualifierValueInput?.value);
+
+                    if (qualifierRow) {
+                        qualifierRow.style.display = checked ? 'grid' : 'none';
+                    }
+                    if (qualifierInput) {
+                        qualifierInput.disabled = !checked;
+                        qualifierInput.readOnly = !editable;
+                    }
+                    if (qualifierValueInput) {
+                        qualifierValueInput.disabled = !checked;
+                        qualifierValueInput.readOnly = !editable;
+                    }
 
                     if (dateInput) {
                         dateInput.disabled = !checked || !editable;
@@ -9852,6 +10011,14 @@
                                 hasCustomValue = true;
                             }
                         });
+                        if (checked && qualifier) {
+                            customValues.qualifier = qualifier;
+                            hasCustomValue = true;
+                        }
+                        if (checked && qualifierValue) {
+                            customValues.value = qualifierValue;
+                            hasCustomValue = true;
+                        }
                         if (hasCustomValue) {
                             values[code] = customValues;
                         }
@@ -9866,7 +10033,23 @@
                         valueInput.disabled = !checked;
                         valueInput.readOnly = !editable;
                         valueInput.style.display = checked ? 'block' : 'none';
-                        if (checked && valueInput.value) values[code] = valueInput.value;
+                        const noteValue = normalizeFindingScalar(valueInput.value);
+                        if (checked && (qualifier || qualifierValue || noteValue)) {
+                            if (qualifier || qualifierValue) {
+                                const entry = {};
+                                if (qualifier) entry.qualifier = qualifier;
+                                if (qualifierValue) entry.value = qualifierValue;
+                                if (noteValue) entry.note = noteValue;
+                                values[code] = entry;
+                            } else {
+                                values[code] = noteValue;
+                            }
+                        }
+                    } else if (checked && (qualifier || qualifierValue)) {
+                        const entry = {};
+                        if (qualifier) entry.qualifier = qualifier;
+                        if (qualifierValue) entry.value = qualifierValue;
+                        values[code] = entry;
                     }
                 });
 
@@ -9890,6 +10073,10 @@
                 input.addEventListener('change', updateSelectedCodes);
             });
             document.querySelectorAll('.findings-custom-input').forEach(input => {
+                input.addEventListener('change', updateSelectedCodes);
+                input.addEventListener('input', updateSelectedCodes);
+            });
+            document.querySelectorAll('input.findings-qualifier, input.findings-qualifier-value').forEach(input => {
                 input.addEventListener('change', updateSelectedCodes);
                 input.addEventListener('input', updateSelectedCodes);
             });
@@ -9938,6 +10125,12 @@
             });
             document.querySelectorAll('.findings-custom-panel').forEach(panel => {
                 panel.style.display = 'none';
+            });
+            document.querySelectorAll('.findings-qualifier-row').forEach(row => {
+                row.style.display = 'none';
+            });
+            document.querySelectorAll('input.findings-qualifier, input.findings-qualifier-value').forEach(input => {
+                input.disabled = true;
             });
             updateSelectedCodes();
 
