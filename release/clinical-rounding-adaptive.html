@@ -7611,7 +7611,7 @@
                         document.querySelectorAll('.procedure-checkbox').forEach(cb => {
                             cb.checked = p.procedureCodes.includes(cb.value);
                             const dateInput = document.querySelector(`input.procedure-date[data-procedure="${cb.value}"]`);
-                            const nameInput = document.querySelector(`input.procedure-name-input[data-procedure="${cb.value}"]`);
+                            const notesInput = document.querySelector(`textarea.procedure-notes[data-procedure="${cb.value}"]`);
                             
                             if (cb.checked) {
                                 if (dateInput && p.procedureDates && p.procedureDates[cb.value]) {
@@ -7619,10 +7619,10 @@
                                     dateInput.disabled = false;
                                     dateInput.style.display = 'inline-block';
                                 }
-                                if (nameInput && p.procedureValues && p.procedureValues[cb.value]) {
-                                    nameInput.value = p.procedureValues[cb.value];
-                                    nameInput.disabled = false;
-                                    nameInput.style.display = 'block';
+                                if (notesInput && p.procedureValues && p.procedureValues[cb.value]) {
+                                    notesInput.value = p.procedureValues[cb.value];
+                                    notesInput.disabled = false;
+                                    notesInput.style.display = 'block';
                                 }
                             }
                         });
@@ -12031,19 +12031,19 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             // ========== Procedures UI Handler ==========
             function updateSelectedProcedures(options = {}) {
-                const editable = options.editable ?? (document.getElementById('patient-modal').classList.contains('hidden') === false);
+                const editable = options.editable ?? isFindingsModalEditable();
                 const selected = Array.from(document.querySelectorAll('.procedure-checkbox')).filter(cb => cb.checked).map(cb => cb.value);
                 const codesInput = document.getElementById('f-procedure-codes');
-                if (codesInput) codesInput.value = selected.join(', ');
+                if (codesInput) codesInput.value = selected.join(',');
                 
-                const values = {};
                 const dates = {};
+                const values = {};
                 
                 document.querySelectorAll('.procedure-checkbox').forEach(cb => {
                     const procedure = cb.value;
                     const checked = cb.checked;
                     const dateInput = document.querySelector(`input.procedure-date[data-procedure="${procedure}"]`);
-                    const nameInput = document.querySelector(`input.procedure-name-input[data-procedure="${procedure}"]`);
+                    const notesInput = document.querySelector(`textarea.procedure-notes[data-procedure="${procedure}"]`);
                     
                     if (dateInput) {
                         dateInput.disabled = !checked || !editable;
@@ -12053,12 +12053,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                         }
                     }
                     
-                    if (nameInput) {
-                        nameInput.style.display = checked ? 'block' : 'none';
-                        nameInput.disabled = !checked || !editable;
-                        nameInput.readOnly = !editable;
-                        if (checked && nameInput.value) {
-                            values[procedure] = nameInput.value;
+                    if (notesInput) {
+                        notesInput.disabled = !checked || !editable;
+                        notesInput.readOnly = !editable;
+                        notesInput.style.display = checked ? 'block' : 'none';
+                        if (checked && notesInput.value) {
+                            values[procedure] = notesInput.value;
                         }
                     }
                 });
@@ -12069,20 +12069,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                 if (valuesInput) valuesInput.value = JSON.stringify(values);
             }
             
-            function openProcedureCalendar(procedureName, procedureDate) {
-                if (!procedureDate) {
-                    showToast('📅 Set date first');
-                    return;
-                }
-                // Link to calendar view for the procedure date
-                if (typeof globalThis.setTab === 'function') {
-                    globalThis.setTab('calendar');
-                    // Store the target date for calendar to highlight
-                    window.procedureCalendarHighlightDate = procedureDate;
-                    showToast(`📅 ${procedureName} - ${procedureDate}`);
-                }
-            }
-            
             // Attach procedure checkbox listeners
             document.querySelectorAll('.procedure-checkbox').forEach(cb => {
                 cb.addEventListener('change', updateSelectedProcedures);
@@ -12091,20 +12077,10 @@ const findHeaderIndex = (rows, sheetLog) => {
             // Attach date input listeners
             document.querySelectorAll('input.procedure-date').forEach(input => {
                 input.addEventListener('change', updateSelectedProcedures);
-                input.addEventListener('click', () => {
-                    // When date is clicked, open calendar
-                    const procedure = input.dataset.procedure;
-                    const procedureName = document.querySelector(`.procedure-checkbox[value="${procedure}"]`)?.nextElementSibling?.textContent || procedure;
-                    setTimeout(() => {
-                        if (input.value) {
-                            openProcedureCalendar(procedureName, input.value);
-                        }
-                    }, 300);
-                });
             });
             
-            // Attach name input listeners
-            document.querySelectorAll('input.procedure-name-input').forEach(input => {
+            // Attach notes textarea listeners
+            document.querySelectorAll('textarea.procedure-notes').forEach(input => {
                 input.addEventListener('change', updateSelectedProcedures);
                 input.addEventListener('input', updateSelectedProcedures);
             });
@@ -12114,13 +12090,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                 input.style.display = 'none';
                 input.disabled = true;
             });
-            document.querySelectorAll('input.procedure-name-input').forEach(input => {
+            document.querySelectorAll('textarea.procedure-notes').forEach(input => {
                 input.style.display = 'none';
                 input.disabled = true;
             });
             updateSelectedProcedures();
             
-            globalThis.openProcedureCalendar = openProcedureCalendar;
             globalThis.syncProceduresUI = updateSelectedProcedures;
             if (typeof globalThis.setTab === 'function') {
                 globalThis.setTab('active');
@@ -13365,92 +13340,88 @@ const findHeaderIndex = (rows, sheetLog) => {
                 <!-- Procedures Section -->
                 <div class="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
                     <h3 class="text-xs font-bold text-purple-900">🏥 Procedures</h3>
-                    <p class="text-xs text-purple-700">Procedures identified from Plan text</p>
-                    <details class="space-y-2">
-                        <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">📋 Procedure Name</summary>
-                        <div class="pl-2 space-y-2 text-xs">
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="cystoscopy">
-                                    <span class="flex-1 font-medium">Cystoscopy</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="cystoscopy">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="cystoscopy" placeholder="Procedure notes..." style="display: none;">
+                    <div class="pl-2 space-y-2 text-xs">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="cystoscopy">
+                                <span class="flex-1 font-medium">Cystoscopy</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="cystoscopy">
                             </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="turbt">
-                                    <span class="flex-1 font-medium">TURBT</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="turbt">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="turbt" placeholder="Procedure notes..." style="display: none;">
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="stent">
-                                    <span class="flex-1 font-medium">Stent Placement</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="stent">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="stent" placeholder="Procedure notes..." style="display: none;">
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="lithotripsy">
-                                    <span class="flex-1 font-medium">Lithotripsy</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="lithotripsy">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="lithotripsy" placeholder="Procedure notes..." style="display: none;">
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="ureteral-reimplantation">
-                                    <span class="flex-1 font-medium">Ureteral Reimplantation</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="ureteral-reimplantation">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="ureteral-reimplantation" placeholder="Procedure notes..." style="display: none;">
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="nephrectomy">
-                                    <span class="flex-1 font-medium">Nephrectomy</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="nephrectomy">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="nephrectomy" placeholder="Procedure notes..." style="display: none;">
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="prostatectomy">
-                                    <span class="flex-1 font-medium">Prostatectomy</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="prostatectomy">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="prostatectomy" placeholder="Procedure notes..." style="display: none;">
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="laser">
-                                    <span class="flex-1 font-medium">Laser Procedure</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="laser">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="laser" placeholder="Procedure notes..." style="display: none;">
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="biopsy">
-                                    <span class="flex-1 font-medium">Biopsy</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="biopsy">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="biopsy" placeholder="Procedure notes..." style="display: none;">
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="procedure-checkbox w-4 h-4" value="other-surgery">
-                                    <span class="flex-1 font-medium">Other Surgery</span>
-                                    <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="other-surgery">
-                                </div>
-                                <input type="text" class="procedure-name-input w-full text-xs px-2 py-1.5 border rounded" data-procedure="other-surgery" placeholder="Specify procedure..." style="display: none;">
-                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="cystoscopy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
                         </div>
-                    </details>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="turbt">
+                                <span class="flex-1 font-medium">TURBT</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="turbt">
+                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="turbt" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="stent">
+                                <span class="flex-1 font-medium">Stent Placement</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="stent">
+                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="stent" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="lithotripsy">
+                                <span class="flex-1 font-medium">Lithotripsy</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="lithotripsy">
+                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="lithotripsy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="ureteral-reimplantation">
+                                <span class="flex-1 font-medium">Ureteral Reimplantation</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="ureteral-reimplantation">
+                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="ureteral-reimplantation" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="nephrectomy">
+                                <span class="flex-1 font-medium">Nephrectomy</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="nephrectomy">
+                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="nephrectomy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="prostatectomy">
+                                <span class="flex-1 font-medium">Prostatectomy</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="prostatectomy">
+                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="prostatectomy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="laser">
+                                <span class="flex-1 font-medium">Laser Procedure</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="laser">
+                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="laser" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="biopsy">
+                                <span class="flex-1 font-medium">Biopsy</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="biopsy">
+                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="biopsy" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="procedure-checkbox w-4 h-4" value="other-surgery">
+                                <span class="flex-1 font-medium">Other Surgery</span>
+                                <input type="date" class="procedure-date text-xs px-2 py-1 border rounded" data-procedure="other-surgery">
+                            </div>
+                            <textarea class="procedure-notes w-full text-xs px-2 py-1.5 border rounded resize-none mt-1" data-procedure="other-surgery" placeholder="Procedure notes..." rows="1" style="display: none;"></textarea>
+                        </div>
+                    </div>
                     <input type="hidden" id="f-procedure-codes">
                     <input type="hidden" id="f-procedure-dates">
                     <input type="hidden" id="f-procedure-values">
