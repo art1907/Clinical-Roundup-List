@@ -8338,6 +8338,7 @@
                     return;
                 }
                 modal.classList.add('hidden');
+                delete modal.dataset.flaggedId; // Clear flag tracking
                 document.body.classList.remove('no-scroll');
                 clearDraft();// Clear draft on close
                 const form = document.getElementById('patient-form');
@@ -9005,7 +9006,15 @@
                 syncDateReviewUI();
                 setDateReviewScanning(false);
                 const remaining = getDateReviewIssueItems(getFormDateReviewMeta()).length;
-                showToast(remaining ? `Date review rescan found ${remaining} item${remaining === 1 ? '' : 's'} remaining` : 'Date review complete');
+                if (remaining) {
+                    showToast(`Date review rescan found ${remaining} item${remaining === 1 ? '' : 's'} remaining`);
+                } else {
+                    showToast('Date review complete. Saving record...');
+                    const saveBtn = document.getElementById('save-button');
+                    if (saveBtn && !saveBtn.disabled) {
+                        saveBtn.click();
+                    }
+                }
             }, 500);
             return true;
         };
@@ -10497,6 +10506,15 @@ const findHeaderIndex = (rows, sheetLog) => {
                     }
                     renderUI();
                     clearDraft(); // Clear draft on successful save
+                    
+                    const form = document.getElementById('patient-modal');
+                    if (form && form.dataset.flaggedId) {
+                        if (typeof globalThis.deleteFlaggedRecord === 'function') {
+                            globalThis.deleteFlaggedRecord(form.dataset.flaggedId);
+                        }
+                        delete form.dataset.flaggedId;
+                    }
+                    
                     showToast("✓ Saved (Local)");
                     const remainingDateReviewIssues = getDateReviewIssueItems(getFormDateReviewMeta()).length;
                     if (hadDateReviewIssuesAtSave && remainingDateReviewIssues) {
@@ -10539,6 +10557,15 @@ const findHeaderIndex = (rows, sheetLog) => {
                             const recordId = resolvedEditId || result;
                             diffAndLog(previousPatient, data, recordId);
                             clearDraft(); // Clear draft on successful save
+
+                            const form = document.getElementById('patient-modal');
+                            if (form && form.dataset.flaggedId) {
+                                if (typeof globalThis.deleteFlaggedRecord === 'function') {
+                                    globalThis.deleteFlaggedRecord(form.dataset.flaggedId);
+                                }
+                                delete form.dataset.flaggedId;
+                            }
+
                             showToast("✓ Saved");
                             const remainingDateReviewIssues = getDateReviewIssueItems(getFormDateReviewMeta()).length;
                             if (hadDateReviewIssuesAtSave && remainingDateReviewIssues) {
@@ -10846,6 +10873,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 globalThis.openModal();
                 const form = document.getElementById('patient-modal');
                 if (form) {
+                    form.dataset.flaggedId = flaggedId;
                     // Pre-populate form with flagged record data
                     const { patientData } = flag;
                     const formFields = ['f-room', 'f-name', 'f-dob', 'f-mrn', 'f-hospital', 'f-plan', 'f-supervising-md',
