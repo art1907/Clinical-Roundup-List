@@ -1,0 +1,12 @@
+--- clinical-rounding-adaptive.html
++++ clinical-rounding-adaptive.html
+@@ -7548,6 +7548,9 @@
+             if (editIdInput) editIdInput.value = '';
+             modal.dataset.amendConfirmed = 'false';
+             modal.dataset.forceNewVisit = 'false';
+             modal.dataset.followUpSourceId = '';
++            
++            const prevCard = document.getElementById('previous-visit-reference-card');
++            if (prevCard) prevCard.classList.add('hidden');
+ 
+             modal.dataset.pendingDateReviewReasons = '[]';

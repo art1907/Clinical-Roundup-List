@@ -1,0 +1,49 @@
+--- clinical-rounding-adaptive.html
++++ clinical-rounding-adaptive.html
+@@ -7548,6 +7548,9 @@
+             if (editIdInput) editIdInput.value = '';
+             modal.dataset.amendConfirmed = 'false';
+             modal.dataset.forceNewVisit = 'false';
+             modal.dataset.followUpSourceId = '';
++            
++            const prevCard = document.getElementById('previous-visit-reference-card');
++            if (prevCard) prevCard.classList.add('hidden');
+ 
+             modal.dataset.pendingDateReviewReasons = '[]';
+             modal.dataset.dateReviewScanning = 'false';
+@@ -7965,6 +7968,20 @@
+             setTextValue('f-findings-codes', '');
+             setTextValue('f-findings-values', '{}');
+             setTextValue('f-findings-dates', '{}');
++            
++            const prevCard = document.getElementById('previous-visit-reference-card');
++            if (prevCard) {
++                prevCard.classList.remove('hidden');
++                const setSpanText = (spanId, text) => {
++                    const el = document.getElementById(spanId);
++                    if (el) el.textContent = text;
++                };
++                setSpanText('prev-visit-date-badge', sourcePatient.date || 'Unknown Date');
++                setSpanText('prev-visit-progress', sourcePatient.progressNotes || 'None');
++                setSpanText('prev-visit-findings', sourcePatient.findingsText || 'None');
++            }
+ 
+             document.querySelectorAll('.findings-checkbox').forEach(cb => { cb.checked = false; });
+             document.querySelectorAll('.findings-value').forEach(el => { el.value = ''; el.disabled = true; });
+@@ -13490,6 +13507,15 @@
+                     </div>
+                 </div>
+ 
++                <div id="previous-visit-reference-card" class="hidden rounded-lg border-2 border-amber-300 bg-amber-50 px-4 py-3 mb-2 shadow-sm">
++                    <div class="flex justify-between items-center mb-2 border-b border-amber-200 pb-2">
++                        <span class="text-xs font-bold text-amber-900 tracking-wide uppercase">📖 Prior Visit Reference (Read Only)</span>
++                        <span id="prev-visit-date-badge" class="text-[10px] bg-amber-200 text-amber-800 px-2 py-0.5 rounded font-mono font-bold"></span>
++                    </div>
++                    <div class="space-y-1.5 text-xs text-amber-900 leading-relaxed max-h-32 overflow-y-auto pr-1">
++                        <div><strong class="text-amber-800">Subjective/Objective:</strong> <span id="prev-visit-progress" class="font-mono"></span></div>
++                        <div><strong class="text-amber-800">Additional Comments:</strong> <span id="prev-visit-findings" class="font-mono"></span></div>
++                    </div>
++                </div>
++
+                 <div>
+                     <textarea id="f-progress-notes" placeholder="Subjective & Objective Findings" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>
