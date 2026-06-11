@@ -1051,6 +1051,8 @@ async function api_savePatient(patientData) {
         Title: patientData.name || '',
         Name: patientData.name || '',
         DateofBirth: patientData.dob || '',
+        DOB: patientData.dob || '', // Fallback catch for variations
+        Date_x0020_of_x0020_Birth: patientData.dob || '', // Fallback catch for spaces
         MRN: patientData.mrn || '',
         Hospital_x0028_s_x0029_: patientData.hospital || '',
         VisitKey: visitKeyValue,

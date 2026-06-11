@@ -5808,7 +5808,7 @@
             const knownFields = new Set([
                 'id', 'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
                 'pending', 'followUp', 'stat', 'priority', 'procedureStatus', 'cptPrimary', 'icdPrimary',
-                'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues', 'archived',
+                'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues', 'procedureCodes', 'procedureValues', 'procedureDates', 'archived',
                 ...patients.flatMap((p) => Object.keys(p || {}))
             ]);
             const fieldByNorm = new Map(Array.from(knownFields).map((field) => [normalize(field), field]));
@@ -10414,15 +10414,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                 if (normalizedDateState.appliedDefaults.length) {
                     showToast('⚠️ Missing or invalid date fields were defaulted to the created-on date and highlighted amber for review');
                 }
-                data.notesHistory = normalizePatientChangeHistory(previousPatient);
-                data.notesHistory = appendFindingsSnapshotHistory(data.notesHistory, previousPatient, data, auditUser);
-                consumePendingDateReviewReasons().forEach((dateReviewNote) => {
-                    data.notesHistory = appendPatientChangeNote(data.notesHistory, dateReviewNote, auditUser, 'date review confirmation');
-                });
-                data.notesHistory = appendPatientChangeNote(data.notesHistory, changeNote, auditUser, changeActionLabel);
-                data.lastChangeNote = changeNote;
-                data.lastChangeNoteAt = new Date().toISOString();
-                data.lastChangeNoteBy = auditUser;
 
                 // Normalize a field value to a stable string for comparison.
                 // null, undefined, "" and empty collections all become "".
@@ -10437,10 +10428,28 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const USER_DIFF_FIELDS = [
                     'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
                     'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
-                    'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues',
+                    'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues', 'procedureCodes', 'procedureValues', 'procedureDates',
                     'findingsDates', 'followUpLabs', 'followUpImaging', 'followUpConsultation',
-                    'followUpText', 'stat', 'priority'
+                    'followUpText', 'stat', 'priority', 'progressNotes', 'archived'
                 ];
+
+                let finalChangeNote = changeNote;
+                if (resolvedEditId && previousPatient) {
+                    const changedFieldsForNote = USER_DIFF_FIELDS.filter(f => toComparable(previousPatient[f]) !== toComparable(data[f]));
+                    if (changedFieldsForNote.length > 0) {
+                        finalChangeNote += `\n[Changed: ${changedFieldsForNote.map(humanizeHistoryField).join(', ')}]`;
+                    }
+                }
+
+                data.notesHistory = normalizePatientChangeHistory(previousPatient);
+                data.notesHistory = appendFindingsSnapshotHistory(data.notesHistory, previousPatient, data, auditUser);
+                consumePendingDateReviewReasons().forEach((dateReviewNote) => {
+                    data.notesHistory = appendPatientChangeNote(data.notesHistory, dateReviewNote, auditUser, 'date review confirmation');
+                });
+                data.notesHistory = appendPatientChangeNote(data.notesHistory, finalChangeNote, auditUser, changeActionLabel);
+                data.lastChangeNote = finalChangeNote;
+                data.lastChangeNoteAt = new Date().toISOString();
+                data.lastChangeNoteBy = auditUser;
 
                 const diffAndLog = (previous, next, recordId) => {
                     if (!previous) {
@@ -12157,7 +12166,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             const auditFields = [
                 'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd',
                 'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
-                'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues',
+                'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues', 'procedureCodes', 'procedureValues', 'procedureDates',
                 'findingsDates', 'stat', 'priority', 'archived'
             ];
             const toComparable = (value) => {
