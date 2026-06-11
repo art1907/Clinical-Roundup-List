@@ -9003,15 +9003,11 @@
                     if (findingsDatesInput) {
                         let storedDates = {};
                         try { storedDates = JSON.parse(findingsDatesInput.value || '{}'); } catch (e) {}
-                        if (!storedDates[issue.key]) {
-                            storedDates[issue.key] = confirmedDate;
-                            findingsDatesInput.value = JSON.stringify(storedDates);
-                        }
+                        storedDates[issue.key] = confirmedDate;
+                        findingsDatesInput.value = JSON.stringify(storedDates);
                     }
-                    const visualInput = document.querySelector(`input.findings-date[data-code="${issue.key}"]`);
-                    if (visualInput && !visualInput.value) {
-                        visualInput.value = confirmedDate;
-                    }
+                    const visualInput = document.querySelector(`input.findings-date[data-code="${escapeCssSelectorValue(issue.key)}"]`);
+                    if (visualInput) visualInput.value = confirmedDate;
                 }
             }
             addPendingDateReviewReason(`${issue.label} (${issue.value}) confirmed during date review: ${note}`);
@@ -9027,7 +9023,11 @@
                 showToast(remaining ? `Date review rescan found ${remaining} item${remaining === 1 ? '' : 's'} remaining` : 'Date review complete. Saving record...');
                 if (!remaining) {
                     const saveBtn = document.getElementById('save-button');
-                    if (saveBtn && !saveBtn.disabled) saveBtn.click();
+                    if (saveBtn && !saveBtn.disabled) {
+                        saveBtn.click();
+                    } else if (typeof globalThis.savePatient === 'function') {
+                        globalThis.savePatient({ preventDefault() {}, stopPropagation() {} });
+                    }
                 }
             }, 500);
             return true;
