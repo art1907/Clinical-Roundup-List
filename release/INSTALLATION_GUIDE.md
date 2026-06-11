@@ -156,7 +156,7 @@ SHAREPOINT_SITE_ID=yourdomain.sharepoint.com,abc123,def456
 3. Click **Create**
 4. Add columns per the schema below
 
-#### Patients List Schema (19 Columns)
+#### Patients List Schema (25 Columns)
 
 Create all columns listed below. **VisitKey is critical** for data integrity!
 
@@ -171,6 +171,9 @@ Create all columns listed below. **VisitKey is critical** for data integrity!
 | Hospital | Choice | Choices: WGMC, BTMC, AWC, Westgate, CRMC, AHD, BEMC, Other | Facility name |
 | FindingsData | Multiple lines of text | - | JSON: clinical findings (app-managed) |
 | FindingsText | Multiple lines of text | - | Plain-text findings summary |
+| ProcedureCodes | Multiple lines of text | - | Comma-separated procedure codes |
+| ProcedureData | Multiple lines of text | - | JSON: procedure notes/values |
+| ProcedureDates | Multiple lines of text | - | JSON: procedure dates |
 | Plan | Multiple lines of text | - | Treatment plan |
 | SupervisingMD | Single line text | - | Attending physician |
 | Pending | Multiple lines of text | - | Pending tests/procedures |
@@ -181,6 +184,9 @@ Create all columns listed below. **VisitKey is critical** for data integrity!
 | ICDPrimary | Single line text | - | Primary ICD diagnosis code |
 | ChargeCodesSecondary | Multiple lines of text | - | Additional codes (JSON array) |
 | Archived | Choice | Choices: Yes, No | Soft-delete flag |
+| ChangeNotesHistory | Multiple lines of text | - | JSON: history of change notes |
+| ProgressNotes | Multiple lines of text | - | Accumulating progress text |
+| VisitTime | Single line text | - | Record creation timestamp |
 
 #### ⚠️ CRITICAL: Enable VisitKey Unique Constraint
 
