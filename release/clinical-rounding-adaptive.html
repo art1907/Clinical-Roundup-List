@@ -8994,6 +8994,25 @@
                 reviewMeta.visitDateDefaultedTo = '';
             } else if (issue.type === 'finding') {
                 delete reviewMeta.findingsDatesDefaulted[issue.key];
+                // Persist the confirmed date into f-findings-dates so that
+                // applyDateReviewDefaultsToRecord does not re-flag this code
+                // when the finding date is absent from the stored FindingsDates field.
+                const confirmedDate = issue.value;
+                if (confirmedDate) {
+                    const findingsDatesInput = document.getElementById('f-findings-dates');
+                    if (findingsDatesInput) {
+                        let storedDates = {};
+                        try { storedDates = JSON.parse(findingsDatesInput.value || '{}'); } catch (e) {}
+                        if (!storedDates[issue.key]) {
+                            storedDates[issue.key] = confirmedDate;
+                            findingsDatesInput.value = JSON.stringify(storedDates);
+                        }
+                    }
+                    const visualInput = document.querySelector(`input.findings-date[data-code="${issue.key}"]`);
+                    if (visualInput && !visualInput.value) {
+                        visualInput.value = confirmedDate;
+                    }
+                }
             }
             addPendingDateReviewReason(`${issue.label} (${issue.value}) confirmed during date review: ${note}`);
             if (!hasDateReviewIssues(reviewMeta)) {
@@ -9005,7 +9024,11 @@
                 syncDateReviewUI();
                 setDateReviewScanning(false);
                 const remaining = getDateReviewIssueItems(getFormDateReviewMeta()).length;
-                showToast(remaining ? `Date review rescan found ${remaining} item${remaining === 1 ? '' : 's'} remaining` : 'Date review complete');
+                showToast(remaining ? `Date review rescan found ${remaining} item${remaining === 1 ? '' : 's'} remaining` : 'Date review complete. Saving record...');
+                if (!remaining) {
+                    const saveBtn = document.getElementById('save-button');
+                    if (saveBtn && !saveBtn.disabled) saveBtn.click();
+                }
             }, 500);
             return true;
         };
