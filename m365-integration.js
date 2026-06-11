@@ -912,6 +912,7 @@ async function api_fetchPatients(dateFilter = null) {
             cptPrimary: item.fields.CPTPrimary || '',
             icdPrimary: item.fields.ICDPrimary || '',
             chargeCodesSecondary: safeJsonParse(item.fields.ChargeCodesSecondary, [], `ChargeCodesSecondary for item ${item.id}`),
+            catchAll: item.fields.CatchAll || '',
             archived: parseBoolish(item.fields.Archived),
             notesHistory: item.fields.ChangeNotesHistory
                 ? safeJsonParse(item.fields.ChangeNotesHistory, [], `ChangeNotesHistory for item ${item.id}`)
@@ -1078,6 +1079,7 @@ async function api_savePatient(patientData) {
         CPTPrimary: patientData.cptPrimary || '',
         ICDPrimary: patientData.icdPrimary || '',
         ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '[]',
+        CatchAll: patientData.catchAll || '',
         Archived: normalizeBool(patientData.archived),
         ChangeNotesHistory: patientData.notesHistory ? JSON.stringify(patientData.notesHistory) : '[]'
     };

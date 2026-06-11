@@ -7789,7 +7789,11 @@
                         }
                         const procedureNotesInput = document.getElementById('f-procedure-notes');
                         if (procedureNotesInput) {
-                            procedureNotesInput.value = procedureState.procedureValues.notes || procedureState.procedureValues.__freeText || '';
+                            let uncapturedData = {};
+                            try {
+                                uncapturedData = p.catchAll ? JSON.parse(p.catchAll) : {};
+                            } catch(e) {}
+                            procedureNotesInput.value = uncapturedData.procedureNotes || procedureState.procedureValues.notes || procedureState.procedureValues.__freeText || '';
                         }
                         const otherSurgeriesInput = document.getElementById('f-procedure-other-surgeries');
                         if (otherSurgeriesInput) {
@@ -10363,7 +10367,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                 chargeCodesSecondary: parseSecondaryCodes(document.getElementById('f-charge-codes-secondary').value),
                 createdBy: document.getElementById('f-created-by').value || currentUser || 'Unknown',
                 archived: document.getElementById('f-archived')?.value === 'true',
-                notesHistory: []
+                notesHistory: [],
+                catchAll: JSON.stringify({
+                    procedureNotes: document.getElementById('f-procedure-notes')?.value || ''
+                })
             };
 
             if (!data.visitTime) {
