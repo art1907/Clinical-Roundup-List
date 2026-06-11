@@ -869,10 +869,17 @@ async function api_fetchPatients(dateFilter = null) {
             const statValue = parseBoolish(rawPriority);
             const findingsValues = safeJsonParse(item.fields.FindingsData, {}, `FindingsData for item ${item.id}`);
             const findingsDates = safeJsonParse(item.fields.FindingsDates, {}, `FindingsDates for item ${item.id}`);
+            const procedureValues = safeJsonParse(item.fields.ProcedureData, {}, `ProcedureData for item ${item.id}`);
+            const procedureDates = safeJsonParse(item.fields.ProcedureDates, {}, `ProcedureDates for item ${item.id}`);
             const findingsCodes = Array.from(new Set([
                 ...(item.fields.FindingsCodes ? item.fields.FindingsCodes.split(',').map(c => c.trim()) : []),
                 ...Object.keys(findingsValues || {}),
                 ...Object.keys(findingsDates || {})
+            ].map((code) => String(code || '').trim()).filter(Boolean)));
+            const procedureCodes = Array.from(new Set([
+                ...(item.fields.ProcedureCodes ? item.fields.ProcedureCodes.split(',').map(c => c.trim()) : []),
+                ...Object.keys(procedureDates || {}),
+                ...(String(procedureValues?.otherSurgeryText || '').trim() ? ['other-surgery'] : [])
             ].map((code) => String(code || '').trim()).filter(Boolean)));
             return ({
             // Keep STAT compatibility across app variants (stat and priority)
@@ -891,6 +898,9 @@ async function api_fetchPatients(dateFilter = null) {
             findingsValues,
             findingsDates,
             findingsCodes,
+            procedureValues,
+            procedureDates,
+            procedureCodes,
             findingsText: item.fields.FindingsText || '',
             plan: stripProcedureDateToken(rawPlan),
             procedureDate: extractProcedureDateToken(rawPlan),
@@ -1050,6 +1060,11 @@ async function api_savePatient(patientData) {
             : '',
         FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
         FindingsDates: patientData.findingsDates ? JSON.stringify(patientData.findingsDates) : '{}',
+        ProcedureCodes: Array.isArray(patientData.procedureCodes)
+            ? patientData.procedureCodes.map((code) => String(code || '').trim()).filter(Boolean).join(',')
+            : '',
+        ProcedureData: patientData.procedureValues ? JSON.stringify(patientData.procedureValues) : '{}',
+        ProcedureDates: patientData.procedureDates ? JSON.stringify(patientData.procedureDates) : '{}',
         FindingsText: patientData.findingsText || '',
         Plan: composePlanWithProcedureDateToken(patientData.plan || '', patientData.procedureDate || ''),
         ProgressNotes: patientData.progressNotes || '',

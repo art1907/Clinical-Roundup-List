@@ -6186,7 +6186,7 @@
                 const statFlag = (p.stat === true || p.stat === 'true') ? '<span class="text-red-600 font-bold mr-1">🔴</span>' : '';
                 return `
                     <tr class="hover:bg-blue-50 cursor-pointer border-b border-slate-100" onclick="globalThis.openModal('${esc(p.id)}')" title="Open patient record">
-                        <td class="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">${esc(procedureDate)}</td>
+                        <td class="px-3 py-2 text-xs text-slate-600 whitespace-nowrap"><button type="button" class="text-blue-700 hover:underline font-semibold" onclick="event.stopPropagation();globalThis.openProcedureDateOnCalendar('${esc(procedureDate)}')">${esc(procedureDate)}</button></td>
                         <td class="px-3 py-2 text-xs font-bold text-blue-700 whitespace-nowrap">${statFlag}<span class="hover:underline">${esc(p.name || '—')}</span></td>
                         <td class="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">${esc(p.room || '')}</td>
                         <td class="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">${esc(p.mrn || '')}</td>
@@ -7313,7 +7313,8 @@
                 'f-room', 'f-date', 'f-hospital', 'f-name', 'f-dob', 'f-mrn',
                 'f-md', 'f-plan', 'f-proc-status', 'f-priority', 'f-cpt-primary',
                 'f-icd-primary', 'f-charge-codes-secondary', 'f-followup-labs',
-                'f-followup-imaging', 'f-followup-consultation', 'f-followup-text', 'f-pending'
+                'f-followup-imaging', 'f-followup-consultation', 'f-followup-text', 'f-pending',
+                'f-procedure-other-surgeries'
             ];
             lockedIds.forEach((id) => {
                 const el = document.getElementById(id);
@@ -7436,6 +7437,72 @@
                 parsed.text = [parsed.text, freeTextLines.join('\n').trim()].filter(Boolean).join('\n');
             }
             return parsed;
+        }
+
+        function parseProcedureValueMap(rawValues) {
+            if (rawValues && typeof rawValues === 'object' && !Array.isArray(rawValues)) {
+                return { ...rawValues };
+            }
+            if (typeof rawValues === 'string' && rawValues.trim()) {
+                try {
+                    const parsed = JSON.parse(rawValues);
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        return { ...parsed };
+                    }
+                } catch (err) {
+                    console.debug('Could not parse procedure values:', err?.message || err);
+                }
+            }
+            return {};
+        }
+
+        function parseProcedureDateMap(rawDates) {
+            if (rawDates && typeof rawDates === 'object' && !Array.isArray(rawDates)) {
+                return { ...rawDates };
+            }
+            if (typeof rawDates === 'string' && rawDates.trim()) {
+                try {
+                    const parsed = JSON.parse(rawDates);
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        return { ...parsed };
+                    }
+                } catch (err) {
+                    console.debug('Could not parse procedure dates:', err?.message || err);
+                }
+            }
+            return {};
+        }
+
+        function getProcedureState(patient = {}) {
+            const procedureDates = parseProcedureDateMap(patient.procedureDates);
+            const procedureValues = parseProcedureValueMap(patient.procedureValues);
+            const rawCodes = Array.isArray(patient.procedureCodes)
+                ? patient.procedureCodes
+                : String(patient.procedureCodes || '').split(',').map((code) => code.trim()).filter(Boolean);
+            const derivedCodes = Object.keys(procedureDates);
+            const hasOtherSurgeryText = String(procedureValues.otherSurgeryText || '').trim().length > 0;
+            const mergedCodes = [...new Set([...rawCodes, ...derivedCodes, ...(hasOtherSurgeryText ? ['other-surgery'] : [])])];
+            return {
+                procedureCodes: mergedCodes,
+                procedureDates,
+                procedureValues
+            };
+        }
+
+        function getProcedureSummaryText(patient = {}) {
+            const { procedureCodes, procedureDates, procedureValues } = getProcedureState(patient);
+            if (!procedureCodes.length) return '';
+            const summary = procedureCodes.map((code) => {
+                const label = formatProcedureLabel(code);
+                const rawDate = String(procedureDates[code] || '').trim();
+                const normalizedDate = normalizeProcedureDateValue(rawDate);
+                return normalizedDate ? `${label} (${normalizedDate})` : label;
+            });
+            const otherSurgeryText = String(procedureValues.otherSurgeryText || '').trim();
+            if (otherSurgeryText) {
+                summary.push(`Other details: ${otherSurgeryText}`);
+            }
+            return summary.join(' | ');
         }
 
         function hideReturningPatientBackfillPrompt() {
@@ -7603,6 +7670,10 @@
                 document.querySelectorAll('.procedure-notes').forEach(el => {
                     el.readOnly = !proceduresEditable;
                 });
+                document.querySelectorAll('.procedure-other-surgery').forEach(el => {
+                    el.readOnly = !proceduresEditable;
+                    el.disabled = !proceduresEditable;
+                });
             };
 
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
@@ -7708,30 +7779,27 @@
                     }
                     // Load procedure data
                     if (document.getElementById('f-procedure-codes')) {
-                        document.getElementById('f-procedure-codes').value = p.procedureCodes ? p.procedureCodes.join(',') : "";
-                    }
-                    if (document.getElementById('f-procedure-dates')) {
-                        document.getElementById('f-procedure-dates').value = p.procedureDates ? JSON.stringify(p.procedureDates) : "";
-                    }
-                    if (document.getElementById('f-procedure-values')) {
-                        document.getElementById('f-procedure-values').value = p.procedureValues ? JSON.stringify(p.procedureValues) : "";
-                    }
-                    const procedureNotesInput = document.getElementById('f-procedure-notes');
-                    if (procedureNotesInput) {
-                        procedureNotesInput.value = p.procedureValues?.notes || p.procedureValues?.__freeText || '';
-                    }
-                    // Restore procedure checkboxes and values
-                    if (p.procedureCodes && p.procedureCodes.length > 0) {
+                        const procedureState = getProcedureState(p);
+                        document.getElementById('f-procedure-codes').value = procedureState.procedureCodes.join(',');
+                        if (document.getElementById('f-procedure-dates')) {
+                            document.getElementById('f-procedure-dates').value = JSON.stringify(procedureState.procedureDates);
+                        }
+                        if (document.getElementById('f-procedure-values')) {
+                            document.getElementById('f-procedure-values').value = JSON.stringify(procedureState.procedureValues);
+                        }
+                        const procedureNotesInput = document.getElementById('f-procedure-notes');
+                        if (procedureNotesInput) {
+                            procedureNotesInput.value = procedureState.procedureValues.notes || procedureState.procedureValues.__freeText || '';
+                        }
+                        const otherSurgeriesInput = document.getElementById('f-procedure-other-surgeries');
+                        if (otherSurgeriesInput) {
+                            otherSurgeriesInput.value = procedureState.procedureValues.otherSurgeryText || '';
+                        }
                         document.querySelectorAll('.procedure-checkbox').forEach(cb => {
-                            cb.checked = p.procedureCodes.includes(cb.value);
+                            cb.checked = procedureState.procedureCodes.includes(cb.value);
                             const dateInput = document.querySelector(`input.procedure-date[data-procedure="${cb.value}"]`);
-                            
-                            if (cb.checked) {
-                                if (dateInput && p.procedureDates && p.procedureDates[cb.value]) {
-                                    dateInput.value = p.procedureDates[cb.value];
-                                    dateInput.disabled = false;
-                                    dateInput.style.display = 'inline-block';
-                                }
+                            if (dateInput) {
+                                dateInput.value = procedureState.procedureDates[cb.value] || '';
                             }
                         });
                         if (typeof globalThis.syncProceduresUI === 'function') {
@@ -7869,6 +7937,10 @@
                 el.readOnly = false;
                 el.disabled = false;
             });
+            document.querySelectorAll('.procedure-other-surgery').forEach(el => {
+                el.readOnly = false;
+                el.disabled = false;
+            });
         };
 
         globalThis.confirmAmendAction = () => {
@@ -7974,6 +8046,13 @@
             setTextValue('f-findings-codes', '');
             setTextValue('f-findings-values', '{}');
             setTextValue('f-findings-dates', '{}');
+
+            const sourceProcedureState = getProcedureState(sourcePatient);
+            setTextValue('f-procedure-codes', sourceProcedureState.procedureCodes.join(','));
+            setTextValue('f-procedure-dates', JSON.stringify(sourceProcedureState.procedureDates));
+            setTextValue('f-procedure-values', JSON.stringify(sourceProcedureState.procedureValues));
+            setTextValue('f-procedure-notes', sourceProcedureState.procedureValues.notes || sourceProcedureState.procedureValues.__freeText || '');
+            setTextValue('f-procedure-other-surgeries', sourceProcedureState.procedureValues.otherSurgeryText || '');
             
             const prevCard = document.getElementById('previous-visit-reference-card');
             if (prevCard) {
@@ -7983,13 +8062,27 @@
                     if (el) el.textContent = text || 'None';
                 };
                 setSpanText('prev-visit-date-badge', sourcePatient.date || 'Unknown Date');
-                setSpanText('prev-visit-progress', sourcePatient.progressNotes);
+                setSpanText('prev-visit-progress', getVisibleProgressNotes(sourcePatient));
+                setSpanText('prev-visit-plan', sourcePatient.plan || '');
+                setSpanText('prev-visit-procedures', getProcedureSummaryText(sourcePatient));
+                setSpanText('prev-visit-pending', sourcePatient.pending || '');
                 setSpanText('prev-visit-findings', sourcePatient.findingsText);
+                setSpanText('prev-visit-followup', sourcePatient.followUp || '');
             }
 
             document.querySelectorAll('.findings-checkbox').forEach(cb => { cb.checked = false; });
             document.querySelectorAll('.findings-value').forEach(el => { el.value = ''; el.disabled = true; });
             document.querySelectorAll('.findings-date').forEach(el => { el.value = ''; el.disabled = true; });
+            document.querySelectorAll('.procedure-checkbox').forEach((cb) => {
+                cb.checked = sourceProcedureState.procedureCodes.includes(cb.value);
+                const dateInputEl = document.querySelector(`input.procedure-date[data-procedure="${cb.value}"]`);
+                if (dateInputEl) {
+                    dateInputEl.value = sourceProcedureState.procedureDates[cb.value] || '';
+                }
+            });
+            if (typeof globalThis.syncProceduresUI === 'function') {
+                globalThis.syncProceduresUI({ editable: true });
+            }
             if (typeof globalThis.syncFindingsUI === 'function') {
                 globalThis.syncFindingsUI({ editable: true });
             }
@@ -10200,6 +10293,13 @@ const findHeaderIndex = (rows, sheetLog) => {
             const procedureValues = procValuesInput?.value ? JSON.parse(procValuesInput.value) : {};
             const procDatesInput = document.getElementById('f-procedure-dates');
             const procedureDates = procDatesInput?.value ? JSON.parse(procDatesInput.value) : {};
+            const otherSurgeriesInputValue = String(document.getElementById('f-procedure-other-surgeries')?.value || '').trim();
+            if (otherSurgeriesInputValue) {
+                procedureValues.otherSurgeryText = otherSurgeriesInputValue;
+            }
+            const primaryProcedureDate = procedureCodes
+                .map((code) => normalizeProcedureDateValue(procedureDates[code]))
+                .find(Boolean) || '';
             const followUpLabs = document.getElementById('f-followup-labs')?.value || '';
             const followUpImaging = document.getElementById('f-followup-imaging')?.value || '';
             const followUpConsultation = document.getElementById('f-followup-consultation')?.value || '';
@@ -10237,6 +10337,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 procedureCodes: procedureCodes,
                 procedureValues: procedureValues,
                 procedureDates: procedureDates,
+                procedureDate: primaryProcedureDate,
                 plan: document.getElementById('f-plan').value, 
                 progressNotes: visibleProgressNotes,
                 supervisingMd: document.getElementById('f-md').value,
@@ -10957,6 +11058,18 @@ const findHeaderIndex = (rows, sheetLog) => {
             globalThis._quickFilterDate = dateStr;
             globalThis.setTab('active');
             showToast(`📅 ${dateStr}`);
+        };
+
+        globalThis.openProcedureDateOnCalendar = (rawDate) => {
+            const normalizedDate = normalizeProcedureDateValue(rawDate);
+            if (!normalizedDate) {
+                showToast('⚠️ Enter a valid procedure date first (MM/DD/YYYY)');
+                return false;
+            }
+            calDate = new Date(`${normalizedDate}T00:00:00`);
+            globalThis.setTab('calendar', { bypassSelectionLock: true });
+            showToast(`📅 Calendar opened for ${normalizedDate}`);
+            return true;
         };
 
         function renderUI() {
@@ -12518,12 +12631,17 @@ const findHeaderIndex = (rows, sheetLog) => {
                     const procedure = cb.value;
                     const checked = cb.checked;
                     const dateInput = document.querySelector(`input.procedure-date[data-procedure="${procedure}"]`);
+                    const dateLinkBtn = document.querySelector(`button.procedure-calendar-link[data-procedure-link="${procedure}"]`);
                     
                     if (dateInput) {
                         dateInput.disabled = !checked || !editable;
                         dateInput.style.display = checked ? 'inline-block' : 'none';
                         if (checked && dateInput.value) {
                             dates[procedure] = dateInput.value;
+                        }
+                        if (dateLinkBtn) {
+                            const hasValidDate = Boolean(normalizeProcedureDateValue(dateInput.value));
+                            dateLinkBtn.style.display = checked && hasValidDate ? 'inline-block' : 'none';
                         }
                     }
                 });
@@ -12533,11 +12651,42 @@ const findHeaderIndex = (rows, sheetLog) => {
                     procedureNotesInput.readOnly = !editable;
                     if (procedureNotesInput.value.trim()) values.notes = procedureNotesInput.value;
                 }
+
+                const otherSurgeriesInput = document.getElementById('f-procedure-other-surgeries');
+                const otherSurgerySelected = selected.includes('other-surgery');
+                if (otherSurgeriesInput) {
+                    otherSurgeriesInput.style.display = otherSurgerySelected ? 'block' : 'none';
+                    otherSurgeriesInput.disabled = !otherSurgerySelected || !editable;
+                    otherSurgeriesInput.readOnly = !editable;
+                    if (otherSurgerySelected && otherSurgeriesInput.value.trim()) {
+                        values.otherSurgeryText = otherSurgeriesInput.value.trim();
+                    }
+                }
                 
                 const datesInput = document.getElementById('f-procedure-dates');
                 const valuesInput = document.getElementById('f-procedure-values');
                 if (datesInput) datesInput.value = JSON.stringify(dates);
                 if (valuesInput) valuesInput.value = JSON.stringify(values);
+            }
+
+            function ensureProcedureCalendarLinkButtons() {
+                document.querySelectorAll('input.procedure-date').forEach((input) => {
+                    const procedure = input.dataset.procedure;
+                    if (!procedure) return;
+                    const existingBtn = document.querySelector(`button.procedure-calendar-link[data-procedure-link="${procedure}"]`);
+                    if (existingBtn) return;
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'procedure-calendar-link hidden text-[10px] font-bold text-blue-700 hover:underline px-1';
+                    btn.dataset.procedureLink = procedure;
+                    btn.textContent = 'Calendar';
+                    btn.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        globalThis.openProcedureDateOnCalendar(input.value);
+                    });
+                    input.insertAdjacentElement('afterend', btn);
+                });
             }
             
             // Attach procedure checkbox listeners
@@ -12548,10 +12697,16 @@ const findHeaderIndex = (rows, sheetLog) => {
             // Attach date input listeners
             document.querySelectorAll('input.procedure-date').forEach(input => {
                 input.addEventListener('change', updateSelectedProcedures);
+                input.addEventListener('input', updateSelectedProcedures);
             });
             
             // Attach notes textarea listeners
             document.querySelectorAll('textarea.procedure-notes').forEach(input => {
+                input.addEventListener('change', updateSelectedProcedures);
+                input.addEventListener('input', updateSelectedProcedures);
+            });
+
+            document.querySelectorAll('.procedure-other-surgery').forEach(input => {
                 input.addEventListener('change', updateSelectedProcedures);
                 input.addEventListener('input', updateSelectedProcedures);
             });
@@ -12561,10 +12716,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                 input.style.display = 'none';
                 input.disabled = true;
             });
-            document.querySelectorAll('textarea.procedure-notes').forEach(input => {
+            document.querySelectorAll('.procedure-other-surgery').forEach(input => {
                 input.style.display = 'none';
                 input.disabled = true;
             });
+            ensureProcedureCalendarLinkButtons();
             updateSelectedProcedures();
             
             globalThis.syncProceduresUI = updateSelectedProcedures;
@@ -13514,7 +13670,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                     </div>
                     <div class="space-y-1.5 text-xs text-amber-900 leading-relaxed max-h-32 overflow-y-auto pr-1">
                         <div><strong class="text-amber-800">Subjective/Objective:</strong> <span id="prev-visit-progress" class="font-mono"></span></div>
+                        <div><strong class="text-amber-800">Plan:</strong> <span id="prev-visit-plan" class="font-mono"></span></div>
+                        <div><strong class="text-amber-800">Procedures:</strong> <span id="prev-visit-procedures" class="font-mono"></span></div>
+                        <div><strong class="text-amber-800">Pending:</strong> <span id="prev-visit-pending" class="font-mono"></span></div>
                         <div><strong class="text-amber-800">Additional Comments:</strong> <span id="prev-visit-findings" class="font-mono"></span></div>
+                        <div><strong class="text-amber-800">Follow Up:</strong> <span id="prev-visit-followup" class="font-mono"></span></div>
                     </div>
                 </div>
 
@@ -13901,6 +14061,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             </div>
                         </div>
                     </div>
+                    <textarea id="f-procedure-other-surgeries" class="procedure-other-surgery w-full text-xs px-2 py-1.5 border rounded resize-none" placeholder="Other Surgeries (details)" rows="2"></textarea>
                     <input type="hidden" id="f-procedure-codes">
                     <input type="hidden" id="f-procedure-dates">
                     <input type="hidden" id="f-procedure-values">
