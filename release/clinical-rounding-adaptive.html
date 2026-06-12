@@ -9020,13 +9020,14 @@
                 syncDateReviewUI();
                 setDateReviewScanning(false);
                 const remaining = getDateReviewIssueItems(getFormDateReviewMeta()).length;
-                showToast(remaining ? `Date review rescan found ${remaining} item${remaining === 1 ? '' : 's'} remaining` : 'Date review complete. Saving record...');
-                if (!remaining) {
-                    const saveBtn = document.getElementById('save-button');
-                    if (saveBtn && !saveBtn.disabled) {
-                        saveBtn.click();
-                    } else if (typeof globalThis.savePatient === 'function') {
-                        globalThis.savePatient({ preventDefault() {}, stopPropagation() {} });
+                if (remaining) {
+                    showToast(`Date review rescan found ${remaining} item${remaining === 1 ? '' : 's'} remaining`);
+                } else {
+                    showToast('✅ Date review complete — finish your edits and click Save Record');
+                    const banner = document.getElementById('date-review-banner');
+                    if (banner) {
+                        banner.classList.remove('hidden');
+                        banner.innerHTML = '<div class="rounded border border-green-300 bg-green-50 px-3 py-2 text-green-800 font-semibold text-xs">✅ All date fields reviewed. Complete any remaining edits and click <strong>Save Record</strong>.</div>';
                     }
                 }
             }, 500);

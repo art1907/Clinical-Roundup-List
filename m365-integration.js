@@ -1070,7 +1070,10 @@ async function api_savePatient(patientData) {
         ProcedureDates: patientData.procedureDates ? JSON.stringify(patientData.procedureDates) : '{}',
         FindingsText: patientData.findingsText || '',
         Plan: composePlanWithProcedureDateToken(patientData.plan || '', patientData.procedureDate || ''),
+        // Write both naming variants — SharePoint column may be 'ProgressNotes' or 'Progress Notes' (Progress_x0020_Notes).
+        // patchFieldsWithRetry will silently drop whichever one SharePoint rejects.
         ProgressNotes: patientData.progressNotes || '',
+        Progress_x0020_Notes: patientData.progressNotes || '',
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
@@ -1081,7 +1084,9 @@ async function api_savePatient(patientData) {
         ChargeCodesSecondary: patientData.chargeCodesSecondary ? JSON.stringify(patientData.chargeCodesSecondary) : '[]',
         CatchAll: patientData.catchAll || '',
         Archived: normalizeBool(patientData.archived),
-        ChangeNotesHistory: patientData.notesHistory ? JSON.stringify(patientData.notesHistory) : '[]'
+        // Write both naming variants for change notes history.
+        ChangeNotesHistory: patientData.notesHistory ? JSON.stringify(patientData.notesHistory) : '[]',
+        NotesHistory: patientData.notesHistory ? JSON.stringify(patientData.notesHistory) : '[]'
     };
 
     let fieldsToSend = { ...fields };
@@ -1210,6 +1215,13 @@ async function api_savePatient(patientData) {
 
                     if (invalidKeys.length > 0) {
                         console.warn('SAVE patch isolate: rejected fields', invalidKeys);
+                        // Surface rejected fields so the user/developer can diagnose SharePoint schema issues.
+                        // Filter out known dual-write aliases so they don't confuse the user.
+                        const ALIAS_PAIRS = new Set(['Progress_x0020_Notes', 'NotesHistory']);
+                        const userFacingRejected = invalidKeys.filter(k => !ALIAS_PAIRS.has(k));
+                        if (userFacingRejected.length && typeof window !== 'undefined' && typeof window.showToast === 'function') {
+                            window.showToast(`⚠️ SharePoint rejected fields: ${userFacingRejected.join(', ')} — other fields were saved`);
+                        }
                     }
 
                     // If at least one field patched successfully, treat as success.
