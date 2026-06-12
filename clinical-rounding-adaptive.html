@@ -8929,6 +8929,39 @@
             }
         }
 
+        function acceptDateReviewInputValue(input) {
+            if (!input || input.dataset.defaultedDate !== 'true') return false;
+            const normalizedValue = normalizeProcedureDateValue(input.value);
+            if (!normalizedValue) return false;
+
+            const reviewMeta = getFormDateReviewMeta();
+            let acceptedLabel = '';
+            if (input.id === 'f-date' && reviewMeta.visitDateDefaultedTo) {
+                reviewMeta.visitDateDefaultedTo = '';
+                acceptedLabel = 'Visit Date';
+            } else {
+                const code = String(input.dataset.code || '').trim();
+                if (!code || !reviewMeta.findingsDatesDefaulted[code]) return false;
+                delete reviewMeta.findingsDatesDefaulted[code];
+                acceptedLabel = `${getFindingDateReviewLabel(code)} Date`;
+
+                const findingsDatesInput = document.getElementById('f-findings-dates');
+                if (findingsDatesInput) {
+                    let storedDates = {};
+                    try { storedDates = JSON.parse(findingsDatesInput.value || '{}'); } catch (error) { storedDates = {}; }
+                    storedDates[code] = normalizedValue;
+                    findingsDatesInput.value = JSON.stringify(storedDates);
+                }
+            }
+
+            if (!hasDateReviewIssues(reviewMeta)) {
+                reviewMeta.createdOnDate = '';
+            }
+            setFormDateReviewMeta(reviewMeta);
+            addPendingDateReviewReason(`${acceptedLabel} (${normalizedValue}) accepted from highlighted date field.`);
+            return true;
+        }
+
         function syncDateReviewUI() {
             const reviewMeta = getFormDateReviewMeta();
             const visitDateInput = document.getElementById('f-date');
@@ -8978,6 +9011,11 @@
             }
 
             const currentIssue = issueItems[0];
+            const reviewQueue = issueItems.map((item, index) => `
+                <li class="${index === 0 ? 'font-semibold text-amber-950' : 'text-amber-800'}">
+                    ${index + 1}. ${escapeInlineHtml(item.label)} = <span class="font-mono">${escapeInlineHtml(item.value)}</span>
+                    <span class="font-mono text-[10px]">${escapeInlineHtml(item.source || '')}</span>
+                </li>`).join('');
             banner.classList.remove('hidden');
             banner.innerHTML = `
                 <div class="space-y-2">
@@ -8985,6 +9023,7 @@
                     <div><span class="font-semibold">Current item:</span> ${escapeInlineHtml(currentIssue.label)} = <span class="font-mono">${escapeInlineHtml(currentIssue.value)}</span></div>
                     <div class="text-[11px] font-mono text-amber-800">${escapeInlineHtml(currentIssue.source || currentIssue.selector || '')}</div>
                     <div>${escapeInlineHtml(currentIssue.hint)}</div>
+                    ${issueItems.length > 1 ? `<ol class="ml-4 list-decimal space-y-1 text-[11px]">${reviewQueue}</ol>` : ''}
                     ${issueItems.length > 1 ? `<div class="text-[11px] text-amber-800">Resolve this item first. The record will rescan before the next item is shown.</div>` : ''}
                     <div class="flex flex-wrap gap-2 pt-1">
                         <button type="button" onclick="globalThis.focusDateReviewIssue('${escapeInlineHtml(currentIssue.key)}')" class="rounded bg-amber-200 px-2.5 py-1 font-bold text-amber-950 hover:bg-amber-300">Edit highlighted date</button>
@@ -9002,6 +9041,7 @@
                 globalThis.enableModalEdit();
             }
             revealDateReviewInput(input);
+            input.dataset.dateReviewFocused = 'true';
             input.scrollIntoView({ behavior: 'smooth', block: 'center' });
             input.focus();
             if (typeof input.select === 'function') input.select();
@@ -12642,6 +12682,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             document.querySelectorAll('input.findings-date').forEach(input => {
                 input.addEventListener('change', () => {
                     const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
+                    acceptDateReviewInputValue(input);
                     updateSelectedCodes();
                     rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit);
                 });
@@ -12650,12 +12691,27 @@ const findHeaderIndex = (rows, sheetLog) => {
                 });
                 input.addEventListener('blur', () => {
                     const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
+                    if (input.dataset.dateReviewFocused === 'true') {
+                        acceptDateReviewInputValue(input);
+                        delete input.dataset.dateReviewFocused;
+                    }
                     updateSelectedCodes();
                     rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit);
                 });
             });
             document.getElementById('f-date')?.addEventListener('change', () => {
                 const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
+                acceptDateReviewInputValue(document.getElementById('f-date'));
+                syncDateReviewUI();
+                rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit);
+            });
+            document.getElementById('f-date')?.addEventListener('blur', () => {
+                const dateInput = document.getElementById('f-date');
+                const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
+                if (dateInput?.dataset.dateReviewFocused === 'true') {
+                    acceptDateReviewInputValue(dateInput);
+                    delete dateInput.dataset.dateReviewFocused;
+                }
                 syncDateReviewUI();
                 rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit);
             });
