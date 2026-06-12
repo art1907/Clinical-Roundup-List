@@ -10302,6 +10302,14 @@ const findHeaderIndex = (rows, sheetLog) => {
             
             console.log('💾 Starting save...');
             console.log('🔍 Save context:', { isConnected, useM365, hasM365SaveFunction: typeof globalThis.m365SavePatient === 'function' });
+
+            // Force-sync hidden JSON fields from visible controls before reading form values.
+            if (typeof globalThis.syncFindingsUI === 'function') {
+                globalThis.syncFindingsUI({ editable: isFindingsModalEditable() });
+            }
+            if (typeof globalThis.syncProceduresUI === 'function') {
+                globalThis.syncProceduresUI({ editable: isFindingsModalEditable() });
+            }
             
             const codesInput = document.getElementById('f-findings-codes');
             const findingsCodes = codesInput.value ? codesInput.value.split(',').map(c => c.trim()).filter(Boolean) : [];
@@ -12580,6 +12588,14 @@ const findHeaderIndex = (rows, sheetLog) => {
             }
             document.querySelectorAll('input.findings-date').forEach(input => {
                 input.addEventListener('change', () => {
+                    const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
+                    updateSelectedCodes();
+                    rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit);
+                });
+                input.addEventListener('input', () => {
+                    updateSelectedCodes();
+                });
+                input.addEventListener('blur', () => {
                     const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
                     updateSelectedCodes();
                     rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit);
