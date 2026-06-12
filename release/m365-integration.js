@@ -89,7 +89,8 @@ const M365_CONFIG = {
 
     // Debug toggles (temporary)
     debug: {
-        minimalSave: false
+        minimalSave: false,
+        verifyWrites: true
     }
 };
 
@@ -630,7 +631,11 @@ async function graphRequest(endpoint, method = 'GET', body = null, opts = {}) {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('❌ Graph API error response:', { status: response.status, text: errorText });
-                throw new Error(`Graph API error: ${response.status} - ${errorText}`);
+                const graphError = new Error(`Graph API error: ${response.status} - ${errorText}`);
+                graphError.status = response.status;
+                graphError.responseText = errorText;
+                graphError.retryable = false;
+                throw graphError;
             }
 
             if (response.status === 204) {
@@ -658,6 +663,10 @@ async function graphRequest(endpoint, method = 'GET', body = null, opts = {}) {
                 }
             } else {
                 lastErr = fetchErr;
+                if (fetchErr.retryable === false) {
+                    console.error('❌ graphRequest failed with non-retryable response:', fetchErr.message);
+                    throw fetchErr;
+                }
                 if (attempt < maxRetries) {
                     const backoff = Math.min(Math.pow(2, attempt) * 1000, 10_000);
                     console.warn('❌ Network/fetch error — back-off', backoff, 'ms:', fetchErr.message);
@@ -1051,10 +1060,8 @@ async function api_savePatient(patientData) {
         Title: patientData.name || '',
         Name: patientData.name || '',
         DateofBirth: patientData.dob || '',
-        DOB: patientData.dob || '', // Fallback catch for variations
-        Date_x0020_of_x0020_Birth: patientData.dob || '', // Fallback catch for spaces
         MRN: patientData.mrn || '',
-        Hospital_x0028_s_x0029_: patientData.hospital || '',
+        Hospital: patientData.hospital || '',
         VisitKey: visitKeyValue,
         [VISIT_TIME_FIELD]: visitTimeValue,
         FindingsCodes: Array.isArray(patientData.findingsCodes)
@@ -1093,7 +1100,7 @@ async function api_savePatient(patientData) {
         console.warn('DEBUG minimal save disabled; sending full payload');
     }
 
-    ['Hospital_x0028_s_x0029_', 'ProcedureStatus', 'Archived', 'Date', 'MRN', VISIT_TIME_FIELD].forEach((key) => {
+    ['Hospital', 'ProcedureStatus', 'Archived', 'Date', 'MRN', VISIT_TIME_FIELD].forEach((key) => {
         if (fieldsToSend[key] === '' || fieldsToSend[key] === null) {
             delete fieldsToSend[key];
         }
@@ -1107,7 +1114,7 @@ async function api_savePatient(patientData) {
         throw new Error('Missing required fields: Date and visit identity are required to create a record');
     }
 
-    console.log('SAVE fields', { visitKey: fieldsToSend.VisitKey, hospital: fieldsToSend.Hospital_x0028_s_x0029_ });
+    console.log('SAVE fields', { visitKey: fieldsToSend.VisitKey, hospital: fieldsToSend.Hospital });
 
     const logAndValidateResponse = (resp, context) => {
         console.log(`RESP ${context}`, resp);
@@ -1119,15 +1126,12 @@ async function api_savePatient(patientData) {
 
     const buildBaseFields = () => ({
         Title: fieldsToSend.Title || fieldsToSend.Name || 'Untitled',
-        Name: fieldsToSend.Name || fieldsToSend.Title || 'Untitled',
-        MRN: fieldsToSend.MRN,
         Date: fieldsToSend.Date,
-        VisitKey: fieldsToSend.VisitKey,
-        [VISIT_TIME_FIELD]: fieldsToSend[VISIT_TIME_FIELD]
+        VisitKey: fieldsToSend.VisitKey
     });
 
     const buildPatchFields = () => {
-        const baseKeys = new Set(['Title', 'Name', 'MRN', 'Date', 'VisitKey', VISIT_TIME_FIELD]);
+        const baseKeys = new Set(['Title', 'Date', 'VisitKey']);
         const patch = {};
         Object.keys(fieldsToSend).forEach((key) => {
             if (!baseKeys.has(key)) {
@@ -1135,6 +1139,42 @@ async function api_savePatient(patientData) {
             }
         });
         return patch;
+    };
+
+    const verifySavedFields = async (itemId, expectedFields, contextLabel) => {
+        if (!M365_CONFIG.debug?.verifyWrites || !itemId) return;
+
+        try {
+            const response = await graphRequest(`/sites/${siteId}/lists/${listId}/items/${itemId}?expand=fields`, 'GET', null, { timeoutMs: 10000, maxRetries: 0 });
+            const returnedFields = response?.fields || {};
+            const normalizeVerifyValue = (value, key) => {
+                if (value == null) return '';
+                const stringValue = typeof value === 'string' ? value.trim() : String(value).trim();
+                if (key === 'Date') return stringValue.slice(0, 10);
+                return stringValue;
+            };
+            const checkedKeys = Object.keys(expectedFields).filter((key) => expectedFields[key] !== '' && expectedFields[key] != null);
+            const missingKeys = checkedKeys.filter((key) => !Object.prototype.hasOwnProperty.call(returnedFields, key));
+            const mismatchedKeys = checkedKeys.filter((key) => {
+                if (missingKeys.includes(key)) return false;
+                return normalizeVerifyValue(returnedFields[key], key) !== normalizeVerifyValue(expectedFields[key], key);
+            });
+
+            console.log('SAVE verify readback', {
+                context: contextLabel,
+                itemId,
+                checkedKeys,
+                missingKeys,
+                mismatchedKeys
+            });
+
+            const rejectedKeys = [...missingKeys, ...mismatchedKeys];
+            if (rejectedKeys.length && typeof window !== 'undefined' && typeof window.showToast === 'function') {
+                window.showToast(`⚠️ Verify write: check SharePoint columns ${rejectedKeys.join(', ')}`);
+            }
+        } catch (verifyErr) {
+            console.warn('SAVE verify readback failed', verifyErr);
+        }
     };
 
     const extractUnknownFieldName = (err) => {
@@ -1256,6 +1296,7 @@ async function api_savePatient(patientData) {
                     throw new Error(`SharePoint rejected fields: ${invalidFields.join(', ') || 'unknown'}`);
                 }
             }
+            await verifySavedFields(newId, fieldsToSend, contextLabel);
             console.log('SAVE created id', newId);
             return newId;
         } catch (createErr) {
@@ -1272,6 +1313,7 @@ async function api_savePatient(patientData) {
             const updateFields = { ...fieldsToSend };
             delete updateFields.VisitKey;
             await patchFieldsWithRetry(`/sites/${siteId}/lists/${listId}/items/${recoveredItemId}/fields`, updateFields);
+            await verifySavedFields(recoveredItemId, updateFields, 'recover-update');
             console.log('SAVE recovered existing id after unique constraint', recoveredItemId);
             return recoveredItemId;
         }
@@ -1290,6 +1332,7 @@ async function api_savePatient(patientData) {
             const endpoint = `/sites/${siteId}/lists/${listId}/items/${targetItemId}/fields`;
             const response = await patchFieldsWithRetry(endpoint, updateFields);
             console.log('SAVE patch response', response);
+            await verifySavedFields(targetItemId, updateFields, 'update');
             return targetItemId;
         }
 
