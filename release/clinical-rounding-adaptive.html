@@ -8754,6 +8754,7 @@
                     label: 'Visit Date',
                     value: normalizedMeta.visitDateDefaultedTo,
                     selector: '#f-date',
+                    source: 'Form field: f-date',
                     hint: 'Visit Date was missing or invalid, so it was defaulted to the record created-on date. Correct the date if this is wrong, or confirm it is clinically correct.'
                 });
             }
@@ -8765,10 +8766,26 @@
                     label: `${label} Date`,
                     value: normalizedMeta.findingsDatesDefaulted[code],
                     selector: `input.findings-date[data-code="${escapeCssSelectorValue(code)}"]`,
+                    source: `Investigation field: findingsDates.${code}`,
                     hint: `${label} date was missing or invalid, so it was defaulted to the record created-on date. Correct the date if this investigation was done on a different day, or confirm this date is clinically correct.`
                 });
             });
             return items;
+        }
+
+        function revealDateReviewInput(input) {
+            if (!input) return false;
+            let parent = input.parentElement;
+            while (parent) {
+                if (parent.tagName === 'DETAILS') parent.open = true;
+                parent = parent.parentElement;
+            }
+            const card = input.closest('.border');
+            if (card) {
+                card.classList.add('ring-2', 'ring-amber-400', 'ring-offset-1');
+                setTimeout(() => card.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-1'), 2500);
+            }
+            return true;
         }
 
         function setDateReviewScanning(isScanning, message = 'Amended record is being scanned for remaining date review items...') {
@@ -8961,6 +8978,7 @@
                 <div class="space-y-2">
                     <div class="font-bold">Date Review Needed (${issueItems.length} item${issueItems.length === 1 ? '' : 's'} remaining)</div>
                     <div><span class="font-semibold">Current item:</span> ${escapeInlineHtml(currentIssue.label)} = <span class="font-mono">${escapeInlineHtml(currentIssue.value)}</span></div>
+                    <div class="text-[11px] font-mono text-amber-800">${escapeInlineHtml(currentIssue.source || currentIssue.selector || '')}</div>
                     <div>${escapeInlineHtml(currentIssue.hint)}</div>
                     ${issueItems.length > 1 ? `<div class="text-[11px] text-amber-800">Resolve this item first. The record will rescan before the next item is shown.</div>` : ''}
                     <div class="flex flex-wrap gap-2 pt-1">
@@ -8975,9 +8993,14 @@
             if (!issue) return false;
             const input = document.querySelector(issue.selector);
             if (!input) return false;
+            if (input.disabled && typeof globalThis.enableModalEdit === 'function') {
+                globalThis.enableModalEdit();
+            }
+            revealDateReviewInput(input);
             input.scrollIntoView({ behavior: 'smooth', block: 'center' });
             input.focus();
-            showToast(`Review ${issue.label}`);
+            if (typeof input.select === 'function') input.select();
+            showToast(`Review ${issue.label}: ${issue.source || issue.selector}`);
             return true;
         };
 
