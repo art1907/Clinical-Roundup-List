@@ -4,3 +4,9 @@
 *.xlsm
 *.xlsb
 *.csv
+
+# Node dependencies
+node_modules/
+
+# Optional Azure Functions API local install artifacts
+api/package-lock.json
