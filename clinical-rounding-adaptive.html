@@ -7906,13 +7906,11 @@
             const modal = document.getElementById('patient-modal');
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
-            const amendmentSummary = document.getElementById('amendment-review-summary');
             if (modal && modal.dataset.amendConfirmed !== 'true' && document.getElementById('edit-id')?.value) {
                 if (!globalThis.confirmAmendAction()) return false;
                 modal.dataset.amendConfirmed = 'true';
             }
             if (modal) modal.dataset.findingsEditable = 'true';
-            if (amendmentSummary) amendmentSummary.classList.add('hidden');
             lockBackfilledFields(false);
             if (saveBtn) {
                 saveBtn.disabled = false;
