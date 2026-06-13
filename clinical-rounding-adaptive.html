@@ -12686,6 +12686,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                 codesInput.value = selected.join(', ');
                 const values = {};
                 const dates = {};
+                let existingDates = {};
+                try {
+                    existingDates = JSON.parse(datesInput.value || '{}');
+                } catch (error) {
+                    existingDates = {};
+                }
                 checkboxes.forEach(cb => {
                     const code = cb.value;
                     const checked = cb.checked;
@@ -12697,7 +12703,13 @@ const findHeaderIndex = (rows, sheetLog) => {
                     if (dateInput) {
                         dateInput.disabled = !checked || !editable;
                         dateInput.style.display = checked ? 'inline-block' : 'none';
-                        if (checked && dateInput.value) dates[code] = dateInput.value;
+                        if (checked) {
+                            const dateValue = dateInput.value || existingDates[code] || '';
+                            if (dateValue) {
+                                dates[code] = dateValue;
+                                if (!dateInput.value) dateInput.value = dateValue;
+                            }
+                        }
                     }
 
                     if (isCustomCode) {

@@ -1077,6 +1077,7 @@ async function api_savePatient(patientData) {
         FindingsText: patientData.findingsText || '',
         Plan: composePlanWithProcedureDateToken(patientData.plan || '', patientData.procedureDate || ''),
         ProgressNotes: patientData.progressNotes || '',
+        Progress_x0020_Notes: patientData.progressNotes || '',
         SupervisingMD: patientData.supervisingMd || '',
         Pending: patientData.pending || '',
         FollowUp: patientData.followUp || '',
