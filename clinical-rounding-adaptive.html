@@ -7618,6 +7618,7 @@
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
             renderPatientChangeHistory(null);
+            renderAmendmentReviewSummary(null);
             modal.dataset.returningPatientCandidateId = '';
             modal.dataset.returningPatientBackfilledFrom = '';
             modal.dataset.pendingDateReviewReasons = '[]';
@@ -7813,6 +7814,7 @@
                     if (statusInput) statusInput.value = getSafeConfiguredStatus(p.procedureStatus);
                     if (statInput) statInput.checked = p.stat === true || p.stat === 'true';
                     renderPatientChangeHistory(p);
+                    renderAmendmentReviewSummary(p);
                     
                     // Show who created the record when editing
                     const createdByField = document.getElementById('f-created-by');
@@ -7881,6 +7883,7 @@
                 if (archiveBtn) archiveBtn.classList.add('hidden');
                 if (deleteBtn) deleteBtn.classList.add('hidden');
                 if (editToggleBtn) editToggleBtn.classList.add('hidden');
+                renderAmendmentReviewSummary(null);
                 if (typeof globalThis.clearPatientFiles === 'function') {
                     globalThis.clearPatientFiles();
                 }
@@ -7903,7 +7906,13 @@
             const modal = document.getElementById('patient-modal');
             const editToggleBtn = document.getElementById('modal-edit-btn');
             const saveBtn = document.getElementById('save-button');
+            const amendmentSummary = document.getElementById('amendment-review-summary');
+            if (modal && modal.dataset.amendConfirmed !== 'true' && document.getElementById('edit-id')?.value) {
+                if (!globalThis.confirmAmendAction()) return false;
+                modal.dataset.amendConfirmed = 'true';
+            }
             if (modal) modal.dataset.findingsEditable = 'true';
+            if (amendmentSummary) amendmentSummary.classList.add('hidden');
             lockBackfilledFields(false);
             if (saveBtn) {
                 saveBtn.disabled = false;
@@ -7945,6 +7954,7 @@
                 el.readOnly = false;
                 el.disabled = false;
             });
+            return true;
         };
 
         globalThis.confirmAmendAction = () => {
@@ -7981,14 +7991,9 @@
                 return true;
             }
 
-            if (!globalThis.confirmAmendAction()) {
-                return false;
-            }
-
             globalThis.openModal(id);
             const modal = document.getElementById('patient-modal');
-            if (modal) modal.dataset.amendConfirmed = 'true';
-            globalThis.enableModalEdit();
+            if (modal) modal.dataset.amendConfirmed = 'false';
             return true;
         };
 
@@ -9014,17 +9019,17 @@
             const reviewQueue = issueItems.map((item, index) => `
                 <li class="${index === 0 ? 'font-semibold text-amber-950' : 'text-amber-800'}">
                     ${index + 1}. ${escapeInlineHtml(item.label)} = <span class="font-mono">${escapeInlineHtml(item.value)}</span>
-                    <span class="font-mono text-[10px]">${escapeInlineHtml(item.source || '')}</span>
+                    <span class="font-mono text-xs">${escapeInlineHtml(item.source || '')}</span>
                 </li>`).join('');
             banner.classList.remove('hidden');
             banner.innerHTML = `
                 <div class="space-y-2">
                     <div class="font-bold">Date Review Needed (${issueItems.length} item${issueItems.length === 1 ? '' : 's'} remaining)</div>
                     <div><span class="font-semibold">Current item:</span> ${escapeInlineHtml(currentIssue.label)} = <span class="font-mono">${escapeInlineHtml(currentIssue.value)}</span></div>
-                    <div class="text-[11px] font-mono text-amber-800">${escapeInlineHtml(currentIssue.source || currentIssue.selector || '')}</div>
+                    <div class="text-xs font-mono text-amber-800">${escapeInlineHtml(currentIssue.source || currentIssue.selector || '')}</div>
                     <div>${escapeInlineHtml(currentIssue.hint)}</div>
-                    ${issueItems.length > 1 ? `<ol class="ml-4 list-decimal space-y-1 text-[11px]">${reviewQueue}</ol>` : ''}
-                    ${issueItems.length > 1 ? `<div class="text-[11px] text-amber-800">Resolve this item first. The record will rescan before the next item is shown.</div>` : ''}
+                    ${issueItems.length > 1 ? `<ol class="ml-4 list-decimal space-y-1 text-xs">${reviewQueue}</ol>` : ''}
+                    ${issueItems.length > 1 ? `<div class="text-xs text-amber-800">Resolve this item first. The record will rescan before the next item is shown.</div>` : ''}
                     <div class="flex flex-wrap gap-2 pt-1">
                         <button type="button" onclick="globalThis.focusDateReviewIssue('${escapeInlineHtml(currentIssue.key)}')" class="rounded bg-amber-200 px-2.5 py-1 font-bold text-amber-950 hover:bg-amber-300">Edit highlighted date</button>
                         <button type="button" onclick="globalThis.confirmDateReviewIssue('${escapeInlineHtml(currentIssue.key)}')" class="rounded bg-blue-600 px-2.5 py-1 font-bold text-white hover:bg-blue-700">Confirm this date is correct</button>
@@ -10308,6 +10313,84 @@ const findHeaderIndex = (rows, sheetLog) => {
                         <div class="text-xs text-slate-700 whitespace-pre-wrap leading-5">${esc(line)}</div>
                     </div>`;
             }).join('');
+        }
+
+        function renderAmendmentReviewSummary(record) {
+            const container = document.getElementById('amendment-review-summary');
+            if (!container) return;
+            if (!record) {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+                return;
+            }
+
+            const normalizeDisplayValue = (value) => {
+                if (value == null) return '';
+                if (Array.isArray(value)) return value.map(item => String(item || '').trim()).filter(Boolean).join(', ');
+                return String(value || '').trim();
+            };
+            const addRows = (rows) => rows
+                .map(([label, value]) => [label, normalizeDisplayValue(value)])
+                .filter(([, value]) => value)
+                .map(([label, value]) => `
+                    <div class="grid grid-cols-1 gap-1 border-b border-slate-200 py-2 last:border-b-0 md:grid-cols-[10rem_1fr]">
+                        <div class="text-xs font-bold uppercase tracking-wide text-slate-500">${escapeInlineHtml(label)}</div>
+                        <div class="whitespace-pre-wrap text-sm leading-5 text-slate-900">${escapeInlineHtml(value)}</div>
+                    </div>`)
+                .join('');
+            const section = (title, rowsHtml) => rowsHtml ? `
+                <section class="border-t border-slate-200 pt-3 first:border-t-0 first:pt-0">
+                    <h4 class="mb-1 text-sm font-bold text-slate-800">${escapeInlineHtml(title)}</h4>
+                    <div>${rowsHtml}</div>
+                </section>` : '';
+
+            const followUpFields = parseFollowUpSummary(record);
+            const findingsSummary = getFindingSegments(record).join('\n');
+            const procedureSummary = getProcedureSummaryText(record);
+            const dateReviewSummary = getDateReviewSummaryLines(getPatientDateReviewMeta(record)).join('\n');
+            const procedureNotes = (() => {
+                try {
+                    const catchAll = record.catchAll ? JSON.parse(record.catchAll) : {};
+                    return catchAll.procedureNotes || '';
+                } catch (error) {
+                    return '';
+                }
+            })();
+            const sections = [
+                section('Patient And Visit', addRows([
+                    ['Name', record.name], ['MRN', record.mrn], ['DOB', record.dob], ['Date', record.date],
+                    ['Hospital', record.hospital], ['Room', record.room], ['Status', record.procedureStatus],
+                    ['STAT', record.stat === true || record.stat === 'true' ? 'Yes' : '']
+                ])),
+                section('Clinical Narrative', addRows([
+                    ['Subjective/Objective', getVisibleProgressNotes(record)], ['Plan', record.plan], ['Pending', record.pending],
+                    ['Provider', record.supervisingMd]
+                ])),
+                section('Investigations', addRows([
+                    ['Selected Findings', findingsSummary], ['Additional Comments', record.findingsText], ['Date Review', dateReviewSummary]
+                ])),
+                section('Procedures', addRows([
+                    ['Selected Procedures', procedureSummary], ['Procedure Notes', procedureNotes]
+                ])),
+                section('Diagnosis And Billing', addRows([
+                    ['CPT Primary', record.cptPrimary], ['ICD Primary', record.icdPrimary], ['Secondary Codes', record.chargeCodesSecondary]
+                ])),
+                section('Follow-Up', addRows([
+                    ['Labs', followUpFields.labs], ['Imaging', followUpFields.imaging], ['Consultation', followUpFields.consultation],
+                    ['Notes', followUpFields.text || record.followUp]
+                ])),
+                section('Record Metadata', addRows([
+                    ['Created By', record.createdBy], ['Visit Key', record.visitKey], ['Visit Time', record.visitTime],
+                    ['Archived', record.archived === true || record.archived === 'true' ? 'Yes' : '']
+                ]))
+            ].filter(Boolean).join('');
+
+            container.innerHTML = `
+                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-slate-900">
+                    <div class="mb-3 text-sm font-bold text-blue-950">Filled Values Review</div>
+                    <div class="space-y-3">${sections || '<div class="text-sm text-slate-500">No filled values recorded.</div>'}</div>
+                </div>`;
+            container.classList.remove('hidden');
         }
         
         // Version marker for debugging - includes timestamp to prevent cache reversion
@@ -13761,7 +13844,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <input type="text" id="f-room" placeholder="Room" aria-label="Patient Room or Bed Number" class="p-3 bg-slate-50 rounded-lg border border-slate-200" required>
                     <input type="date" id="f-date" aria-label="Visit Date" class="p-3 bg-slate-50 rounded-lg border border-slate-200" required>
                 </div>
-                <div id="date-review-banner" class="hidden rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"></div>
+                <div id="date-review-banner" class="hidden rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"></div>
+                <div id="amendment-review-summary" class="hidden"></div>
 
                 <!-- Hospital Selection -->
                 <div>
