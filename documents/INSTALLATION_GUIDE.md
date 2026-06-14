@@ -188,6 +188,69 @@ Create all columns listed below. **VisitKey is critical** for data integrity!
 | ProgressNotes | Multiple lines of text | - | Accumulating progress text |
 | VisitTime | Single line text | - | Record creation timestamp |
 
+#### 📊 Findings Metadata Structure (Investigations Framework)
+
+The app uses a **LOINC-style catalog** of investigations (lab tests, imaging, etc.) stored in `FindingsData` column. **No new SharePoint columns are required** — metadata is embedded in the existing `FindingsData` column using an envelope format.
+
+**FindingsData Storage Format:**
+
+```json
+{
+  "values": {
+    "cbc-85025": {"wcc": 10.5, "hb": 14.2, "plt": 250},
+    "free-text-code": "Investigation note here"
+  },
+  "meta": {
+    "cbc-85025": {
+      "loincCode": "58410-2",
+      "kind": "panel",
+      "unit": null,
+      "dateContext": "current",
+      "dateBasis": "reported",
+      "category": "hematology"
+    },
+    "free-text-code": {
+      "dateContext": "prior",
+      "dateBasis": "unknown"
+    }
+  }
+}
+```
+
+**Backward Compatibility:**
+
+Old records (before metadata feature) store `FindingsData` as a legacy values map:
+```json
+{
+  "cbc-85025": {"wcc": 10.5, "hb": 14.2},
+  "custom-finding": "text value"
+}
+```
+
+The app **automatically detects** both formats on load:
+- **Envelope format** (has `values` and `meta` keys): Splits into separate values and metadata
+- **Legacy format** (no wrapper): Treats entire object as values map, initializes empty metadata
+
+**Metadata Fields (Optional):**
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `loincCode` | LOINC identifier for lab standardization | `58410-2` (CBC) |
+| `kind` | Investigation type: panel, single, imaging, culture, answer-list, free-text | `panel` |
+| `unit` | UCUM unit if applicable | `g/dL` |
+| `dateContext` | Prior, current, future, or confirmed-defaulted | `prior` |
+| `dateBasis` | How date was determined: reported, defaulted, inferred, unknown | `reported` |
+| `category` | Investigation category for filtering | `hematology` |
+| `axes` | LOINC axes: component, property, time, system, scale, method | `{component: "WBC", time: "Pt", system: "Bld"}` |
+
+**CSV/XLS Import Behavior:**
+
+When importing investigations from CSV/XLS:
+- ✅ **Fills `FindingsText`** with investigation summary (plain text)
+- ✅ **Does NOT fabricate metadata** (leaves meta empty or infers from date-review system)
+- ✅ Metadata is populated on first save when `initializeMetaFromDefaults()` runs
+- ✅ On next load, full envelope (values + meta) is persisted
+
 #### ⚠️ CRITICAL: Enable VisitKey Unique Constraint
 
 This step **must be completed** for the app to work correctly:

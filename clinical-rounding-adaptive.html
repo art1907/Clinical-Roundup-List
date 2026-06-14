@@ -3148,6 +3148,20 @@
 
         const FINDINGS_CUSTOM_CODES = new Set(['cbc-85025', 'bmp-80048']);
 
+        // INVESTIGATION_CATALOG: source-of-truth for finding definitions (kind, unit, LOINC axes, etc.)
+        const INVESTIGATION_CATALOG = {
+            'cbc-85025': {
+                appCode: 'cbc-85025', label: 'CBC w/ diff', category: 'hematology', orderCode: '85025',
+                loincCode: '58410-2', kind: 'panel', unit: null,
+                axes: { component: 'WBC', property: 'Nthr Pt', time: 'Pt', system: 'Bld', scale: 'Qn', method: null }
+            },
+            'bmp-80048': {
+                appCode: 'bmp-80048', label: 'BMP', category: 'chemistry', orderCode: '80048',
+                loincCode: '24323-8', kind: 'panel', unit: null,
+                axes: { component: 'Metabolic panel', property: 'Chem', time: 'Pt', system: 'Ser/Plas', scale: 'Qn', method: null }
+            }
+        };
+
         function parseCustomFindingValue(code, rawValue) {
             if (!rawValue) return {};
             if (typeof rawValue === 'object') return rawValue;
@@ -3293,7 +3307,65 @@
             return `Investigation date ${normalizedFindingDate}`;
         }
 
+        // Phase 3: Catalog-driven helpers
+        function getCatalogEntry(code = '') {
+            // Get investigation definition from catalog, or null if not found
+            return INVESTIGATION_CATALOG[code] || null;
+        }
+
+        function enrichMetaFromCatalog(findingsMeta = {}, code = '') {
+            // Populate meta with catalog info (kind, unit, axes, category, loincCode)
+            const catalogEntry = getCatalogEntry(code);
+            if (!catalogEntry) return findingsMeta[code] || {};
+            const meta = findingsMeta[code] || {};
+            // Preserve existing values, add missing ones from catalog
+            if (!meta.loincCode && catalogEntry.loincCode) meta.loincCode = catalogEntry.loincCode;
+            if (!meta.kind && catalogEntry.kind) meta.kind = catalogEntry.kind;
+            if (!meta.unit && catalogEntry.unit) meta.unit = catalogEntry.unit;
+            if (!meta.axes && catalogEntry.axes) meta.axes = catalogEntry.axes;
+            if (!meta.category && catalogEntry.category) meta.category = catalogEntry.category;
+            return meta;
+        }
+
+        function initializeMetaFromDefaults(findingsCodes = [], findingsDates = {}, findingsMeta = {}, patient = {}) {
+            // Phase 2: Initialize metadata with defaults for old records (backward-compat)
+            // Infer dateContext from finding date vs record creation date
+            const recordCreationDate = getPatientRecordCreationDate(patient);
+            const reviewMeta = getPatientDateReviewMeta(patient);
+            
+            findingsCodes.forEach(code => {
+                if (!findingsMeta[code]) findingsMeta[code] = {};
+                const findingDate = findingsDates[code] || '';
+                
+                // Infer dateContext from existing date-review system
+                if (reviewMeta.findingsDatesDefaulted && reviewMeta.findingsDatesDefaulted[code]) {
+                    findingsMeta[code].dateContext = 'confirmed-defaulted';
+                } else if (findingDate && recordCreationDate) {
+                    const normalizedFinding = normalizeProcedureDateValue(findingDate);
+                    const normalizedCreation = normalizeProcedureDateValue(recordCreationDate);
+                    if (normalizedFinding < normalizedCreation) {
+                        findingsMeta[code].dateContext = 'prior';
+                    } else if (normalizedFinding > normalizedCreation) {
+                        findingsMeta[code].dateContext = 'future';
+                    } else {
+                        findingsMeta[code].dateContext = 'current';
+                    }
+                } else {
+                    findingsMeta[code].dateContext = 'current';
+                }
+                
+                // Set default dateBasis
+                if (!findingsMeta[code].dateBasis) findingsMeta[code].dateBasis = 'unknown';
+                
+                // Phase 3: Enrich with catalog info
+                findingsMeta[code] = enrichMetaFromCatalog(findingsMeta, code);
+            });
+            
+            return findingsMeta;
+        }
+
         function getFindingSegments(patient) {
+            // Phase 4: Catalog-aware display with concise format: "label: values | date | context"
             if (!patient || typeof patient !== 'object') return [];
 
             const findingsValues = patient.findingsValues && typeof patient.findingsValues === 'object'
@@ -3323,7 +3395,14 @@
                         displayValue = String(rawValue).trim();
                     }
                     if (!displayValue) return '';
-                    return dateContext ? `${displayValue} (${dateContext})` : displayValue;
+                    
+                    // Phase 4: Use catalog label if available for data-driven display
+                    const catalogEntry = getCatalogEntry(code);
+                    const catalogLabel = catalogEntry ? catalogEntry.label : code;
+                    const hasLabel = catalogLabel !== code;
+                    const labeledDisplay = hasLabel ? `${catalogLabel}: ${displayValue}` : displayValue;
+                    
+                    return dateContext ? `${labeledDisplay} | ${dateContext}` : labeledDisplay;
                 })
                 .filter(Boolean);
 
@@ -7817,6 +7896,9 @@
                     if (document.getElementById('f-findings-dates')) {
                         document.getElementById('f-findings-dates').value = p.findingsDates ? JSON.stringify(p.findingsDates) : "";
                     }
+                    if (document.getElementById('f-findings-meta')) {
+                        document.getElementById('f-findings-meta').value = p.findingsMeta ? JSON.stringify(p.findingsMeta) : "{}";
+                    }
                     // Load procedure data
                     if (document.getElementById('f-procedure-codes')) {
                         const procedureState = getProcedureState(p);
@@ -10593,6 +10675,16 @@ const findHeaderIndex = (rows, sheetLog) => {
             const findingsValues = valuesInput.value ? JSON.parse(valuesInput.value) : {};
             const datesInput = document.getElementById('f-findings-dates');
             const findingsDates = datesInput.value ? JSON.parse(datesInput.value) : {};
+            const metaInput = document.getElementById('f-findings-meta');
+            let findingsMeta = metaInput.value ? JSON.parse(metaInput.value) : {};
+            
+            // Phase 2: Initialize meta for old records (backward-compat)
+            const tempPatient = {
+                date: document.getElementById('f-date').value,
+                visitTime: document.getElementById('f-visit-time').value,
+                findingsDates: findingsDates
+            };
+            findingsMeta = initializeMetaFromDefaults(findingsCodes, findingsDates, findingsMeta, tempPatient);
             
             // Get procedure data
             const procCodesInput = document.getElementById('f-procedure-codes');
@@ -10641,6 +10733,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 findingsCodes: findingsCodes,
                 findingsValues: findingsValues,
                 findingsDates: findingsDates,
+                findingsMeta: findingsMeta,
                 findingsText: document.getElementById('f-findings-text').value,
                 procedureCodes: procedureCodes,
                 procedureValues: procedureValues,
@@ -14374,6 +14467,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <input type="hidden" id="f-findings-codes">
                     <input type="hidden" id="f-findings-values">
                     <input type="hidden" id="f-findings-dates">
+                    <input type="hidden" id="f-findings-meta">
                     <textarea id="f-findings-text" placeholder="Additional Comments" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
                 </div>
 

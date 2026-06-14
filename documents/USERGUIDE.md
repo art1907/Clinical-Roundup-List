@@ -266,6 +266,72 @@ Without opening the full patient form:
 3. Select the new workflow status from the six current visit-status options
 4. Status updates instantly
 
+### Findings & Investigations (Lab/Imaging Data)
+
+The app tracks clinical investigations (lab tests, imaging, cultures, etc.) with structured metadata for better organization and audit trail.
+
+#### Adding Findings
+
+When creating or editing a patient, you can add investigation results:
+
+1. Open the patient form
+2. In the **Findings** section, click on investigation types (e.g., "CBC w/ diff", "BMP", or free-text note)
+3. For **Panel Investigations** (CBC, BMP):
+   - Fill in individual fields: WCC, Hemoglobin, Platelets (for CBC) or Sodium, Potassium, etc. (for BMP)
+   - Add the **Date** the test was performed
+   - The app auto-detects if it's a prior result vs. current result based on record creation date
+4. For **Free-Text Findings**:
+   - Type any investigation note (e.g., "Left hydronephrosis, 2mm stone")
+   - Add the date if known
+5. Click **Save**
+
+#### Understanding Finding Display Format
+
+Findings appear in the **Census table** and **patient modal** in a concise format:
+
+| Display Format | Example | Meaning |
+|---|---|---|
+| **Label: Values \| Date** | CBC w/ diff: WCC 10.5, Hb 14.2 \| 2026-01-16 | Current investigation with date |
+| **Label: Values \| Context** | BMP: K 4.2, Na 138 \| Prior result | Prior investigation (before this visit) |
+| **Custom Text \| Context** | Left hydro, 2mm stone \| Current visit date | Free-text finding |
+| **Label \| Needs Confirmation** | CBC w/ diff \| Defaulted to record date | Investigation date was inferred/defaulted |
+
+#### Date Context
+
+The app automatically tracks when investigations were performed relative to the current visit:
+
+| Context | Icon | Meaning |
+|---------|------|---------|
+| **Current** | 📅 Current visit date | Investigation performed on this visit date |
+| **Prior** | 📍 Prior result | Investigation from before this visit (e.g., admission labs) |
+| **Future** | 🔮 Future date | Investigation scheduled for later (post-discharge follow-up) |
+| **Confirmed-Defaulted** | ⚠️ Needs confirmation | Date was inferred from system (may need manual review) |
+
+**Why This Matters:**
+- ✅ Quickly distinguish current labs vs. admission/old labs
+- ✅ Auto-detection prevents confusion when importing historical data
+- ✅ Easy audit trail: see when each investigation was entered and whether date was confirmed
+
+#### Bulk Import: Findings from CSV/Excel
+
+When importing patient records from Excel:
+
+1. Investigations are imported into the **Findings** field (plain text)
+2. The app preserves the text exactly as provided
+3. On first save, the app enriches metadata with:
+   - Investigation kind (panel, single, imaging, etc.)
+   - LOINC code (if in catalog)
+   - Date context (prior, current, future, defaulted)
+4. Next load shows full metadata (lab names, date context, etc.)
+
+**Example:**
+```
+Import: "CBC done 1/15, BMP normal"
+       ↓ (on save)
+Display: "CBC w/ diff: ... | Prior result"
+         "BMP: ... | Prior result"
+```
+
 ### Selection Mode
 
 When you select one or more rows with the table checkboxes, the app enters **Selection Mode**.
