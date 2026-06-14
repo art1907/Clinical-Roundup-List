@@ -10587,6 +10587,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                     }
                 });
                 syncDateReviewUI();
+                const finalReviewMeta = getFormDateReviewMeta();
+                const remainingDateReviewIssuesAfterSavePrep = getDateReviewIssueItems(finalReviewMeta).length;
+                data.progressNotes = buildProgressNotesWithDateReviewMeta(visibleProgressNotes, finalReviewMeta);
                 if (!data.visitKey) {
                     data.visitKey = data.mrn && data.date
                         ? `${data.mrn}|${data.date}`
@@ -10701,15 +10704,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                     clearDraft(); // Clear draft on successful save
                     
                     const form = document.getElementById('patient-modal');
-                    if (form && form.dataset.flaggedId) {
-                        if (typeof globalThis.deleteFlaggedRecord === 'function') {
-                            globalThis.deleteFlaggedRecord(form.dataset.flaggedId);
-                        }
-                        delete form.dataset.flaggedId;
-                    }
+                    clearResolvedHumanReviewFlags(data, form?.dataset.flaggedId, remainingDateReviewIssuesAfterSavePrep);
+                    if (form?.dataset.flaggedId) delete form.dataset.flaggedId;
                     
                     showToast("✓ Saved (Local)");
-                    const remainingDateReviewIssues = getDateReviewIssueItems(getFormDateReviewMeta()).length;
+                    const remainingDateReviewIssues = remainingDateReviewIssuesAfterSavePrep;
                     if (hadDateReviewIssuesAtSave && remainingDateReviewIssues) {
                         setDateReviewScanning(true);
                         setTimeout(() => {
@@ -10752,15 +10751,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                             clearDraft(); // Clear draft on successful save
 
                             const form = document.getElementById('patient-modal');
-                            if (form && form.dataset.flaggedId) {
-                                if (typeof globalThis.deleteFlaggedRecord === 'function') {
-                                    globalThis.deleteFlaggedRecord(form.dataset.flaggedId);
-                                }
-                                delete form.dataset.flaggedId;
-                            }
+                            clearResolvedHumanReviewFlags(data, form?.dataset.flaggedId, remainingDateReviewIssuesAfterSavePrep);
+                            if (form?.dataset.flaggedId) delete form.dataset.flaggedId;
 
                             showToast("✓ Saved");
-                            const remainingDateReviewIssues = getDateReviewIssueItems(getFormDateReviewMeta()).length;
+                            const remainingDateReviewIssues = remainingDateReviewIssuesAfterSavePrep;
                             if (hadDateReviewIssuesAtSave && remainingDateReviewIssues) {
                                 setDateReviewScanning(true);
                                 setTimeout(() => {
@@ -10951,6 +10946,26 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             updateMobileBottomNav(activeTab);
         };
+
+        function clearResolvedHumanReviewFlags(savedPatient, flaggedId = '', remainingDateReviewIssues = 0) {
+            if (remainingDateReviewIssues > 0 || !Array.isArray(flaggedRecords) || !flaggedRecords.length) return;
+            const savedVisitKey = savedPatient?.visitKey || buildImportIdentityKey(savedPatient || {});
+            const before = flaggedRecords.length;
+            flaggedRecords = flaggedRecords.filter((flag) => {
+                if (flaggedId && flag.id === flaggedId) return false;
+                const flagVisitKey = flag.visitKey || buildImportIdentityKey(flag.patientData || {});
+                return !savedVisitKey || flagVisitKey !== savedVisitKey;
+            });
+            globalThis.flaggedRecords = flaggedRecords;
+            if (before === flaggedRecords.length) return;
+            const reviewBtn = document.getElementById('tab-review-btn');
+            if (reviewBtn && !flaggedRecords.some(record => !record.resolved)) {
+                reviewBtn.classList.remove('has-flagged-records');
+            }
+            if (currentTab === 'review' && typeof globalThis.renderReviewTab === 'function') {
+                globalThis.renderReviewTab();
+            }
+        }
 
         // FLAG RECORDS FOR HUMAN REVIEW
         globalThis.flagRecordForReview = (patientData, rowLabel, explanation, reason = 'reconciliation_issue') => {
