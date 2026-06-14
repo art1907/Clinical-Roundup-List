@@ -3260,6 +3260,39 @@
                 .replaceAll("'", '&#39;');
         }
 
+        function getPatientRecordCreationDate(patient = {}) {
+            const visitTimeDate = String(patient.visitTime || '').split('T')[0];
+            return normalizeProcedureDateValue(visitTimeDate) || normalizeProcedureDateValue(patient.date) || '';
+        }
+
+        function getFindingDateDisplayContext(patient = {}, code = '') {
+            const normalizedCode = String(code || '').trim();
+            if (!normalizedCode) return '';
+            const findingsDates = patient.findingsDates && typeof patient.findingsDates === 'object'
+                ? patient.findingsDates
+                : {};
+            const normalizedFindingDate = normalizeProcedureDateValue(findingsDates[normalizedCode]);
+            if (!normalizedFindingDate) return '';
+
+            const reviewMeta = getPatientDateReviewMeta(patient);
+            const dateContext = reviewMeta.findingsDateContexts?.[normalizedCode];
+            if (dateContext?.date === normalizedFindingDate && dateContext.context === 'confirmed-defaulted') {
+                return `Investigation date ${normalizedFindingDate} - confirmed after missing/invalid import date defaulted to record-created date`;
+            }
+            if (reviewMeta.findingsDatesDefaulted?.[normalizedCode] === normalizedFindingDate) {
+                return `Investigation date ${normalizedFindingDate} - defaulted from missing/invalid entry; needs review`;
+            }
+
+            const recordCreationDate = getPatientRecordCreationDate(patient);
+            if (recordCreationDate && normalizedFindingDate < recordCreationDate) {
+                return `Investigation date ${normalizedFindingDate} - historical/prior data entered with this record`;
+            }
+            if (recordCreationDate && normalizedFindingDate > recordCreationDate) {
+                return `Investigation date ${normalizedFindingDate} - dated after record creation`;
+            }
+            return `Investigation date ${normalizedFindingDate}`;
+        }
+
         function getFindingSegments(patient) {
             if (!patient || typeof patient !== 'object') return [];
 
@@ -3272,21 +3305,25 @@
 
             const valueSegments = findingsCodes
                 .map((code) => {
+                    const dateContext = getFindingDateDisplayContext(patient, code);
                     const rawValue = findingsValues[code];
-                    if (rawValue === null || rawValue === undefined) return '';
-                    if (FINDINGS_CUSTOM_CODES.has(code)) {
-                        return formatCustomFindingDisplay(code, rawValue);
-                    }
-                    if (typeof rawValue === 'string') {
-                        return rawValue.trim();
-                    }
-                    if (typeof rawValue === 'object') {
-                        return Object.values(rawValue)
+                    let displayValue = '';
+                    if (rawValue === null || rawValue === undefined) {
+                        displayValue = dateContext ? getFindingDateReviewLabel(code) : '';
+                    } else if (FINDINGS_CUSTOM_CODES.has(code)) {
+                        displayValue = formatCustomFindingDisplay(code, rawValue);
+                    } else if (typeof rawValue === 'string') {
+                        displayValue = rawValue.trim();
+                    } else if (typeof rawValue === 'object') {
+                        displayValue = Object.values(rawValue)
                             .map((value) => String(value || '').trim())
                             .filter(Boolean)
                             .join(', ');
+                    } else {
+                        displayValue = String(rawValue).trim();
                     }
-                    return String(rawValue).trim();
+                    if (!displayValue) return '';
+                    return dateContext ? `${displayValue} (${dateContext})` : displayValue;
                 })
                 .filter(Boolean);
 
@@ -8654,8 +8691,12 @@
         const normalizeDateReviewMeta = (meta = {}) => {
             const source = meta && typeof meta === 'object' ? meta : {};
             const findingsDatesDefaulted = {};
+            const findingsDateContexts = {};
             const rawFindingsDefaults = source.findingsDatesDefaulted && typeof source.findingsDatesDefaulted === 'object'
                 ? source.findingsDatesDefaulted
+                : {};
+            const rawFindingsContexts = source.findingsDateContexts && typeof source.findingsDateContexts === 'object'
+                ? source.findingsDateContexts
                 : {};
 
             Object.entries(rawFindingsDefaults).forEach(([code, value]) => {
@@ -8665,16 +8706,35 @@
                 }
             });
 
+            Object.entries(rawFindingsContexts).forEach(([code, value]) => {
+                const normalizedCode = String(code || '').trim();
+                if (!normalizedCode || !value || typeof value !== 'object') return;
+                const normalizedDate = isValidIsoDateString(value.date) ? String(value.date).trim() : '';
+                const normalizedContext = String(value.context || '').trim();
+                if (normalizedDate && normalizedContext) {
+                    findingsDateContexts[normalizedCode] = {
+                        date: normalizedDate,
+                        context: normalizedContext
+                    };
+                }
+            });
+
             return {
                 createdOnDate: isValidIsoDateString(source.createdOnDate) ? String(source.createdOnDate).trim() : '',
                 visitDateDefaultedTo: isValidIsoDateString(source.visitDateDefaultedTo) ? String(source.visitDateDefaultedTo).trim() : '',
-                findingsDatesDefaulted
+                findingsDatesDefaulted,
+                findingsDateContexts
             };
         };
 
         const hasDateReviewIssues = (meta = {}) => {
             const normalizedMeta = normalizeDateReviewMeta(meta);
             return Boolean(normalizedMeta.visitDateDefaultedTo || Object.keys(normalizedMeta.findingsDatesDefaulted).length);
+        };
+
+        const hasDateReviewPersistence = (meta = {}) => {
+            const normalizedMeta = normalizeDateReviewMeta(meta);
+            return hasDateReviewIssues(normalizedMeta) || Object.keys(normalizedMeta.findingsDateContexts).length > 0;
         };
 
         function parseProgressNotesWithDateReviewMeta(rawProgressNotes = '') {
@@ -8714,7 +8774,7 @@
         const buildProgressNotesWithDateReviewMeta = (visibleText = '', reviewMeta = {}) => {
             const cleanedVisibleText = String(visibleText || '').replace(/(?:\r?\n)?\[\[SYS_DATE_REVIEW_META=[^\]]+\]\]\s*$/, '').trimEnd();
             const normalizedMeta = normalizeDateReviewMeta(reviewMeta);
-            if (!hasDateReviewIssues(normalizedMeta)) {
+            if (!hasDateReviewPersistence(normalizedMeta)) {
                 return cleanedVisibleText;
             }
             const encodedMeta = encodeURIComponent(JSON.stringify(normalizedMeta));
@@ -8873,6 +8933,12 @@
                 }
             });
 
+            Object.keys(normalizedMeta.findingsDateContexts).forEach((code) => {
+                if (!selectedCodeSet.has(code)) {
+                    delete normalizedMeta.findingsDateContexts[code];
+                }
+            });
+
             selectedCodes.forEach((code) => {
                 const findingsDateValue = String(nextFindingsDates[code] || '').trim();
                 const normalizedFindingsDate = normalizeProcedureDateValue(findingsDateValue);
@@ -8885,7 +8951,7 @@
                 }
             });
 
-            if (!hasDateReviewIssues(normalizedMeta)) {
+            if (!hasDateReviewPersistence(normalizedMeta)) {
                 normalizedMeta.createdOnDate = '';
             }
 
@@ -8914,7 +8980,7 @@
             const reviewMetaInput = document.getElementById('f-review-meta');
             if (!reviewMetaInput) return;
             const normalizedMeta = normalizeDateReviewMeta(reviewMeta);
-            reviewMetaInput.value = hasDateReviewIssues(normalizedMeta) ? JSON.stringify(normalizedMeta) : '';
+            reviewMetaInput.value = hasDateReviewPersistence(normalizedMeta) ? JSON.stringify(normalizedMeta) : '';
         }
 
         function applyAmberDateHighlight(input, shouldHighlight) {
@@ -8952,7 +9018,16 @@
             } else {
                 const code = String(input.dataset.code || '').trim();
                 if (!code || !reviewMeta.findingsDatesDefaulted[code]) return false;
+                const defaultedDate = reviewMeta.findingsDatesDefaulted[code];
                 delete reviewMeta.findingsDatesDefaulted[code];
+                if (normalizedValue === defaultedDate) {
+                    reviewMeta.findingsDateContexts[code] = {
+                        date: normalizedValue,
+                        context: 'confirmed-defaulted'
+                    };
+                } else {
+                    delete reviewMeta.findingsDateContexts[code];
+                }
                 acceptedLabel = `${getFindingDateReviewLabel(code)} Date`;
 
                 const findingsDatesInput = document.getElementById('f-findings-dates');
@@ -8964,7 +9039,7 @@
                 }
             }
 
-            if (!hasDateReviewIssues(reviewMeta)) {
+            if (!hasDateReviewPersistence(reviewMeta)) {
                 reviewMeta.createdOnDate = '';
             }
             setFormDateReviewMeta(reviewMeta);
@@ -8998,7 +9073,15 @@
                 }
             });
 
-            if (!hasDateReviewIssues(reviewMeta)) {
+            Object.keys(reviewMeta.findingsDateContexts).forEach((code) => {
+                const findingDateInput = document.querySelector(`input.findings-date[data-code="${code}"]`);
+                const currentValue = normalizeProcedureDateValue(findingDateInput?.value || '');
+                if (!selectedCodeSet.has(code) || !currentValue || currentValue !== reviewMeta.findingsDateContexts[code]?.date) {
+                    delete reviewMeta.findingsDateContexts[code];
+                }
+            });
+
+            if (!hasDateReviewPersistence(reviewMeta)) {
                 reviewMeta.createdOnDate = '';
             }
             setFormDateReviewMeta(reviewMeta);
@@ -9081,6 +9164,10 @@
                 // when the finding date is absent from the stored FindingsDates field.
                 const confirmedDate = issue.value;
                 if (confirmedDate) {
+                    reviewMeta.findingsDateContexts[issue.key] = {
+                        date: confirmedDate,
+                        context: 'confirmed-defaulted'
+                    };
                     const findingsDatesInput = document.getElementById('f-findings-dates');
                     if (findingsDatesInput) {
                         let storedDates = {};
@@ -9093,7 +9180,7 @@
                 }
             }
             addPendingDateReviewReason(`${issue.label} (${issue.value}) confirmed during date review: ${note}`);
-            if (!hasDateReviewIssues(reviewMeta)) {
+            if (!hasDateReviewPersistence(reviewMeta)) {
                 reviewMeta.createdOnDate = '';
             }
             setFormDateReviewMeta(reviewMeta);
