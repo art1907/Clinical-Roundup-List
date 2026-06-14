@@ -7953,23 +7953,8 @@
                 el.readOnly = false;
                 el.disabled = false;
             });
-            if (document.getElementById('edit-id')?.value) {
-                focusFirstDateReviewIssueAfterAmend();
-            }
             return true;
         };
-
-        function focusFirstDateReviewIssueAfterAmend() {
-            setTimeout(() => {
-                syncDateReviewUI();
-                const firstIssue = getDateReviewIssueItems(getFormDateReviewMeta())[0];
-                if (firstIssue) {
-                    globalThis.focusDateReviewIssue(firstIssue.key);
-                    return;
-                }
-                showToast('Amend mode enabled');
-            }, 100);
-        }
 
         globalThis.confirmAmendAction = () => {
             const warningText = [
