@@ -7623,6 +7623,8 @@
             modal.dataset.returningPatientBackfilledFrom = '';
             modal.dataset.pendingDateReviewReasons = '[]';
             modal.dataset.dateReviewScanning = 'false';
+            modal.dataset.amendConfirmed = '';
+            modal.dataset.amendAuthorizationNote = '';
             hideReturningPatientBackfillPrompt();
             const prevCard = document.getElementById('previous-visit-reference-card');
             if (prevCard) prevCard.classList.add('hidden');
@@ -7908,7 +7910,6 @@
             const saveBtn = document.getElementById('save-button');
             if (modal && modal.dataset.amendConfirmed !== 'true' && document.getElementById('edit-id')?.value) {
                 if (!globalThis.confirmAmendAction()) return false;
-                modal.dataset.amendConfirmed = 'true';
             }
             if (modal) modal.dataset.findingsEditable = 'true';
             lockBackfilledFields(false);
@@ -7952,8 +7953,23 @@
                 el.readOnly = false;
                 el.disabled = false;
             });
+            if (document.getElementById('edit-id')?.value) {
+                focusFirstDateReviewIssueAfterAmend();
+            }
             return true;
         };
+
+        function focusFirstDateReviewIssueAfterAmend() {
+            setTimeout(() => {
+                syncDateReviewUI();
+                const firstIssue = getDateReviewIssueItems(getFormDateReviewMeta())[0];
+                if (firstIssue) {
+                    globalThis.focusDateReviewIssue(firstIssue.key);
+                    return;
+                }
+                showToast('Amend mode enabled');
+            }, 100);
+        }
 
         globalThis.confirmAmendAction = () => {
             const warningText = [
@@ -7980,6 +7996,12 @@
                 return false;
             }
 
+            const modal = document.getElementById('patient-modal');
+            if (modal) {
+                modal.dataset.amendConfirmed = 'true';
+                modal.dataset.amendAuthorizationNote = 'AMEND authorization accepted before editing this existing record.';
+            }
+
             return true;
         };
 
@@ -7992,7 +8014,7 @@
             globalThis.openModal(id);
             const modal = document.getElementById('patient-modal');
             if (modal) modal.dataset.amendConfirmed = 'false';
-            return true;
+            return globalThis.enableModalEdit();
         };
 
         globalThis.openFollowUpModal = (id) => {
@@ -9058,7 +9080,11 @@
             const issue = issueItems.find(item => item.key === issueKey) || issueItems[0];
             if (!issue) return false;
 
-            const note = await getRequiredChangeNote(`date review confirmation - ${issue.label}`);
+            const modal = document.getElementById('patient-modal');
+            const amendAuthorizationNote = modal?.dataset.amendConfirmed === 'true'
+                ? String(modal.dataset.amendAuthorizationNote || '').trim()
+                : '';
+            const note = amendAuthorizationNote || await getRequiredChangeNote(`date review confirmation - ${issue.label}`);
             if (!note) return false;
 
             if (issue.type === 'visit') {
@@ -10596,7 +10622,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const previousPatient = resolvedEditId ? (patients.find(p => p.id === resolvedEditId) || null) : null;
                 const hadDateReviewIssuesAtSave = hasDateReviewIssues(reviewMeta);
                 const changeActionLabel = resolvedEditId ? 'update' : 'create';
-                const changeNote = await getRequiredChangeNote(changeActionLabel);
+                const modal = document.getElementById('patient-modal');
+                const amendAuthorizationNote = resolvedEditId && modal?.dataset.amendConfirmed === 'true'
+                    ? String(modal.dataset.amendAuthorizationNote || '').trim()
+                    : '';
+                const changeNote = amendAuthorizationNote || await getRequiredChangeNote(changeActionLabel);
                 if (!changeNote) return false;
                 if (normalizedDateState.appliedDefaults.length) {
                     showToast('⚠️ Missing or invalid date fields were defaulted to the created-on date and highlighted amber for review');
