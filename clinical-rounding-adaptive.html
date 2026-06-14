@@ -3277,15 +3277,15 @@
             const reviewMeta = getPatientDateReviewMeta(patient);
             const dateContext = reviewMeta.findingsDateContexts?.[normalizedCode];
             if (dateContext?.date === normalizedFindingDate && dateContext.context === 'confirmed-defaulted') {
-                return `Investigation date ${normalizedFindingDate} - confirmed after missing/invalid import date defaulted to record-created date`;
+                return `No Actual Date provided - Defaulting to Record Creation Date Instead (${normalizedFindingDate})`;
             }
             if (reviewMeta.findingsDatesDefaulted?.[normalizedCode] === normalizedFindingDate) {
-                return `Investigation date ${normalizedFindingDate} - defaulted from missing/invalid entry; needs review`;
+                return `No Actual Date provided - Defaulting to Record Creation Date Instead (${normalizedFindingDate})`;
             }
 
             const recordCreationDate = getPatientRecordCreationDate(patient);
             if (recordCreationDate && normalizedFindingDate < recordCreationDate) {
-                return `Investigation date ${normalizedFindingDate} - historical/prior data entered with this record`;
+                return `Prior/historical data - investigation dated ${normalizedFindingDate} (before record creation ${recordCreationDate})`;
             }
             if (recordCreationDate && normalizedFindingDate > recordCreationDate) {
                 return `Investigation date ${normalizedFindingDate} - dated after record creation`;
@@ -8788,12 +8788,12 @@
             const summaryLines = [];
 
             if (normalizedMeta.visitDateDefaultedTo) {
-                summaryLines.push(`Visit date defaulted to created-on date (${normalizedMeta.visitDateDefaultedTo}). Update it to clear the amber highlight.`);
+                summaryLines.push(`No Actual Date provided for Visit Date - Defaulting to Record Creation Date Instead (${normalizedMeta.visitDateDefaultedTo}). Update it to clear the amber highlight.`);
             }
 
             const flaggedFindingCodes = Object.keys(normalizedMeta.findingsDatesDefaulted);
             if (flaggedFindingCodes.length) {
-                summaryLines.push(`${flaggedFindingCodes.length} finding date${flaggedFindingCodes.length === 1 ? '' : 's'} defaulted to created-on date. Update the amber-highlighted finding date field${flaggedFindingCodes.length === 1 ? '' : 's'} to clear the review flag.`);
+                summaryLines.push(`${flaggedFindingCodes.length} finding date${flaggedFindingCodes.length === 1 ? '' : 's'} with No Actual Date provided - Defaulting to Record Creation Date Instead. Update the amber-highlighted finding date field${flaggedFindingCodes.length === 1 ? '' : 's'} to clear the review flag.`);
             }
 
             return summaryLines;
@@ -8830,7 +8830,7 @@
                     value: normalizedMeta.visitDateDefaultedTo,
                     selector: '#f-date',
                     source: 'Form field: f-date',
-                    hint: 'Visit Date was missing or invalid, so it was defaulted to the record created-on date. Correct the date if this is wrong, or confirm it is clinically correct.'
+                    hint: 'No Actual Date provided - Defaulting to Record Creation Date Instead. Correct the date if this is wrong, or confirm it is clinically correct.'
                 });
             }
             Object.keys(normalizedMeta.findingsDatesDefaulted).sort().forEach((code) => {
@@ -8842,7 +8842,7 @@
                     value: normalizedMeta.findingsDatesDefaulted[code],
                     selector: `input.findings-date[data-code="${escapeCssSelectorValue(code)}"]`,
                     source: `Investigation field: findingsDates.${code}`,
-                    hint: `${label} date was missing or invalid, so it was defaulted to the record created-on date. Correct the date if this investigation was done on a different day, or confirm this date is clinically correct.`
+                    hint: `No Actual Date provided for ${label} - Defaulting to Record Creation Date Instead. Correct the date if this investigation was done on a different day, or confirm this date is clinically correct.`
                 });
             });
             return items;
@@ -9096,9 +9096,34 @@
             if (!banner) return;
 
             const issueItems = getDateReviewIssueItems(reviewMeta);
+
+            const visitReferenceDate = normalizeProcedureDateValue(visitDateInput?.value || '');
+            const priorDateItems = [];
+            selectedCodes.forEach((code) => {
+                if (reviewMeta.findingsDatesDefaulted[code]) return;
+                const findingDateInput = document.querySelector(`input.findings-date[data-code="${escapeCssSelectorValue(code)}"]`);
+                const findingDate = normalizeProcedureDateValue(findingDateInput?.value || '');
+                if (!findingDate || !visitReferenceDate || findingDate >= visitReferenceDate) return;
+                priorDateItems.push({ label: getFindingDateReviewLabel(code), date: findingDate });
+            });
+
+            const priorDateNotes = priorDateItems.length ? `
+                <div class="rounded border border-blue-300 bg-blue-50 p-2 text-xs text-blue-900">
+                    <div class="font-semibold">Prior/historical investigation date${priorDateItems.length === 1 ? '' : 's'} (entered before the record date — kept as-is, no review needed):</div>
+                    <ul class="ml-4 list-disc">
+                        ${priorDateItems.map(item => `<li>${escapeInlineHtml(item.label)} = <span class="font-mono">${escapeInlineHtml(item.date)}</span></li>`).join('')}
+                    </ul>
+                </div>` : '';
+
             if (!issueItems.length) {
-                banner.classList.add('hidden');
-                banner.innerHTML = '';
+                if (!priorDateItems.length) {
+                    banner.classList.add('hidden');
+                    banner.innerHTML = '';
+                    setDateReviewScanning(false);
+                    return;
+                }
+                banner.classList.remove('hidden');
+                banner.innerHTML = `<div class="space-y-2">${priorDateNotes}</div>`;
                 setDateReviewScanning(false);
                 return;
             }
@@ -9118,6 +9143,7 @@
                     <div>${escapeInlineHtml(currentIssue.hint)}</div>
                     ${issueItems.length > 1 ? `<ol class="ml-4 list-decimal space-y-1 text-xs">${reviewQueue}</ol>` : ''}
                     ${issueItems.length > 1 ? `<div class="text-xs text-amber-800">Resolve this item first. The record will rescan before the next item is shown.</div>` : ''}
+                    ${priorDateNotes}
                     <div class="flex flex-wrap gap-2 pt-1">
                         <button type="button" onclick="globalThis.focusDateReviewIssue('${escapeInlineHtml(currentIssue.key)}')" class="rounded bg-amber-200 px-2.5 py-1 font-bold text-amber-950 hover:bg-amber-300">Edit highlighted date</button>
                         <button type="button" onclick="globalThis.confirmDateReviewIssue('${escapeInlineHtml(currentIssue.key)}')" class="rounded bg-blue-600 px-2.5 py-1 font-bold text-white hover:bg-blue-700">Confirm this date is correct</button>
@@ -9875,8 +9901,8 @@ const findHeaderIndex = (rows, sheetLog) => {
         }
         
         // Version enforcement to prevent cache reversion
-        const EXPECTED_VERSION = '2026-02-08T07:50:00Z';
-        const CURRENT_VERSION = '2026-02-08T07:50:00Z';
+        const EXPECTED_VERSION = '2026-06-14T00:00:00Z';
+        const CURRENT_VERSION = '2026-06-14T00:00:00Z';
         const storedVersion = sessionStorage.getItem('appVersion');
         
         // Detect and fix version mismatches
@@ -10490,7 +10516,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         }
         
         // Version marker for debugging - includes timestamp to prevent cache reversion
-        console.log('%c🔄 App Version: 2026-02-08 07:50 - Save Fix V22 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
+        console.log('%c🔄 App Version: 2026-06-14 - Investigation Date Context V23 [' + CURRENT_VERSION + '] (enforced)', 'background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold;');
         
         // Global form submission blocker - prevents double submissions
         console.log('📋 Setting up global form submission blocker...');
