@@ -8890,10 +8890,20 @@
                 Object.entries(findingsDatesDefaulted).filter(([code, defaultedDate]) => {
                     const normalizedFindingDate = normalizeProcedureDateValue(findingsDates?.[code] || '');
                     const normalizedDefaultedDate = normalizeProcedureDateValue(defaultedDate);
+                    
+                    // Migration fix: If date is in findingsDates, user explicitly entered it → remove from defaulted set
+                    // This covers same-day entries from records created before explicit-marking code existed
+                    if (normalizedFindingDate && normalizedFindingDate === normalizedDefaultedDate) {
+                        return false;  // Remove from defaulted (user entered this date explicitly)
+                    }
+                    
+                    // Prior dates (before record creation) are valid clinical data, not missing/defaulted dates
                     if (normalizedFindingDate && normalizedFindingDate < recordDate) return false;
+                    
                     if (!normalizedDefaultedDate) return true; // Keep unparseable dates
+                    
                     // Only keep in "defaulted" set if date is >= record creation (not prior).
-                    // Prior dates are valid clinical data, not defaults.
+                    // Dates equal to or after record creation that have no actual date entry are potentially missing.
                     return normalizedDefaultedDate >= recordDate;
                 })
             );
