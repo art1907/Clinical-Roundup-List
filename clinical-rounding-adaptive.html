@@ -8832,7 +8832,10 @@
 
         const hasDateReviewIssues = (meta = {}) => {
             const normalizedMeta = normalizeDateReviewMeta(meta);
-            return Boolean(normalizedMeta.visitDateDefaultedTo || Object.keys(normalizedMeta.findingsDatesDefaulted).length);
+            // Only flag MISSING dates that were auto-populated, not prior dates which are clinically valid.
+            // Prior investigation dates (before record creation) are expected — they indicate the test was done earlier.
+            if (normalizedMeta.visitDateDefaultedTo) return true;
+            return Object.keys(normalizedMeta.findingsDatesDefaulted).length > 0;
         };
 
         const hasDateReviewPersistence = (meta = {}) => {
@@ -8855,6 +8858,17 @@
             let parsedMeta = {};
             try {
                 parsedMeta = JSON.parse(decodeURIComponent(markerMatch[1] || ''));
+                
+                // DRIFT FIX: Clean up prior investigation dates from "defaulted" flagged set.
+                // Prior dates are clinically valid (test done before record created), not errors.
+                // Only truly missing/inferred dates should flag for review.
+                if (parsedMeta.findingsDatesDefaulted && parsedMeta.createdOnDate) {
+                    parsedMeta.findingsDatesDefaulted = clearPriorDatesFlagFromDefaulted(
+                        parsedMeta.findingsDates || {},
+                        parsedMeta.findingsDatesDefaulted,
+                        parsedMeta.createdOnDate
+                    );
+                }
             } catch (error) {
                 console.warn('Unable to parse stored date review metadata:', error);
             }
@@ -8873,6 +8887,23 @@
         };
 
         const getPatientDateReviewMeta = (patient = {}) => parseProgressNotesWithDateReviewMeta(patient.progressNotes || '').reviewMeta;
+
+        // Clean up legacy records: prior investigation dates are clinically valid and should not be flagged.
+        // This removes dates from "defaulted" set if they are prior to record creation (not missing/inferred).
+        const clearPriorDatesFlagFromDefaulted = (findingsDates = {}, findingsDatesDefaulted = {}, recordCreationDate = '') => {
+            const recordDate = normalizeProcedureDateValue(recordCreationDate);
+            if (!recordDate) return findingsDatesDefaulted;
+            
+            return Object.fromEntries(
+                Object.entries(findingsDatesDefaulted).filter(([code, defaultedDate]) => {
+                    const normalizedDefaultedDate = normalizeProcedureDateValue(defaultedDate);
+                    if (!normalizedDefaultedDate) return true; // Keep unparseable dates
+                    // Only keep in "defaulted" set if date is >= record creation (not prior).
+                    // Prior dates are valid clinical data, not defaults.
+                    return normalizedDefaultedDate >= recordDate;
+                })
+            );
+        };
 
         const buildProgressNotesWithDateReviewMeta = (visibleText = '', reviewMeta = {}) => {
             const cleanedVisibleText = String(visibleText || '').replace(/(?:\r?\n)?\[\[SYS_DATE_REVIEW_META=[^\]]+\]\]\s*$/, '').trimEnd();
