@@ -3265,6 +3265,22 @@
             return segments.join(', ');
         }
 
+        function extractInvestigationDateText(rawValue) {
+            if (rawValue == null) return '';
+            const text = typeof rawValue === 'string'
+                ? rawValue
+                : (typeof rawValue === 'object' ? JSON.stringify(rawValue) : String(rawValue));
+            if (!text) return '';
+
+            const isoLike = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+            if (isoLike?.[1]) return isoLike[1];
+
+            const slashLike = text.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/);
+            if (slashLike?.[1]) return slashLike[1];
+
+            return '';
+        }
+
         function escapeInlineHtml(value) {
             return String(value == null ? '' : value)
                 .replaceAll('&', '&amp;')
@@ -10692,6 +10708,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                     delete findingsDates[code];
                 }
             });
+            findingsCodes.forEach((code) => {
+                if (findingsDates[code]) return;
+                const rawValue = findingsValues[code];
+                const inferredDate = extractInvestigationDateText(rawValue);
+                if (inferredDate) findingsDates[code] = inferredDate;
+            });
             if (datesInput) {
                 datesInput.value = JSON.stringify(findingsDates);
             }
@@ -12985,6 +13007,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                         });
                         if (hasCustomValue) {
                             values[code] = customValues;
+                            if (!dates[code]) {
+                                const inferredDate = extractInvestigationDateText(customValues.comments || customValues.date || customValues.notes || customValues.note || Object.values(customValues).join(' '));
+                                if (inferredDate) dates[code] = inferredDate;
+                            }
                         }
                         if (valueInput) {
                             valueInput.disabled = true;
@@ -12998,6 +13024,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                         valueInput.readOnly = !editable;
                         valueInput.style.display = checked ? 'block' : 'none';
                         if (checked && valueInput.value) values[code] = valueInput.value;
+                        if (checked && !dates[code] && valueInput.value) {
+                            const inferredDate = extractInvestigationDateText(valueInput.value);
+                            if (inferredDate) dates[code] = inferredDate;
+                        }
                     }
                 });
 
