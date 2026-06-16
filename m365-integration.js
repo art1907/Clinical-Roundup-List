@@ -267,6 +267,20 @@ function normalizeDateFromSharePoint(value) {
     const text = String(value).trim();
     // Already normalized for date inputs and calendar comparisons.
     if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    
+    // Handle MM/DD/YYYY format (US/Canada)
+    const mmddyyyyMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mmddyyyyMatch) {
+        const [, m, d, y] = mmddyyyyMatch;
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+    
+    // Handle MM-DD-YYYY format (with dashes)
+    const mmddyyyyDashMatch = text.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (mmddyyyyDashMatch) {
+        const [, m, d, y] = mmddyyyyDashMatch;
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
 
     const parsed = new Date(text);
     if (Number.isNaN(parsed.getTime())) return text;
@@ -877,20 +891,22 @@ async function api_fetchPatients(dateFilter = null) {
             const rawPriority = item.fields.Priority ?? item.fields.Stat ?? item.fields.STAT ?? item.fields.StatPriority ?? item.fields.IsSTAT;
             const statValue = parseBoolish(rawPriority);
             
-            // Load FindingsData with envelope support: { values, meta } (new) or legacy values map.
+            // Load FindingsData with envelope support: { values, dates, meta } (new) or legacy values map.
             const rawFindingsData = safeJsonParse(item.fields.FindingsData, {}, `FindingsData for item ${item.id}`);
             let findingsValues = {};
+            let findingsDates = {};
             let findingsMeta = {};
-            if (rawFindingsData && typeof rawFindingsData === 'object' && 'values' in rawFindingsData && 'meta' in rawFindingsData) {
-                // Enveloped format
+            if (rawFindingsData && typeof rawFindingsData === 'object' && 'values' in rawFindingsData) {
+                // Enveloped format: { values, dates, meta }
                 findingsValues = rawFindingsData.values || {};
+                findingsDates = rawFindingsData.dates || {};
                 findingsMeta = rawFindingsData.meta || {};
             } else {
                 // Legacy format: FindingsData is the values map directly
                 findingsValues = rawFindingsData;
+                // Try to load FindingsDates from separate field if it exists (backward compat)
+                findingsDates = safeJsonParse(item.fields.FindingsDates, {}, `FindingsDates for item ${item.id}`);
             }
-            
-            const findingsDates = safeJsonParse(item.fields.FindingsDates, {}, `FindingsDates for item ${item.id}`);
             const procedureValues = safeJsonParse(item.fields.ProcedureData, {}, `ProcedureData for item ${item.id}`);
             const procedureDates = safeJsonParse(item.fields.ProcedureDates, {}, `ProcedureDates for item ${item.id}`);
             const findingsCodes = Array.from(new Set([
@@ -1079,18 +1095,16 @@ async function api_savePatient(patientData) {
         Hospital: patientData.hospital || '',
         VisitKey: visitKeyValue,
         [VISIT_TIME_FIELD]: visitTimeValue,
-        FindingsCodes: Array.isArray(patientData.findingsCodes)
-            ? patientData.findingsCodes.map((code) => String(code || '').trim()).filter(Boolean).join(',')
-            : '',
         FindingsData: (() => {
-            // Create findings envelope: { values, meta }. m365 load will detect this on read.
+            // Create findings envelope: { values, dates, meta }. SharePoint only has FindingsData, not separate FindingsCodes/FindingsDates.
+            // This way dates get saved with values and won't be lost when separate fields are rejected with 400 error.
             const envelope = {
                 values: patientData.findingsValues ? patientData.findingsValues : {},
+                dates: patientData.findingsDates ? patientData.findingsDates : {},
                 meta: patientData.findingsMeta ? patientData.findingsMeta : {}
             };
             return JSON.stringify(envelope);
         })(),
-        FindingsDates: patientData.findingsDates ? JSON.stringify(patientData.findingsDates) : '{}',
         ProcedureCodes: Array.isArray(patientData.procedureCodes)
             ? patientData.procedureCodes.map((code) => String(code || '').trim()).filter(Boolean).join(',')
             : '',
