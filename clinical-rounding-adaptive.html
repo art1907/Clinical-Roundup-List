@@ -3285,8 +3285,13 @@
             const findingsDates = patient.findingsDates && typeof patient.findingsDates === 'object'
                 ? patient.findingsDates
                 : {};
-            const normalizedFindingDate = normalizeProcedureDateValue(findingsDates[normalizedCode]);
-            if (!normalizedFindingDate) return '';
+            const rawFindingDate = String(findingsDates[normalizedCode] || '').trim();
+            if (!rawFindingDate) return '';
+            const normalizedFindingDate = normalizeProcedureDateValue(rawFindingDate);
+            if (!normalizedFindingDate) {
+                // Keep showing user-entered date text even when format is non-standard.
+                return `Investigation date ${rawFindingDate}`;
+            }
 
             const reviewMeta = getPatientDateReviewMeta(patient);
             const dateContext = reviewMeta.findingsDateContexts?.[normalizedCode];
@@ -10674,7 +10679,22 @@ const findHeaderIndex = (rows, sheetLog) => {
             const valuesInput = document.getElementById('f-findings-values');
             const findingsValues = valuesInput.value ? JSON.parse(valuesInput.value) : {};
             const datesInput = document.getElementById('f-findings-dates');
-            const findingsDates = datesInput.value ? JSON.parse(datesInput.value) : {};
+            let findingsDates = datesInput.value ? JSON.parse(datesInput.value) : {};
+            // Rebuild findings dates from visible inputs so typed date text is never dropped.
+            const selectedCodes = new Set(findingsCodes);
+            document.querySelectorAll('input.findings-date[data-code]').forEach((input) => {
+                const code = String(input.dataset.code || '').trim();
+                if (!code || !selectedCodes.has(code)) return;
+                const value = String(input.value || '').trim();
+                if (value) {
+                    findingsDates[code] = value;
+                } else {
+                    delete findingsDates[code];
+                }
+            });
+            if (datesInput) {
+                datesInput.value = JSON.stringify(findingsDates);
+            }
             const metaInput = document.getElementById('f-findings-meta');
             let findingsMeta = metaInput.value ? JSON.parse(metaInput.value) : {};
             
