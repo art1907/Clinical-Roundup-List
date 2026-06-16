@@ -8858,17 +8858,6 @@
             let parsedMeta = {};
             try {
                 parsedMeta = JSON.parse(decodeURIComponent(markerMatch[1] || ''));
-                
-                // DRIFT FIX: Clean up prior investigation dates from "defaulted" flagged set.
-                // Prior dates are clinically valid (test done before record created), not errors.
-                // Only truly missing/inferred dates should flag for review.
-                if (parsedMeta.findingsDatesDefaulted && parsedMeta.createdOnDate) {
-                    parsedMeta.findingsDatesDefaulted = clearPriorDatesFlagFromDefaulted(
-                        parsedMeta.findingsDates || {},
-                        parsedMeta.findingsDatesDefaulted,
-                        parsedMeta.createdOnDate
-                    );
-                }
             } catch (error) {
                 console.warn('Unable to parse stored date review metadata:', error);
             }
@@ -8886,7 +8875,10 @@
             return parseProgressNotesWithDateReviewMeta(patientOrNotes).visibleText;
         };
 
-        const getPatientDateReviewMeta = (patient = {}) => parseProgressNotesWithDateReviewMeta(patient.progressNotes || '').reviewMeta;
+        const getPatientDateReviewMeta = (patient = {}) => {
+            const parsedMeta = parseProgressNotesWithDateReviewMeta(patient.progressNotes || '').reviewMeta;
+            return cleanDateReviewMetaForPatient(parsedMeta, patient);
+        };
 
         // Clean up legacy records: prior investigation dates are clinically valid and should not be flagged.
         // This removes dates from "defaulted" set if they are prior to record creation (not missing/inferred).
@@ -8896,13 +8888,29 @@
             
             return Object.fromEntries(
                 Object.entries(findingsDatesDefaulted).filter(([code, defaultedDate]) => {
+                    const normalizedFindingDate = normalizeProcedureDateValue(findingsDates?.[code] || '');
                     const normalizedDefaultedDate = normalizeProcedureDateValue(defaultedDate);
+                    if (normalizedFindingDate && normalizedFindingDate < recordDate) return false;
                     if (!normalizedDefaultedDate) return true; // Keep unparseable dates
                     // Only keep in "defaulted" set if date is >= record creation (not prior).
                     // Prior dates are valid clinical data, not defaults.
                     return normalizedDefaultedDate >= recordDate;
                 })
             );
+        };
+
+        const cleanDateReviewMetaForPatient = (meta = {}, patient = {}) => {
+            const normalizedMeta = normalizeDateReviewMeta(meta);
+            const findingsDates = patient.findingsDates && typeof patient.findingsDates === 'object'
+                ? patient.findingsDates
+                : {};
+            const recordCreationDate = normalizedMeta.createdOnDate || getPatientRecordCreationDate(patient);
+            normalizedMeta.findingsDatesDefaulted = clearPriorDatesFlagFromDefaulted(
+                findingsDates,
+                normalizedMeta.findingsDatesDefaulted,
+                recordCreationDate
+            );
+            return normalizeDateReviewMeta(normalizedMeta);
         };
 
         const buildProgressNotesWithDateReviewMeta = (visibleText = '', reviewMeta = {}) => {
@@ -9079,7 +9087,16 @@
                 if (!normalizedFindingsDate) {
                     nextFindingsDates[code] = effectiveCreatedOnDate;
                     normalizedMeta.findingsDatesDefaulted[code] = effectiveCreatedOnDate;
+                    delete normalizedMeta.findingsDateContexts[code];
                     appliedDefaults.push(`findings:${code}`);
+                    return;
+                }
+
+                const dateContext = normalizedMeta.findingsDateContexts[code];
+                const userAcceptedOrEnteredDate = dateContext?.date === normalizedFindingsDate
+                    && ['confirmed-defaulted', 'explicit'].includes(dateContext.context);
+                if (userAcceptedOrEnteredDate) {
+                    delete normalizedMeta.findingsDatesDefaulted[code];
                 } else if (normalizedMeta.findingsDatesDefaulted[code] && normalizedFindingsDate !== normalizedMeta.findingsDatesDefaulted[code]) {
                     delete normalizedMeta.findingsDatesDefaulted[code];
                 }
@@ -9179,6 +9196,33 @@
             setFormDateReviewMeta(reviewMeta);
             addPendingDateReviewReason(`${acceptedLabel} (${normalizedValue}) accepted from highlighted date field.`);
             return true;
+        }
+
+        function markFindingDateCodeAsExplicit(code, value) {
+            const normalizedCode = String(code || '').trim();
+            const normalizedValue = normalizeProcedureDateValue(value);
+            if (!normalizedCode || !normalizedValue) return false;
+
+            const reviewMeta = getFormDateReviewMeta();
+            delete reviewMeta.findingsDatesDefaulted[normalizedCode];
+            reviewMeta.findingsDateContexts[normalizedCode] = {
+                date: normalizedValue,
+                context: 'explicit'
+            };
+            if (!hasDateReviewPersistence(reviewMeta)) {
+                reviewMeta.createdOnDate = '';
+            }
+            setFormDateReviewMeta(reviewMeta);
+            return true;
+        }
+
+        function markFindingDateAsExplicit(input) {
+            if (!input || !input.classList?.contains('findings-date')) return false;
+            const code = String(input.dataset.code || '').trim();
+            const normalizedValue = normalizeProcedureDateValue(input.value);
+            if (!code || !normalizedValue) return false;
+
+            return markFindingDateCodeAsExplicit(code, normalizedValue);
         }
 
         function syncDateReviewUI() {
@@ -10743,7 +10787,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                 if (findingsDates[code]) return;
                 const rawValue = findingsValues[code];
                 const inferredDate = extractInvestigationDateText(rawValue);
-                if (inferredDate) findingsDates[code] = inferredDate;
+                if (inferredDate) {
+                    findingsDates[code] = inferredDate;
+                    markFindingDateCodeAsExplicit(code, inferredDate);
+                }
             });
             if (datesInput) {
                 datesInput.value = JSON.stringify(findingsDates);
@@ -13040,7 +13087,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                             values[code] = customValues;
                             if (!dates[code]) {
                                 const inferredDate = extractInvestigationDateText(customValues.comments || customValues.date || customValues.notes || customValues.note || Object.values(customValues).join(' '));
-                                if (inferredDate) dates[code] = inferredDate;
+                                if (inferredDate) {
+                                    dates[code] = inferredDate;
+                                    markFindingDateCodeAsExplicit(code, inferredDate);
+                                }
                             }
                         }
                         if (valueInput) {
@@ -13057,7 +13107,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                         if (checked && valueInput.value) values[code] = valueInput.value;
                         if (checked && !dates[code] && valueInput.value) {
                             const inferredDate = extractInvestigationDateText(valueInput.value);
-                            if (inferredDate) dates[code] = inferredDate;
+                            if (inferredDate) {
+                                dates[code] = inferredDate;
+                                markFindingDateCodeAsExplicit(code, inferredDate);
+                            }
                         }
                     }
                 });
@@ -13092,17 +13145,18 @@ const findHeaderIndex = (rows, sheetLog) => {
             document.querySelectorAll('input.findings-date').forEach(input => {
                 input.addEventListener('change', () => {
                     const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
-                    acceptDateReviewInputValue(input);
+                    if (!acceptDateReviewInputValue(input)) markFindingDateAsExplicit(input);
                     updateSelectedCodes();
                     rescanDateReviewAfterManualEdit(hadIssuesBeforeEdit);
                 });
                 input.addEventListener('input', () => {
+                    markFindingDateAsExplicit(input);
                     updateSelectedCodes();
                 });
                 input.addEventListener('blur', () => {
                     const hadIssuesBeforeEdit = hasDateReviewIssues(getFormDateReviewMeta());
                     if (input.dataset.dateReviewFocused === 'true') {
-                        acceptDateReviewInputValue(input);
+                        if (!acceptDateReviewInputValue(input)) markFindingDateAsExplicit(input);
                         delete input.dataset.dateReviewFocused;
                     }
                     updateSelectedCodes();
