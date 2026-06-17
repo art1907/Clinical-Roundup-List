@@ -3290,6 +3290,24 @@
                 .replaceAll("'", '&#39;');
         }
 
+        // Format a UTC/ISO timestamp into the viewer's local wall-clock time with a timezone
+        // abbreviation (e.g. "10:50 AM PDT"). UTC is stored; display is localized per viewer.
+        function formatLocalTimeWithZone(value) {
+            if (!value) return '';
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) return '';
+            return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+        }
+
+        // Format a UTC/ISO timestamp into the viewer's local date + time with a timezone
+        // abbreviation (e.g. "6/13/2026, 10:50 AM PDT").
+        function formatLocalDateTimeWithZone(value) {
+            if (!value) return '';
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) return '';
+            return parsed.toLocaleString([], { timeZoneName: 'short' });
+        }
+
         function getPatientRecordCreationDate(patient = {}) {
             const visitTimeDate = String(patient.visitTime || '').split('T')[0];
             return normalizeProcedureDateValue(visitTimeDate) || normalizeProcedureDateValue(patient.date) || '';
@@ -6168,7 +6186,7 @@
 
                 tableBody.innerHTML = logs.slice(0, 500).map((entry, idx) => {
                     const rowId = `arow-${idx}`;
-                    const when = entry.normalizedTimestamp ? new Date(entry.normalizedTimestamp).toLocaleString() : '-';
+                    const when = entry.normalizedTimestamp ? formatLocalDateTimeWithZone(entry.normalizedTimestamp) : '-';
                     const user = safeText(entry.userId || entry.userIdentity || 'unknown');
                     const action = entry.normalizedAction;
                     const recordId = entry.recordId || entry.patientId || '-';
@@ -11371,7 +11389,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     'reconciliation_issue': '❓ Reconciliation Issue'
                 }[reason] || reason;
 
-                const timeLabel = new Date(timestamp).toLocaleString();
+                const timeLabel = formatLocalDateTimeWithZone(timestamp);
 
                 html += `
                     <div class="border-2 ${bgColor} rounded-lg p-3 flex gap-3">
@@ -11726,7 +11744,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const status = getSafeConfiguredStatus(getPatientStatus(p));
                 const statusObj = STATUS_COLORS[status] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || STATUS_COLORS['To-Do'];
                 const findingsDisplay = getFindingsDisplay(p);
-                const visitTimeDisplay = p.visitTime ? new Date(p.visitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                const visitTimeDisplay = p.visitTime ? formatLocalTimeWithZone(p.visitTime) : '';
                 const isCrossedOut = isPatientCrossedOut(p.id);
                 const crossedOutClass = isCrossedOut ? 'cross-out-target' : '';
                 
