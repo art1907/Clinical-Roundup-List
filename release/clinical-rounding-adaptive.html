@@ -4609,6 +4609,81 @@
             showToast(result.failed ? `⚠️ ${result.deleted} deleted, ${result.failed} failed` : `🗑️ ${result.deleted} records deleted`);
         };
 
+        function getUniqueDeletionTargets(records) {
+            const seen = new Set();
+            return records.filter((patient) => {
+                if (!patient || !patient.id || seen.has(patient.id)) return false;
+                seen.add(patient.id);
+                return true;
+            });
+        }
+
+        async function runMassDelete(records, actionLabel) {
+            const targets = getUniqueDeletionTargets(records || []);
+            if (!targets.length) {
+                showToast('No records matched this delete action');
+                return;
+            }
+
+            if (!confirm(`⚠️ ${actionLabel}: DELETE ${targets.length} records? This cannot be undone.`)) return;
+            const typed = prompt(`Type NUKE to confirm: ${actionLabel} (${targets.length} records)`);
+            if ((typed || '').trim().toUpperCase() !== 'NUKE') {
+                showToast('Mass delete canceled');
+                return;
+            }
+
+            const changeNote = await getRequiredChangeNote(actionLabel.toLowerCase());
+            if (!changeNote) return;
+
+            const ids = targets.map((patient) => patient.id);
+            const auditUser = (typeof globalThis.m365GetCurrentUser === 'function' ? globalThis.m365GetCurrentUser() : '') || currentUser || 'unknown';
+            const useCloud = isConnected && useM365 && typeof globalThis.m365DeletePatient === 'function';
+
+            if (useCloud) {
+                showToast(`⏳ ${actionLabel}: deleting ${ids.length} records…`);
+                queuePendingPatientSyncGuard({ deletedIds: new Set(ids), changeNote });
+            }
+
+            const result = useCloud
+                ? await deletePatientsFromCloud(ids, auditUser)
+                : deletePatientsLocally(ids, auditUser);
+
+            selectedPatientIds.clear();
+            renderUI();
+            updateBatchOpCount();
+            showToast(result.failed ? `⚠️ ${result.deleted} deleted, ${result.failed} failed` : `🧨 ${result.deleted} records deleted`);
+        }
+
+        globalThis.nukeFilteredPatients = async () => {
+            await runMassDelete(getFilteredData(), 'Nuke Filtered');
+        };
+
+        globalThis.dropPatientsTable = async () => {
+            await runMassDelete(patients, 'Drop Patients Table');
+        };
+
+        function getRecordsForCurrentTab() {
+            if (currentTab === 'archive') {
+                return patients.filter(p => isArchivedRecord(p));
+            } else if (currentTab === 'active') {
+                return patients.filter(p => !isArchivedRecord(p));
+            } else if (currentTab === 'procedures') {
+                const surgical = patients.filter(p => !isArchivedRecord(p) && (PROC_KEYWORDS.test(p.plan || '') || PROC_KEYWORDS.test(p.findingsText || '')));
+                return surgical;
+            } else {
+                return [];
+            }
+        }
+
+        globalThis.dropCurrentTab = async () => {
+            const tabLabel = {
+                'active': 'Active Tab',
+                'archive': 'Archive Tab',
+                'procedures': 'Procedures Tab'
+            }[currentTab] || 'Current Tab';
+            await runMassDelete(getRecordsForCurrentTab(), `Drop ${tabLabel}`);
+        };
+
         // Cancel Batch Operation
         globalThis.cancelBatchOp = () => {
             selectedPatientIds.clear();
@@ -13444,6 +13519,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <button onclick="globalThis.setQuickFilter('procedures')" class="px-2 py-1 bg-blue-100 border border-blue-300 text-blue-700 text-xs rounded hover:bg-blue-200">Procedures 🔵</button>
                     <button onclick="globalThis.setQuickFilter('inprogress')" class="px-2 py-1 bg-yellow-100 border border-yellow-300 text-yellow-700 text-xs rounded hover:bg-yellow-200">In Progress ⚡</button>
                     <button onclick="globalThis.setQuickFilter('pending')" class="px-2 py-1 bg-orange-100 border border-orange-300 text-orange-700 text-xs rounded hover:bg-orange-200">Pending Tests 📋</button>
+                    <button onclick="globalThis.nukeFilteredPatients()" class="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">Nuke Filtered</button>
+                    <button onclick="globalThis.dropCurrentTab()" class="px-2 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700">Drop Tab</button>
+                    <button onclick="globalThis.dropPatientsTable()" class="px-2 py-1 bg-black text-white text-xs rounded hover:bg-slate-800">Drop Table</button>
                     <button onclick="globalThis.clearSearch()" class="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300">Clear</button>
                 </div>
             </div>
