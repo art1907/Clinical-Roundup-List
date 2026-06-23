@@ -4253,12 +4253,18 @@
             const theme = localStorage.getItem('app-theme') || 'light';
             const textSize = localStorage.getItem('app-text-size') || '1';
             const highContrast = localStorage.getItem('app-high-contrast') === 'true';
+            const autoSaveInterval = localStorage.getItem('app-autosave-interval') || '10';
             
             setTheme(theme);
             setTextSize(textSize);
             if (highContrast) {
                 document.getElementById('high-contrast-toggle').checked = true;
                 toggleHighContrast(true);
+            }
+
+            const autoSaveSelect = document.getElementById('settings-autosave-interval');
+            if (autoSaveSelect) {
+                autoSaveSelect.value = autoSaveInterval;
             }
             
             // Load column visibility
@@ -4813,15 +4819,53 @@
             input.click();
         };
 
+        function clearScopedLocalStorageData() {
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (!key) continue;
+                if (
+                    key.startsWith('app-') ||
+                    key.startsWith('m365_cache_') ||
+                    key === 'patientDraft' ||
+                    key === 'm365_session_epoch' ||
+                    key === 'm365_auth_at'
+                ) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach((key) => localStorage.removeItem(key));
+        }
+
         // Clear All Data
-        globalThis.clearAllData = () => {
-            patients = [];
-            onCallSchedule = [];
-            globalSettings = { onCall: "", hospitals: "" };
-            selectedPatientIds.clear();
-            localStorage.clear();
-            renderUI();
-            showToast('🗑️ All data cleared');
+        globalThis.clearAllData = async () => {
+            const useCloudClear = Boolean(isConnected && useM365 && typeof globalThis.m365ClearAllData === 'function');
+
+            try {
+                if (useCloudClear) {
+                    showToast('🧹 Clearing SharePoint + local data...');
+                    await globalThis.m365ClearAllData();
+                }
+
+                patients = [];
+                onCallSchedule = [];
+                globalSettings = { onCall: "", hospitals: "" };
+                selectedPatientIds.clear();
+                crossedOutPatientIds = new Set();
+                persistCrossedOutPatientIds();
+                clearDraft();
+                clearScopedLocalStorageData();
+                renderUI();
+
+                if (useCloudClear) {
+                    showToast('🗑️ All SharePoint + local data cleared');
+                } else {
+                    showToast('🗑️ All local data cleared');
+                }
+            } catch (error) {
+                console.error('Clear-all error:', error);
+                showToast('❌ Could not clear all data');
+            }
         };
 
         // Set Auto-Save Interval
@@ -8600,6 +8644,13 @@
                 setTimeout(() => indicator.classList.add('opacity-0'), 2000);
             }
         }
+
+        function getDraftAutosaveDelayMs() {
+            const configuredSeconds = Number.parseInt(localStorage.getItem('app-autosave-interval') || '10', 10);
+            const safeSeconds = Number.isFinite(configuredSeconds) && configuredSeconds > 0 ? configuredSeconds : 10;
+            return safeSeconds * 1000;
+        }
+
         globalThis.closeMapper = () => {
             document.body.classList.remove('no-scroll');
             document.getElementById('mapper-modal')?.classList.add('hidden');
@@ -13241,7 +13292,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             formInputs.forEach(input => {
                 input.addEventListener('input', () => {
                     clearTimeout(draftTimer);
-                    draftTimer = setTimeout(saveDraft, 1500); // Save draft 1.5s after typing stops
+                    draftTimer = setTimeout(saveDraft, getDraftAutosaveDelayMs());
                 });
             });
             ['f-name', 'f-dob', 'f-mrn'].forEach((fieldId) => {
@@ -13486,7 +13537,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 <!-- Auto-save Interval -->
                 <div class="settings-group">
                     <div class="settings-label">⏱️ Auto-Save Interval</div>
-                    <select onchange="globalThis.setAutoSaveInterval(this.value)" class="w-full p-2 border border-slate-300 rounded text-sm">
+                    <select id="settings-autosave-interval" onchange="globalThis.setAutoSaveInterval(this.value)" class="w-full p-2 border border-slate-300 rounded text-sm">
                         <option value="5">5 seconds</option>
                         <option value="10" selected>10 seconds</option>
                         <option value="30">30 seconds</option>
