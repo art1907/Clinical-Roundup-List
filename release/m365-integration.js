@@ -1579,6 +1579,52 @@ async function api_saveSetting(key, value) {
     }
 }
 
+async function api_clearAllData() {
+    const [patients, schedule] = await Promise.all([
+        api_fetchPatients(),
+        api_fetchOnCallSchedule()
+    ]);
+
+    let deletedPatients = 0;
+    let deletedOnCallShifts = 0;
+
+    for (const patient of patients) {
+        const itemId = normalizeSharePointListItemId(patient?.id);
+        if (!itemId) continue;
+        try {
+            await api_deletePatient(itemId);
+            deletedPatients += 1;
+        } catch (err) {
+            console.warn('Skipping patient delete due to error:', patient?.id, err?.message || err);
+        }
+    }
+
+    for (const shift of schedule) {
+        const itemId = normalizeSharePointListItemId(shift?.id);
+        if (!itemId) continue;
+        try {
+            await api_deleteOnCallShift(itemId);
+            deletedOnCallShifts += 1;
+        } catch (err) {
+            console.warn('Skipping on-call delete due to error:', shift?.id, err?.message || err);
+        }
+    }
+
+    await Promise.allSettled([
+        api_saveSetting('defaultOnCall', ''),
+        api_saveSetting('hospitals', ''),
+        api_saveSetting('crossedOutPatientIds', '[]')
+    ]);
+
+    cacheData('patients', []);
+    cacheData('onCallSchedule', []);
+
+    return {
+        deletedPatients,
+        deletedOnCallShifts
+    };
+}
+
 // =============================================================================
 // ONEDRIVE OPERATIONS
 // =============================================================================
@@ -2044,6 +2090,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.m365DeleteOnCallShift = api_deleteOnCallShift;
     window.m365GetAuditLogs = api_fetchAuditLogs;
     window.m365SaveSetting = api_saveSetting;
+    window.m365ClearAllData = api_clearAllData;
     window.m365NormalizePriorityFields = api_normalizePriorityFields;
     window.m365GetCurrentUser = getCurrentUser;
     window.m365ExportToOneDrive = exportToOneDrive;
