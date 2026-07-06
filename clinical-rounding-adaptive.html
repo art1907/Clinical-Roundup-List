@@ -3484,6 +3484,12 @@
             const segments = getFindingSegments(patient);
             return segments.length ? segments.join(' | ') : '-';
         }
+
+        function getAdditionalFindingsComments(patient) {
+            const findingsText = String(patient?.findingsText || '').trim();
+            if (!findingsText) return '';
+            return parseImportedFindingsPayload(findingsText) ? '' : findingsText;
+        }
         
         console.log('Device:', Device.type, `${Device.width}x${Device.height}`);
 
@@ -6875,7 +6881,7 @@
                     </div>
                     ${p.plan ? `<div class="text-xs text-slate-700 mt-1"><strong>Plan:</strong> ${esc(p.plan)}</div>` : ''}
                     ${getVisibleProgressNotes(p) ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Subjective & Objective Findings:</strong> ${esc(getVisibleProgressNotes(p))}</div>` : ''}
-                    ${p.findingsText ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Investigations:</strong> ${esc(p.findingsText)}</div>` : ''}
+                    ${getFindingsDisplay(p) !== '-' ? `<div class="text-xs text-slate-600 mt-0.5"><strong>Investigations:</strong> ${esc(getFindingsDisplay(p))}</div>` : ''}
                     ${p.pending ? `<div class="text-xs text-amber-700 mt-0.5"><strong>Pending:</strong> ${esc(p.pending)}</div>` : ''}
                     ${p.followUp ? `<div class="text-xs text-teal-700 mt-0.5"><strong>Follow-up:</strong> ${esc(p.followUp)}</div>` : ''}
                 </div>
@@ -8066,6 +8072,10 @@
                             el.value = getVisibleProgressNotes(p);
                             return;
                         }
+                        if (field === 'findings-text') {
+                            el.value = getAdditionalFindingsComments(p);
+                            return;
+                        }
                         el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
                     const followUpFields = parseFollowUpSummary(p);
@@ -8393,7 +8403,7 @@
                 setSpanText('prev-visit-plan', sourcePatient.plan || '');
                 setSpanText('prev-visit-procedures', getProcedureSummaryText(sourcePatient));
                 setSpanText('prev-visit-pending', sourcePatient.pending || '');
-                setSpanText('prev-visit-findings', sourcePatient.findingsText);
+                setSpanText('prev-visit-findings', getAdditionalFindingsComments(sourcePatient));
                 setSpanText('prev-visit-followup', sourcePatient.followUp || '');
             }
 
@@ -10890,7 +10900,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     ['Provider', record.supervisingMd]
                 ])),
                 section('Investigations', addRows([
-                    ['Selected Findings', findingsSummary], ['Additional Comments', record.findingsText], ['Date Review', dateReviewSummary]
+                    ['Selected Findings', findingsSummary], ['Additional Comments', getAdditionalFindingsComments(record)], ['Date Review', dateReviewSummary]
                 ])),
                 section('Procedures', addRows([
                     ['Selected Procedures', procedureSummary], ['Procedure Notes', procedureNotes]
@@ -11794,10 +11804,13 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const dayPatients = patients.filter(p => p.date === dateStr && !p.archived);
                 const statPts = dayPatients.filter(p => p.stat === true || p.stat === 'true');
                 const procEvents = patients
-                    .filter(p => !p.archived && isSurgicalCase(p))
-                    .flatMap(p => getProcedureDateEntries(p)
-                        .filter(entry => entry.date === dateStr)
-                        .map(entry => ({ patient: p, ...entry })));
+                    .filter(p => !p.archived && isDatedProcedureCase(p))
+                    .map(p => {
+                        const entries = getProcedureDateEntries(p).filter(entry => entry.date === dateStr);
+                        // Only show ONE entry per patient per date (first procedure wins)
+                        return entries.length > 0 ? { patient: p, ...entries[0] } : null;
+                    })
+                    .filter(Boolean);
                 const otherCount = dayPatients.filter(p => {
                     const isStat = p.stat === true || p.stat === 'true';
                     const hasProcedureOnThisDate = getProcedureDateEntries(p).some(entry => entry.date === dateStr);
@@ -12317,7 +12330,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 </div>
                                 <div class="section">
                                     <h3>Investigations</h3>
-                                    <div class="row"><span class="label">Additional Comments:</span> <span class="value">${p.findingsText || ''}</span></div>
+                                    <div class="row"><span class="label">Additional Comments:</span> <span class="value">${getAdditionalFindingsComments(p)}</span></div>
                                     <div class="row"><span class="label">Investigation Codes:</span> <span class="value">${(p.findingsCodes && p.findingsCodes.join(', ')) || ''}</span></div>
                                 </div>
                                 <div class="section">
@@ -12356,7 +12369,8 @@ const findHeaderIndex = (rows, sheetLog) => {
             const sel = patients.filter(p => selectedPatientIds.has(p.id));
             let t = `UROLOGY HANDOFF\n${new Date().toLocaleDateString()}\nOn-Call: ${document.getElementById('on-call-provider')?.value || 'N/A'}\n${'='.repeat(40)}\n\n`;
             sel.forEach(p => {
-                const findings = p.findingsCodes?.length ? p.findingsCodes.join(', ') : (p.findingsText || 'Pending');
+                const findingsDisplay = getFindingsDisplay(p);
+                const findings = p.findingsCodes?.length ? p.findingsCodes.join(', ') : (findingsDisplay !== '-' ? findingsDisplay : 'Pending');
                 t += `[${p.room}] ${p.name}\nDx: ${findings}\nPlan: ${p.plan || 'See EMR'}\n${'='.repeat(40)}\n`;
             });
             const area = document.getElementById('handoff-text-area');
