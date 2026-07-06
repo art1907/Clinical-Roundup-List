@@ -9816,7 +9816,10 @@
 
             const findCol = (normalizedHeaders, aliases) => {
                 const normalizedAliases = aliases.map(a => normalizeHeader(a));
-                return normalizedHeaders.findIndex(h => normalizedAliases.some(a => h === a || h.includes(a)));
+                // Prefer exact match over substring match to avoid e.g. FindingsData stealing FindingsText
+                const exactIdx = normalizedHeaders.findIndex(h => normalizedAliases.some(a => h === a));
+                if (exactIdx >= 0) return exactIdx;
+                return normalizedHeaders.findIndex(h => normalizedAliases.some(a => h.includes(a)));
             };
 
             const findHospitalCol = (normalizedHeaders) => {
@@ -9922,6 +9925,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     name: findCol(normalizedHeaders, ['Name', 'Patient']),
                     dob: findCol(normalizedHeaders, ['DOB', 'Date of Birth']),
                     mrn: findCol(normalizedHeaders, ['MRN', 'Medical Record Number']),
+                    findingsData: findCol(normalizedHeaders, ['FindingsData']),
                     findings: findCol(normalizedHeaders, ['Dx/Findings', 'Findings', 'Diagnosis', 'FindingsText']),
                     plan: findCol(normalizedHeaders, ['Plan', 'Assessment/Plan']),
                     md: findCol(normalizedHeaders, ['Supervising MD', 'SupervisingMD', 'Attending', 'Provider']),
@@ -9990,6 +9994,30 @@ const findHeaderIndex = (rows, sheetLog) => {
                             createdOnDate: getTodayDateString()
                         });
 
+                        // Parse FindingsData JSON (structured) into individual fields if present
+                        let parsedFindingsCodes = [];
+                        let parsedFindingsValues = {};
+                        let parsedFindingsDates = {};
+                        if (colMap.findingsData >= 0) {
+                            const rawFindingsData = parts[colMap.findingsData] || '';
+                            if (rawFindingsData) {
+                                try {
+                                    const fd = JSON.parse(rawFindingsData);
+                                    if (fd && typeof fd === 'object') {
+                                        if (fd.values && typeof fd.values === 'object') {
+                                            parsedFindingsCodes = Object.keys(fd.values);
+                                            parsedFindingsValues = fd.values;
+                                        }
+                                        if (fd.dates && typeof fd.dates === 'object') {
+                                            parsedFindingsDates = fd.dates;
+                                        }
+                                    }
+                                } catch (_) {
+                                    // Not valid JSON — ignore, fall through to findingsText
+                                }
+                            }
+                        }
+
                         const patient = {
                             id: `local-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                             date: normalizedDates.date,
@@ -10010,9 +10038,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                             cptPrimary: '',
                             icdPrimary: '',
                             chargeCodesSecondary: '',
-                            findingsCodes: [],
-                            findingsValues: {},
-                            findingsDates: normalizedDates.findingsDates
+                            findingsCodes: parsedFindingsCodes,
+                            findingsValues: parsedFindingsValues,
+                            findingsDates: Object.keys(parsedFindingsDates).length ? parsedFindingsDates : normalizedDates.findingsDates
                         };
 
                         if (sheetVisitDate) {
