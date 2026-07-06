@@ -3407,16 +3407,26 @@
             // Phase 4: Catalog-aware display with concise format: "label: values | date | context"
             if (!patient || typeof patient !== 'object') return [];
 
-            const findingsValues = patient.findingsValues && typeof patient.findingsValues === 'object'
-                ? patient.findingsValues
-                : {};
-            const findingsCodes = Array.isArray(patient.findingsCodes)
-                ? patient.findingsCodes
-                : [];
+            const structuredFindingsText = parseImportedFindingsPayload(patient.findingsText);
 
-            const valueSegments = findingsCodes
+            const findingsValues = patient.findingsValues && typeof patient.findingsValues === 'object'
+                ? { ...(structuredFindingsText?.values || {}), ...patient.findingsValues }
+                : structuredFindingsText?.values || {};
+            const structuredCodes = Object.keys(structuredFindingsText?.values || {});
+            const findingsCodes = Array.isArray(patient.findingsCodes)
+                ? [...patient.findingsCodes, ...structuredCodes]
+                : structuredCodes;
+            const syntheticPatient = structuredFindingsText
+                ? {
+                    ...patient,
+                    findingsDates: { ...(structuredFindingsText.dates || {}), ...(patient.findingsDates || {}) },
+                    findingsMeta: { ...(structuredFindingsText.meta || {}), ...(patient.findingsMeta || {}) }
+                }
+                : patient;
+
+            const valueSegments = [...new Set(findingsCodes.map(code => String(code || '').trim()).filter(Boolean))]
                 .map((code) => {
-                    const dateContext = getFindingDateDisplayContext(patient, code);
+                    const dateContext = getFindingDateDisplayContext(syntheticPatient, code);
                     const rawValue = findingsValues[code];
                     let displayValue = '';
                     if (rawValue === null || rawValue === undefined) {
@@ -3445,7 +3455,7 @@
                 })
                 .filter(Boolean);
 
-            const findingsText = String(patient.findingsText || '').trim();
+            const findingsText = structuredFindingsText ? '' : String(patient.findingsText || '').trim();
             if (findingsText) {
                 valueSegments.push(findingsText);
             }
@@ -5212,6 +5222,7 @@
                     if (aVal > bVal) return -1;
                     if (aVal < bVal) return 1;
                 }
+
                 // Secondary sort: within same patient MRN group, show most recent visit first
                 const aMrn = (a.mrn || a.name || '').toLowerCase();
                 const bMrn = (b.mrn || b.name || '').toLowerCase();
@@ -5222,6 +5233,31 @@
             });
             
             return list;
+        }
+
+        function parseImportedFindingsPayload(value) {
+            if (typeof value !== 'string') return null;
+            const trimmed = value.trim();
+            if (!trimmed || !trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (!parsed || typeof parsed !== 'object') return null;
+                if (parsed.values && typeof parsed.values === 'object') {
+                    return {
+                        values: parsed.values || {},
+                        dates: parsed.dates && typeof parsed.dates === 'object' ? parsed.dates : {},
+                        meta: parsed.meta && typeof parsed.meta === 'object' ? parsed.meta : {}
+                    };
+                }
+                const looksLikeLegacyValues = Object.values(parsed).some((entry) => {
+                    if (entry == null) return false;
+                    if (typeof entry === 'string') return true;
+                    return typeof entry === 'object' && !('values' in entry) && !('dates' in entry) && !('meta' in entry);
+                });
+                return looksLikeLegacyValues ? { values: parsed, dates: {}, meta: {} } : null;
+            } catch (_) {
+                return null;
+            }
         }
 
         // Apply Advanced Filters
@@ -8831,6 +8867,7 @@
             const findings = String(patient.findingsText || '');
             return explicitFlag || SURGICAL_STATUSES.has(status) || PROC_KEYWORDS.test(plan) || PROC_KEYWORDS.test(findings);
         }
+
         const STATUS_COLORS = {
             'NEW CONSULT': { bg: 'bg-slate-50 border border-slate-300', text: 'text-slate-700', badge: 'NC', bgHeavy: 'bg-slate-200' },
             'SURGICAL PATIENT (SAME DAY SURGERY)': { bg: 'bg-blue-50 border border-blue-300', text: 'text-blue-700', badge: 'SDS', bgHeavy: 'bg-blue-200' },
@@ -9933,6 +9970,10 @@ const findHeaderIndex = (rows, sheetLog) => {
                     followUp: findCol(normalizedHeaders, ['Follow-Up Appt', 'Follow Up', 'FollowUp'])
                 };
 
+                if (colMap.findingsData >= 0 && colMap.findings === colMap.findingsData) {
+                    colMap.findings = -1;
+                }
+
                 if (colMap.dateService === -1) {
                     throw new Error('Header mapping failed: missing Date/Date of Service column');
                 }
@@ -10001,21 +10042,21 @@ const findHeaderIndex = (rows, sheetLog) => {
                         if (colMap.findingsData >= 0) {
                             const rawFindingsData = parts[colMap.findingsData] || '';
                             if (rawFindingsData) {
-                                try {
-                                    const fd = JSON.parse(rawFindingsData);
-                                    if (fd && typeof fd === 'object') {
-                                        if (fd.values && typeof fd.values === 'object') {
-                                            parsedFindingsCodes = Object.keys(fd.values);
-                                            parsedFindingsValues = fd.values;
-                                        }
-                                        if (fd.dates && typeof fd.dates === 'object') {
-                                            parsedFindingsDates = fd.dates;
-                                        }
-                                    }
-                                } catch (_) {
-                                    // Not valid JSON — ignore, fall through to findingsText
+                                const structuredFindings = parseImportedFindingsPayload(rawFindingsData);
+                                if (structuredFindings) {
+                                    parsedFindingsCodes = Object.keys(structuredFindings.values || {});
+                                    parsedFindingsValues = structuredFindings.values || {};
+                                    parsedFindingsDates = structuredFindings.dates || {};
                                 }
                             }
+                        }
+
+                        const rawFindingsText = colMap.findings >= 0 ? (parts[colMap.findings] || '') : '';
+                        const structuredFindingsText = parseImportedFindingsPayload(rawFindingsText);
+                        if (structuredFindingsText) {
+                            parsedFindingsValues = { ...parsedFindingsValues, ...(structuredFindingsText.values || {}) };
+                            parsedFindingsDates = { ...parsedFindingsDates, ...(structuredFindingsText.dates || {}) };
+                            parsedFindingsCodes = [...new Set([...parsedFindingsCodes, ...Object.keys(structuredFindingsText.values || {})])];
                         }
 
                         const patient = {
@@ -10027,7 +10068,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             dob: colMap.dob >= 0 ? (parts[colMap.dob] || '') : '',
                             mrn: mrnValue,
                             hospital: (colMap.hospital >= 0 ? (parts[colMap.hospital] || '') : '') || currentHospital || 'Unassigned',
-                            findingsText: colMap.findings >= 0 ? (parts[colMap.findings] || '') : '',
+                            findingsText: structuredFindingsText ? '' : rawFindingsText,
                             plan: colMap.plan >= 0 ? (parts[colMap.plan] || '') : '',
                             supervisingMd: colMap.md >= 0 ? (parts[colMap.md] || '') : '',
                             pending: colMap.pending >= 0 ? (parts[colMap.pending] || '') : '',
@@ -11122,6 +11163,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const amendAuthorizationNote = resolvedEditId && modal?.dataset.amendConfirmed === 'true'
                     ? String(modal.dataset.amendAuthorizationNote || '').trim()
                     : '';
+
                 const changeNote = amendAuthorizationNote || await getRequiredChangeNote(changeActionLabel);
                 if (!changeNote) return false;
                 if (normalizedDateState.appliedDefaults.length) {
@@ -14381,6 +14423,43 @@ const findHeaderIndex = (rows, sheetLog) => {
             <div class="p-4 border-t flex gap-2 flex-shrink-0">
                 <button id="batch-status-cancel" type="button" class="flex-1 p-3 bg-slate-200 text-slate-700 font-bold rounded-lg">Cancel</button>
                 <button id="batch-status-confirm" type="button" class="flex-1 p-3 bg-blue-600 text-white font-bold rounded-lg">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Procedure Conflict Resolution Modal (z-60 sits above patient-modal z-50) -->
+    <div id="proc-conflict-modal" class="fixed inset-0 z-[60] hidden bg-black/60 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div class="p-4 border-b bg-amber-50 rounded-t-2xl flex items-center gap-2">
+                <span class="text-amber-600 text-xl">⚠️</span>
+                <div>
+                    <h2 class="text-base font-bold text-amber-800">Surgery Entry Conflict</h2>
+                    <p class="text-xs text-amber-700 mt-0.5">Two different surgeries found for this patient</p>
+                </div>
+            </div>
+            <div class="p-4 space-y-3 text-sm">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-blue-600 font-bold text-xs uppercase tracking-wide">📋 Procedure Section</span>
+                        <span class="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-semibold">WINS</span>
+                    </div>
+                    <div class="font-mono font-bold text-blue-900" id="pcm-proc-codes"></div>
+                    <div class="text-xs text-blue-600">Used for Calendar and Procedure Log</div>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
+                    <div class="text-amber-700 font-bold text-xs uppercase tracking-wide">📝 Plan / Findings Text Mentions</div>
+                    <div class="font-mono font-bold text-amber-900" id="pcm-text-terms"></div>
+                    <div class="text-xs text-slate-500 mt-1 space-y-0.5">
+                        <div class="truncate">Plan: <span class="italic" id="pcm-plan-preview"></span></div>
+                        <div class="truncate">Findings: <span class="italic" id="pcm-findings-preview"></span></div>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-500">The Procedure section is the authoritative surgical record. Plan/Findings text is kept for clinical narrative. Choose how to save:</p>
+            </div>
+            <div class="p-4 border-t space-y-2">
+                <button onclick="globalThis.resolveProcedureConflict('procedure-wins')" class="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">✓ Proceed — Procedure Entry Wins (Recommended)</button>
+                <button onclick="globalThis.resolveProcedureConflict('go-back')" class="w-full px-4 py-2.5 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600 transition-colors">✏️ Go Back and Reconcile Manually</button>
+                <button onclick="globalThis.resolveProcedureConflict('cancel')" class="w-full px-4 py-2.5 bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-300 transition-colors">✗ Cancel Save</button>
             </div>
         </div>
     </div>

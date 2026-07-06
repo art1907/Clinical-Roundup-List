@@ -3263,14 +3263,17 @@
         function getFindingSegments(patient) {
             if (!patient || typeof patient !== 'object') return [];
 
-            const findingsValues = patient.findingsValues && typeof patient.findingsValues === 'object'
-                ? patient.findingsValues
-                : {};
-            const findingsCodes = Array.isArray(patient.findingsCodes)
-                ? patient.findingsCodes
-                : [];
+            const structuredFindingsText = parseImportedFindingsPayload(patient.findingsText);
 
-            const valueSegments = findingsCodes
+            const findingsValues = patient.findingsValues && typeof patient.findingsValues === 'object'
+                ? { ...(structuredFindingsText?.values || {}), ...patient.findingsValues }
+                : structuredFindingsText?.values || {};
+            const structuredCodes = Object.keys(structuredFindingsText?.values || {});
+            const findingsCodes = Array.isArray(patient.findingsCodes)
+                ? [...patient.findingsCodes, ...structuredCodes]
+                : structuredCodes;
+
+            const valueSegments = [...new Set(findingsCodes.map(code => String(code || '').trim()).filter(Boolean))]
                 .map((code) => {
                     const rawValue = findingsValues[code];
                     if (rawValue === null || rawValue === undefined) return '';
@@ -3290,12 +3293,37 @@
                 })
                 .filter(Boolean);
 
-            const findingsText = String(patient.findingsText || '').trim();
+            const findingsText = structuredFindingsText ? '' : String(patient.findingsText || '').trim();
             if (findingsText) {
                 valueSegments.push(findingsText);
             }
 
             return [...new Set(valueSegments.filter(Boolean))];
+        }
+
+        function parseImportedFindingsPayload(value) {
+            if (typeof value !== 'string') return null;
+            const trimmed = value.trim();
+            if (!trimmed || !trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (!parsed || typeof parsed !== 'object') return null;
+                if (parsed.values && typeof parsed.values === 'object') {
+                    return {
+                        values: parsed.values || {},
+                        dates: parsed.dates && typeof parsed.dates === 'object' ? parsed.dates : {},
+                        meta: parsed.meta && typeof parsed.meta === 'object' ? parsed.meta : {}
+                    };
+                }
+                const looksLikeLegacyValues = Object.values(parsed).some((entry) => {
+                    if (entry == null) return false;
+                    if (typeof entry === 'string') return true;
+                    return typeof entry === 'object' && !('values' in entry) && !('dates' in entry) && !('meta' in entry);
+                });
+                return looksLikeLegacyValues ? { values: parsed, dates: {}, meta: {} } : null;
+            } catch (_) {
+                return null;
+            }
         }
 
         function renderFindingSegments(patient, compact = false) {
@@ -9584,12 +9612,17 @@ const findHeaderIndex = (rows, sheetLog) => {
                     name: findCol(normalizedHeaders, ['Name', 'Patient']),
                     dob: findCol(normalizedHeaders, ['DOB', 'Date of Birth']),
                     mrn: findCol(normalizedHeaders, ['MRN', 'Medical Record Number']),
+                    findingsData: findCol(normalizedHeaders, ['FindingsData']),
                     findings: findCol(normalizedHeaders, ['Dx/Findings', 'Findings', 'Diagnosis', 'FindingsText']),
                     plan: findCol(normalizedHeaders, ['Plan', 'Assessment/Plan']),
                     md: findCol(normalizedHeaders, ['Supervising MD', 'SupervisingMD', 'Attending', 'Provider']),
                     pending: findCol(normalizedHeaders, ['Pending Tests/Info', 'Pending', 'Pending Info']),
                     followUp: findCol(normalizedHeaders, ['Follow-Up Appt', 'Follow Up', 'FollowUp'])
                 };
+
+                if (colMap.findingsData >= 0 && colMap.findings === colMap.findingsData) {
+                    colMap.findings = -1;
+                }
 
                 if (colMap.dateService === -1) {
                     throw new Error('Header mapping failed: missing Date/Date of Service column');
@@ -9652,6 +9685,29 @@ const findHeaderIndex = (rows, sheetLog) => {
                             createdOnDate: getTodayDateString()
                         });
 
+                        let parsedFindingsCodes = [];
+                        let parsedFindingsValues = {};
+                        let parsedFindingsDates = {};
+                        if (colMap.findingsData >= 0) {
+                            const rawFindingsData = parts[colMap.findingsData] || '';
+                            if (rawFindingsData) {
+                                const structuredFindings = parseImportedFindingsPayload(rawFindingsData);
+                                if (structuredFindings) {
+                                    parsedFindingsCodes = Object.keys(structuredFindings.values || {});
+                                    parsedFindingsValues = structuredFindings.values || {};
+                                    parsedFindingsDates = structuredFindings.dates || {};
+                                }
+                            }
+                        }
+
+                        const rawFindingsText = colMap.findings >= 0 ? (parts[colMap.findings] || '') : '';
+                        const structuredFindingsText = parseImportedFindingsPayload(rawFindingsText);
+                        if (structuredFindingsText) {
+                            parsedFindingsValues = { ...parsedFindingsValues, ...(structuredFindingsText.values || {}) };
+                            parsedFindingsDates = { ...parsedFindingsDates, ...(structuredFindingsText.dates || {}) };
+                            parsedFindingsCodes = [...new Set([...parsedFindingsCodes, ...Object.keys(structuredFindingsText.values || {})])];
+                        }
+
                         const patient = {
                             id: `local-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                             date: normalizedDates.date,
@@ -9661,7 +9717,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                             dob: colMap.dob >= 0 ? (parts[colMap.dob] || '') : '',
                             mrn: mrnValue,
                             hospital: (colMap.hospital >= 0 ? (parts[colMap.hospital] || '') : '') || currentHospital || 'Unassigned',
-                            findingsText: colMap.findings >= 0 ? (parts[colMap.findings] || '') : '',
+                            findingsText: structuredFindingsText ? '' : rawFindingsText,
                             plan: colMap.plan >= 0 ? (parts[colMap.plan] || '') : '',
                             supervisingMd: colMap.md >= 0 ? (parts[colMap.md] || '') : '',
                             pending: colMap.pending >= 0 ? (parts[colMap.pending] || '') : '',
@@ -9672,9 +9728,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                             cptPrimary: '',
                             icdPrimary: '',
                             chargeCodesSecondary: '',
-                            findingsCodes: [],
-                            findingsValues: {},
-                            findingsDates: normalizedDates.findingsDates
+                            findingsCodes: parsedFindingsCodes,
+                            findingsValues: parsedFindingsValues,
+                            findingsDates: Object.keys(parsedFindingsDates).length ? parsedFindingsDates : normalizedDates.findingsDates
                         };
 
                         if (sheetVisitDate) {

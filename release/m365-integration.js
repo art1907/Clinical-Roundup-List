@@ -876,8 +876,20 @@ async function api_fetchPatients(dateFilter = null) {
             const rawPlan = item.fields.Plan || '';
             const rawPriority = item.fields.Priority ?? item.fields.Stat ?? item.fields.STAT ?? item.fields.StatPriority ?? item.fields.IsSTAT;
             const statValue = parseBoolish(rawPriority);
-            const findingsValues = safeJsonParse(item.fields.FindingsData, {}, `FindingsData for item ${item.id}`);
-            const findingsDates = safeJsonParse(item.fields.FindingsDates, {}, `FindingsDates for item ${item.id}`);
+
+            // Load FindingsData with envelope support: { values, dates, meta } (new) or legacy values map.
+            const rawFindingsData = safeJsonParse(item.fields.FindingsData, {}, `FindingsData for item ${item.id}`);
+            let findingsValues = {};
+            let findingsDates = {};
+            let findingsMeta = {};
+            if (rawFindingsData && typeof rawFindingsData === 'object' && 'values' in rawFindingsData) {
+                findingsValues = rawFindingsData.values || {};
+                findingsDates = rawFindingsData.dates || {};
+                findingsMeta = rawFindingsData.meta || {};
+            } else {
+                findingsValues = rawFindingsData;
+                findingsDates = safeJsonParse(item.fields.FindingsDates, {}, `FindingsDates for item ${item.id}`);
+            }
             const procedureValues = safeJsonParse(item.fields.ProcedureData, {}, `ProcedureData for item ${item.id}`);
             const procedureDates = safeJsonParse(item.fields.ProcedureDates, {}, `ProcedureDates for item ${item.id}`);
             const findingsCodes = Array.from(new Set([
@@ -905,6 +917,7 @@ async function api_fetchPatients(dateFilter = null) {
             visitTime: item.fields[VISIT_TIME_FIELD] || item.fields.Visit_x0020_Time || '',
             visitKey: item.fields.VisitKey || '',
             findingsValues,
+            findingsMeta,
             findingsDates,
             findingsCodes,
             procedureValues,
@@ -1067,7 +1080,14 @@ async function api_savePatient(patientData) {
         FindingsCodes: Array.isArray(patientData.findingsCodes)
             ? patientData.findingsCodes.map((code) => String(code || '').trim()).filter(Boolean).join(',')
             : '',
-        FindingsData: patientData.findingsValues ? JSON.stringify(patientData.findingsValues) : '{}',
+        FindingsData: (() => {
+            const envelope = {
+                values: patientData.findingsValues ? patientData.findingsValues : {},
+                dates: patientData.findingsDates ? patientData.findingsDates : {},
+                meta: patientData.findingsMeta ? patientData.findingsMeta : {}
+            };
+            return JSON.stringify(envelope);
+        })(),
         FindingsDates: patientData.findingsDates ? JSON.stringify(patientData.findingsDates) : '{}',
         ProcedureCodes: Array.isArray(patientData.procedureCodes)
             ? patientData.procedureCodes.map((code) => String(code || '').trim()).filter(Boolean).join(',')
