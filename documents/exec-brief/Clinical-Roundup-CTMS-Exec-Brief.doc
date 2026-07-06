@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta http-equiv="Content-Type" content="application/vnd.ms-word; charset=utf-8">
+  <meta charset="utf-8">
+  <title>Clinical Roundup to AI-Native CTMS — Executive Brief</title>
+  <!--[if gte mso 9]>
+  <xml>
+    <w:WordDocument>
+      <w:View>Print</w:View>
+      <w:Zoom>100</w:Zoom>
+      <w:DoNotOptimizeForBrowser/>
+    </w:WordDocument>
+    <o:OfficeDocumentSettings>
+      <o:AllowPNG/>
+      <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+  </xml>
+  <![endif]-->
+  <style>
+    @page {
+      size: 8.5in 11in;
+      margin: 1in;
+    }
+    body {
+      font-family: Calibri, Cambria, "Segoe UI", Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.4;
+      color: #1A1A1A;
+    }
+    h1 {
+      font-size: 22pt;
+      color: #1F4E79;
+      margin-bottom: 8pt;
+    }
+    h2 {
+      font-size: 16pt;
+      color: #1F4E79;
+      margin-top: 18pt;
+      margin-bottom: 10pt;
+    }
+    h3 {
+      font-size: 13pt;
+      color: #1F4E79;
+      margin-top: 14pt;
+      margin-bottom: 8pt;
+    }
+    .subtitle { font-size: 13pt; color: #404040; }
+    .meta { margin-top: 24pt; }
+    .page-break { page-break-before: always; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8pt 0 12pt 0;
+    }
+    th, td {
+      border: 1px solid #7F7F7F;
+      padding: 6pt;
+      vertical-align: top;
+    }
+    thead th {
+      font-weight: bold;
+      background: #F2F2F2;
+    }
+    .callout td {
+      background: #DEEBF7;
+      border-left: 4px solid #1F4E79;
+    }
+    .footer {
+      margin-top: 28pt;
+      font-size: 9pt;
+      color: #595959;
+      border-top: 1px solid #D9D9D9;
+      padding-top: 6pt;
+    }
+    ul, ol { margin-top: 4pt; }
+  </style>
+</head>
+<body>
+
+  <h1>Clinical Roundup → AI-Native CTMS</h1>
+  <p class="subtitle"><strong>30-Minute Executive Pitch + Demo Brief</strong></p>
+  <p class="meta"><strong>Prepared by:</strong> [Prepared by: ______]<br>
+  <strong>Date:</strong> [Date: ______]<br>
+  <strong>Version:</strong> [Version: 1.0]</p>
+
+  <br clear="all" style="page-break-before:always">
+
+  <h2>Table of Contents</h2>
+  <ol>
+    <li>Executive Summary and Key Asks</li>
+    <li>Meeting Objective and 30-Minute Flow</li>
+    <li>Slide 1 — Introduction</li>
+    <li>Slide 2 — Team</li>
+    <li>Slide 3 — Problem</li>
+    <li>Slide 4 — Why Now</li>
+    <li>Slide 5 — What We Built</li>
+    <li>Slide 6 — Why This Is Different From a CTMS</li>
+    <li>Part 2 — Demo Flow and Talk Track</li>
+    <li>Part 3 — Path Forward and Decisions</li>
+    <li>Core Pitch Message</li>
+  </ol>
+
+  <br clear="all" style="page-break-before:always">
+
+  <h2>Executive Summary and Key Asks</h2>
+  <table class="callout" border="1" cellspacing="0">
+    <thead>
+      <tr><th>Executive Summary</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Clinical Roundup is a working clinical operations intelligence layer that consolidates fragmented trial operations signals into one action-ready view. It is not positioned as a full CTMS today. It is positioned as the fastest wedge into enterprise clinical operations, with a phased path to AI-native CTMS capability. This session demonstrates current product maturity, differentiation, and an execution path from MVP to enterprise pilot.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table class="callout" border="1" cellspacing="0">
+    <thead>
+      <tr><th>Key Asks</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          <ol>
+            <li>Confirm strategic direction: intelligence layer first, AI-native CTMS path second.</li>
+            <li>Prioritize MVP CTMS modules for the next 6–9 months.</li>
+            <li>Align integration sequence (EDC, eTMF, CTMS, safety, labs).</li>
+            <li>Confirm pilot compliance threshold and AI use-case boundaries.</li>
+          </ol>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Meeting Objective</h3>
+  <p>Demonstrate the working Clinical Roundup product, validate the operational problem it solves now, and align on a phased path toward an AI-native CTMS capability.</p>
+
+  <h3>30-Minute Flow</h3>
+  <table border="1" cellspacing="0">
+    <thead>
+      <tr><th>Section</th><th>Time</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Team, concept, work done</td><td>8–10 min</td></tr>
+      <tr><td>Product demo</td><td>10–12 min</td></tr>
+      <tr><td>Path forward and questions</td><td>8–10 min</td></tr>
+      <tr><td>Total</td><td>30 min</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="page-break">Slide 1 — Introduction</h2>
+  <p><strong>Purpose:</strong> Establish context fast.</p>
+  <p><strong>Message:</strong> We are presenting a production-capable Clinical Roundup application and a practical path to AI-native CTMS capability.</p>
+
+  <h2 class="page-break">Slide 2 — Team</h2>
+  <p><strong>Purpose:</strong> Establish credibility.</p>
+  <p><strong>Include:</strong></p>
+  <ul>
+    <li>Product and business ownership</li>
+    <li>Clinical operations expertise</li>
+    <li>Technology and engineering depth</li>
+    <li>AI and data architecture strength</li>
+    <li>Compliance and governance readiness</li>
+  </ul>
+  <p><strong>Message:</strong> The team combines clinical workflow insight, software delivery, AI fluency, and enterprise execution discipline.</p>
+
+  <h2 class="page-break">Slide 3 — Problem</h2>
+  <p><strong>Purpose:</strong> Define the operational gap.</p>
+  <p><strong>Message:</strong> Trial operations are fragmented across spreadsheets, CTMS, EDC, eTMF, documents, email, and manual status updates. Leadership and study teams need faster, clearer visibility into status, risk, actions, and next steps.</p>
+
+  <h2 class="page-break">Slide 4 — Why Now</h2>
+  <p><strong>Purpose:</strong> Explain urgency and market timing.</p>
+  <ul>
+    <li>Sponsors and CROs are under pressure to consolidate operational tooling and reduce cycle time.</li>
+    <li>Enterprise-grade LLM platforms have reached the reliability threshold for governed, assistive clinical workflows.</li>
+    <li>Incumbent CTMS AI features are largely bolt-ons, creating an opening for an AI-native entrant.</li>
+  </ul>
+
+  <h2 class="page-break">Slide 5 — What We Built</h2>
+  <p><strong>Purpose:</strong> Position the current product accurately.</p>
+  <p><strong>Message:</strong> Clinical Roundup consolidates trial-relevant information into a structured operational command view for visibility, status review, tracking, and action prioritization.</p>
+  <p><strong>Key capabilities:</strong></p>
+  <ul>
+    <li>Clinical roundup view</li>
+    <li>Structured study/patient/site information</li>
+    <li>Operational status tracking</li>
+    <li>Search and filtering</li>
+    <li>Dashboard-style review</li>
+    <li>Action-oriented clinical operations visibility</li>
+  </ul>
+
+  <h2 class="page-break">Slide 6 — Why This Is Different From a CTMS</h2>
+  <p><strong>Purpose:</strong> Be explicit about scope and strategy.</p>
+  <p><strong>Message:</strong> Clinical Roundup is not a full CTMS today. It is a clinical operations intelligence layer that sits above EDC/CTMS/eTMF/Labs/Safety systems and accelerates decisions.</p>
+  <p><strong>Positioning:</strong> Clinical Roundup is the wedge; AI-native CTMS is the phased target state.</p>
+
+  <h2 class="page-break">Part 2 — Demo: Clinical Roundup Product (10–12 minutes)</h2>
+  <h3>Demo Flow and Tightened Talk Track</h3>
+  <ol>
+    <li><strong>Open the application</strong> — Show the landing view and orientation.<br>
+      <em>Talk track:</em> This is Clinical Roundup. It gives study teams one operational view instead of cross-system hunting.</li>
+    <li><strong>Show the main roundup view</strong> — Highlight organization of core information.<br>
+      <em>Talk track:</em> The view structures status, issues, and context so teams can review quickly and act confidently.</li>
+    <li><strong>Show filtering/search/navigation</strong> — Demonstrate speed of use.<br>
+      <em>Talk track:</em> Users narrow instantly to what matters most.</li>
+    <li><strong>Show status/tracking elements</strong> — Connect directly to oversight workflows.<br>
+      <em>Talk track:</em> Teams see what is active, pending, delayed, or blocked and can prioritize follow-up.</li>
+    <li><strong>Show AI insertion points</strong> — Point to near-term product evolution.<br>
+      <em>Talk track:</em> AI can summarize records, detect missing data, classify issues, recommend actions, and draft leadership-ready updates.</li>
+  </ol>
+
+  <h2 class="page-break">Part 3 — Path Forward and Decisions (8–10 minutes)</h2>
+
+  <h3>Slide 7 — Evolution Path</h3>
+  <table border="1" cellspacing="0">
+    <thead>
+      <tr><th>Stage</th><th>Focus</th><th>Outcome</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Now</td><td>Clinical Roundup</td><td>Visibility and operational review</td></tr>
+      <tr><td>Next</td><td>CTMS foundation</td><td>Study, site, user, role, audit, data model</td></tr>
+      <tr><td>Then</td><td>CTMS workflows</td><td>Enrollment, monitoring, milestones, documents</td></tr>
+      <tr><td>Later</td><td>AI-native CTMS</td><td>Summaries, risk scoring, forecasting, natural-language queries</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Slide 8 — How AI Helps</h3>
+  <ol>
+    <li><strong>Accelerate the build:</strong> Requirements drafts, user stories, test cases, validation documentation, code scaffolding</li>
+    <li><strong>Enrich CTMS capability:</strong> Study-status summaries, action extraction from notes, document classification, missing-info detection, operational briefings</li>
+    <li><strong>Differentiate the product:</strong> Risk scoring, enrollment forecasting, milestone delay prediction, natural-language trial queries, executive intelligence</li>
+  </ol>
+
+  <h3>Slide 9 — Medical-Grade AI / LLM Plan</h3>
+  <p><strong>Message:</strong> Use a model-agnostic AI architecture; avoid premature vendor lock-in.</p>
+  <p><strong>Evaluation areas:</strong> Privacy and data protection, no customer-data training, audit logging, human review, source traceability, model version control, enterprise security, validation support</p>
+  <p><strong>Candidate platforms to evaluate:</strong> Azure OpenAI, AWS Bedrock, Google Vertex AI / MedLM, OpenAI Enterprise / API, Anthropic Claude, and narrowly scoped open-source medical models where justified</p>
+  <p><strong>Positioning:</strong> AI assists, summarizes, classifies, and recommends; regulated clinical and operational decisions remain human-approved.</p>
+
+  <h3>Slide 10 — Simple Timeline</h3>
+  <table border="1" cellspacing="0">
+    <thead>
+      <tr><th>Timeline</th><th>Goal</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>0–3 months</td><td>Confirm CTMS scope, gaps, architecture, and AI governance</td></tr>
+      <tr><td>3–6 months</td><td>Build CTMS foundation: API, data model, RBAC, audit trail, study/site core</td></tr>
+      <tr><td>6–9 months</td><td>Add MVP CTMS workflows: enrollment, milestones, monitoring, actions</td></tr>
+      <tr><td>9–12 months</td><td>Add regulated workflows: e-signature, documents, validation package</td></tr>
+      <tr><td>12–18 months</td><td>Enterprise pilot: integrations, SSO, AI summaries, risk scoring</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Message:</strong> Target a focused CTMS MVP in 6–9 months; target enterprise-grade, regulated capability in 12–18 months.</p>
+
+  <h3>Success Metrics</h3>
+  <table border="1" cellspacing="0">
+    <thead>
+      <tr><th>Phase</th><th>Metric</th><th>Target</th></tr>
+    </thead>
+    <tbody>
+      <tr><td rowspan="5">6–9 Month MVP</td><td>Pilot sponsors/CRO groups signed</td><td>2–3</td></tr>
+      <tr><td>Active studies onboarded</td><td>5+</td></tr>
+      <tr><td>Time-to-status-report reduction</td><td>30–40%</td></tr>
+      <tr><td>MVR draft cycle-time reduction</td><td>25%</td></tr>
+      <tr><td>User adoption in pilot teams</td><td>90%+ in first 8 weeks</td></tr>
+      <tr><td rowspan="5">12–18 Month Enterprise Pilot</td><td>Studies in multi-program portfolio pilot</td><td>10+</td></tr>
+      <tr><td>Milestone-slippage reduction</td><td>20–30%</td></tr>
+      <tr><td>Executive portfolio prep-time reduction</td><td>35%+</td></tr>
+      <tr><td>Audit-trail completeness for scoped regulated workflows</td><td>95%</td></tr>
+      <tr><td>AI-assist accuracy threshold approved by governance</td><td>Achieved for initial production use cases</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Competitive Landscape (Mini-Table)</h3>
+  <table border="1" cellspacing="0">
+    <thead>
+      <tr><th>Platform</th><th>Current Position</th><th>AI-Native Entrant Differentiation</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Veeva Vault CTMS</td>
+        <td>Deep enterprise footprint with mature workflows and validation history</td>
+        <td>Differentiate with AI-native operational intelligence, faster insight loops, and lower-friction workflow adaptation.</td>
+      </tr>
+      <tr>
+        <td>Medidata Rave CTMS</td>
+        <td>Strong ecosystem adjacency and established clinical data workflows</td>
+        <td>Differentiate with cross-system operational synthesis and native decision-support workflows rather than add-on AI widgets.</td>
+      </tr>
+      <tr>
+        <td>Oracle Siebel CTMS</td>
+        <td>Legacy enterprise breadth and configurable process depth</td>
+        <td>Differentiate with modern UX, rapid deployment, and built-in AI summarization/risk workflows from day one.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Risk &amp; Mitigation</h3>
+  <table border="1" cellspacing="0">
+    <thead>
+      <tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Regulatory validation load (CSV / 21 CFR Part 11)</td>
+        <td>Slower release velocity and higher documentation burden</td>
+        <td>Stage validation deliverables from foundation phase, map traceability early, and align quality engineering with each release train.</td>
+      </tr>
+      <tr>
+        <td>Incumbent switching costs</td>
+        <td>Longer enterprise sales cycle and integration resistance</td>
+        <td>Start as intelligence layer above existing stack, prove ROI quickly, and phase in system-of-record workflows.</td>
+      </tr>
+      <tr>
+        <td>AI hallucination in regulated contexts</td>
+        <td>Decision-quality and compliance risk</td>
+        <td>Keep human-in-the-loop approvals, enforce source traceability, limit AI to assistive use cases first, and validate model outputs per workflow.</td>
+      </tr>
+      <tr>
+        <td>Multi-tenant data isolation</td>
+        <td>Security, privacy, and trust risk</td>
+        <td>Enforce tenant-boundary controls, encryption at rest/in transit, environment segregation, and auditable access policies.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>Compliance signal already underway:</strong> The repository includes active healthcare-compliance planning artifacts under <code>.kiro/specs/healthcare-compliance/</code> (requirements, design, tasks), indicating foundational governance work is in progress.</p>
+
+  <h3>Slide 11 — Discussion / Decisions Needed</h3>
+  <ol>
+    <li>Is the Clinical Roundup direction aligned with the operational problem?</li>
+    <li>Which CTMS modules matter most for the first MVP?</li>
+    <li>Should near-term priority be intelligence layer, CTMS replacement, or CTMS companion?</li>
+    <li>Which systems must we integrate first?</li>
+    <li>What compliance level is required for the first pilot?</li>
+    <li>Which AI use cases are acceptable for the first release?</li>
+  </ol>
+
+  <h2 class="page-break">Core Pitch Message</h2>
+  <p>We have built a working Clinical Roundup application that solves a real clinical operations visibility gap today. It starts as a clinical operations intelligence layer and scales toward AI-native CTMS capability in phased, governed increments. AI creates two compounding advantages: faster product execution and durable in-product differentiation through summarization, risk scoring, forecasting, and decision support.</p>
+
+  <p class="footer">Footer: Version [1.0] | Date [______] | Owner [______]</p>
+
+</body>
+</html>
