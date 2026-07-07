@@ -6456,6 +6456,33 @@
                 .filter(entry => entry.date);
         }
 
+        function getProcedureCalendarIdentity(patient = {}) {
+            return getPatientPersonKey(patient);
+        }
+
+        function normalizeProcedureCalendarName(procedure) {
+            const text = String(procedure || '').trim().toLowerCase();
+            const aliases = {
+                litho: 'lithotripsy',
+                laser: 'lithotripsy',
+                urs: 'ureteroscopy',
+                bx: 'biopsy'
+            };
+            return aliases[text] || text;
+        }
+
+        function getProcedureCalendarKey(patient = {}, entry = {}) {
+            const identity = getProcedureCalendarIdentity(patient);
+            const procedure = normalizeProcedureCalendarName(entry.procedure);
+            return `${identity}|${entry.date || ''}|${procedure}`;
+        }
+
+        function shouldReplaceProcedureCalendarEvent(existingEvent, candidateEvent) {
+            const existingVisitDate = normalizeProcedureDateValue(existingEvent?.patient?.date) || '9999-12-31';
+            const candidateVisitDate = normalizeProcedureDateValue(candidateEvent?.patient?.date) || '9999-12-31';
+            return candidateVisitDate < existingVisitDate;
+        }
+
         function isDatedProcedureCase(patient) {
             return isSurgicalCase(patient) && getProcedureDateEntries(patient).length > 0;
         }
@@ -11803,14 +11830,21 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const shift = onCallSchedule.find(s => s.date === dateStr);
                 const dayPatients = patients.filter(p => p.date === dateStr && !p.archived);
                 const statPts = dayPatients.filter(p => p.stat === true || p.stat === 'true');
-                const procEvents = patients
+                const procEventMap = new Map();
+                patients
                     .filter(p => !p.archived && isDatedProcedureCase(p))
-                    .map(p => {
-                        const entries = getProcedureDateEntries(p).filter(entry => entry.date === dateStr);
-                        // Only show ONE entry per patient per date (first procedure wins)
-                        return entries.length > 0 ? { patient: p, ...entries[0] } : null;
-                    })
-                    .filter(Boolean);
+                    .forEach(p => {
+                        getProcedureDateEntries(p)
+                            .filter(entry => entry.date === dateStr)
+                            .forEach(entry => {
+                                const event = { patient: p, ...entry };
+                                const key = getProcedureCalendarKey(p, entry);
+                                if (!procEventMap.has(key) || shouldReplaceProcedureCalendarEvent(procEventMap.get(key), event)) {
+                                    procEventMap.set(key, event);
+                                }
+                            });
+                    });
+                const procEvents = Array.from(procEventMap.values());
                 const otherCount = dayPatients.filter(p => {
                     const isStat = p.stat === true || p.stat === 'true';
                     const hasProcedureOnThisDate = getProcedureDateEntries(p).some(entry => entry.date === dateStr);
