@@ -27,7 +27,7 @@ flowchart TD
    D -- Yes --> E[Click Add Record]
     D -- No --> F[Select Existing Patient]
     E --> G[Enter Details & Save]
-   F --> H[Update Visit Status & Findings]
+   F --> H[Update SOAP Note & Investigations]
     G --> I{Rounds Complete?}
     H --> I
     I -- No --> C
@@ -65,8 +65,8 @@ flowchart TD
     B -- Yes --> C[Update Existing Record]
     B -- No --> D{Same MRN, New Date?}
     D -- Yes --> E[Prompt: Copy Previous Visit]
-    E --> F[Auto-fill Demographics & Plan]
-    F --> G[Leave Findings Blank]
+   E --> F[Auto-fill Stable Demographics]
+   F --> G[Leave Current SOAP/Findings Blank]
     G --> H[Create New Record]
     D -- No --> I[Create Brand New Patient]
 
@@ -193,8 +193,10 @@ The app offers three ways to view patient data:
    - **Date** - Today's date (or select a different date)
    - **Hospital** - Select from dropdown
    - **Name, DOB, MRN** - Patient demographics
-   - **Findings** - Clinical assessments
-   - **Plan** - Treatment plan
+   - **SOAP Note** - Subjective and objective visit narrative
+   - **Investigations** - Labs, microbiology, and repeatable imaging entries
+   - **Assessment** - Clinical assessment or diagnosis narrative
+   - **Plan** - Structured treatment and follow-up plan
    - **Supervising MD** - Attending physician
    - **Pending** - Lab work, imaging, procedures
    - **Follow-Up** - Follow-up appointments
@@ -237,7 +239,7 @@ When adding the same patient on a new date, click: **"Copy from Previous Visit"*
 This auto-fills:
 - ✅ Room, Hospital, Name, DOB, MRN
 - ✅ Treatment Plan, Supervising MD
-- ❌ **Does NOT copy**: Findings, Pending tests, Follow-ups (fresh per visit)
+- ❌ **Does NOT copy**: current SOAP narrative, findings, pending tests, follow-ups (fresh per visit)
 
 **Pro Tip**: Use this when rounding on the same patient across different days!
 
@@ -266,6 +268,38 @@ Without opening the full patient form:
 3. Select the new workflow status from the six current visit-status options
 4. Status updates instantly
 
+### SOAP Note Layout
+
+The patient form is arranged to support a compact SOAP-style rounding note:
+
+| Section | What to enter |
+|---------|---------------|
+| **Subjective** | Symptoms, history, patient-reported concerns, interval events |
+| **Objective** | Exam, observed findings, vitals/labs narrative, clinically objective notes |
+| **Investigations** | Lab panels, cultures, and imaging results with dates and context |
+| **Assessment** | Clinical impression, diagnosis, problem framing, medico-legal assessment text |
+| **Plan** | Observation, investigation, treatment, procedure, disposition, success indicators, failure/escalation indicators |
+
+The **Objective** field replaces the older progress-notes entry visually, while the app still preserves the legacy progress-notes carrier behind the scenes for compatibility and date-review metadata.
+
+#### Structured Plan
+
+Use the structured plan boxes when you want the note to stay compact but complete:
+
+- **Observation / monitoring** - What to watch and how often
+- **Investigation** - Labs, imaging, cultures, consults to follow
+- **Treatment** - Behavioral, medical, or surgical treatment direction
+- **Procedure** - Procedure-specific plan or operative next steps
+- **Disposition / follow-up** - Discharge, sign-off, clinic, repeat visit, or transfer plan
+- **Success indicators** - What would show improvement or readiness to step down
+- **Failure indicators** - What would trigger escalation, re-evaluation, or alternate treatment
+
+The app saves a readable Plan summary from these boxes, plus any **Additional plan notes** you enter.
+
+#### Storage Note for Admins
+
+This SOAP update does **not** require new SharePoint columns. In M365 mode, the structured SOAP data, structured Plan categories, and repeatable imaging entries are stored in the existing **CatchAll** field, while the standard visible summaries continue to save into the existing patient list fields.
+
 ### Findings & Investigations (Lab/Imaging Data)
 
 The app tracks clinical investigations (lab tests, imaging, cultures, etc.) with structured metadata for better organization and audit trail.
@@ -275,15 +309,19 @@ The app tracks clinical investigations (lab tests, imaging, cultures, etc.) with
 When creating or editing a patient, you can add investigation results:
 
 1. Open the patient form
-2. In the **Findings** section, click on investigation types (e.g., "CBC w/ diff", "BMP", or free-text note)
+2. In the **Investigations** section, click on investigation types (e.g., "CBC w/ diff", "BMP", or free-text note)
 3. For **Panel Investigations** (CBC, BMP):
    - Fill in individual fields: WCC, Hemoglobin, Platelets (for CBC) or Sodium, Potassium, etc. (for BMP)
    - Add the **Date** the test was performed
    - The app auto-detects if it's a prior result vs. current result based on record creation date
-4. For **Free-Text Findings**:
+4. For **Repeatable Imaging**:
+   - Click **Add Imaging Entry**
+   - Enter type (X-ray, Ultrasound, CT, MRI, PET, Nuclear Medicine), date, body region, organ/body part, laterality, overall status, result, and comments
+   - Add separate cards for separate studies, sides, body parts, or dates
+5. For **Free-Text Findings**:
    - Type any investigation note (e.g., "Left hydronephrosis, 2mm stone")
    - Add the date if known
-5. Click **Save**
+6. Click **Save**
 
 #### Understanding Finding Display Format
 
@@ -293,6 +331,7 @@ Findings appear in the **Census table** and **patient modal** in a concise forma
 |---|---|---|
 | **Label: Values \| Date** | CBC w/ diff: WCC 10.5, Hb 14.2 \| 2026-01-16 | Current investigation with date |
 | **Label: Values \| Context** | BMP: K 4.2, Na 138 \| Prior result | Prior investigation (before this visit) |
+| **Imaging: Type \| Context** | Imaging: CT: Right abdomen kidney - Abnormal - 4 mm stone \| Current visit date | Structured imaging card |
 | **Custom Text \| Context** | Left hydro, 2mm stone \| Current visit date | Free-text finding |
 | **Label \| Needs Confirmation** | CBC w/ diff \| Defaulted to record date | Investigation date was inferred/defaulted |
 
@@ -782,8 +821,11 @@ The Staffing tab manages **physician on-call coverage**.
 - **Room number**: Use `ER` for emergency department, `5039` for inpatient
 - **MRN**: Unique per patient across system; use consistently
 - **Date**: Leave as today unless importing historical data
-- **Findings**: Use bullet points or abbreviations (e.g., "L hydro, 2mm stone, S/P CRULLS 12/20")
-- **Plan**: Be specific (e.g., "Cysto/stent removal 12/28 @ 2pm", not just "Follow-up")
+- **Subjective**: Keep patient-reported history and interval symptoms here
+- **Objective**: Put exam, observed findings, and objective clinical narrative here
+- **Investigations**: Use cards for CBC/BMP/imaging when available; use Additional Comments only for narrative leftovers
+- **Assessment**: State the clinical impression clearly enough to support the plan
+- **Plan**: Use the structured boxes first, then Additional plan notes for details that do not fit neatly
 
 ### Search Tips
 
@@ -952,7 +994,13 @@ A: Select rows and use **Print Selected** in Selection Mode, or use the **Print*
 A: Yes, all data is encrypted in transit (HTTPS) and at rest in SharePoint. Access is audited and logged.
 
 **Q: What's the "Copy from Previous Visit" button?**  
-A: It copies all data from the patient's last visit except findings, pending items, and follow-up (those are assumed to be new for each visit). Saves time entering repetitive info.
+A: It copies stable data from the patient's last visit but keeps current SOAP narrative, findings, pending items, and follow-up fresh for the new visit. Saves time without carrying forward stale clinical content.
+
+**Q: Do SOAP notes or imaging cards require new SharePoint columns?**  
+A: No. This version stores the new structured SOAP, Plan, and imaging-card data in the existing CatchAll field while continuing to populate the existing visible summary fields.
+
+**Q: How should I enter multiple imaging studies?**  
+A: Use one imaging card per study, side, body part, or date. For example, enter a right renal ultrasound and a CT abdomen as two separate cards so each can keep its own date and result.
 
 **Q: What's "Local Mode" vs "Connected (M365)"?**  
 A: Local Mode = App works in your browser without cloud sync (fast, no setup). Connected = Data syncs to M365/SharePoint (shared team access). Contact IT admin to enable M365 mode.
@@ -968,6 +1016,9 @@ A: **Import New Only** = Add new records, skip duplicates (safe if unsure). **Im
 ## Version History
 
 **v2.0** (Mar 2026) - Enhanced UI & Advanced Features
+- Added SOAP-style patient form with Subjective, Objective, Assessment, and structured Plan fields
+- Added repeatable imaging cards for separate modalities, laterality, body parts, dates, and results
+- Stored structured SOAP/imaging data through existing CatchAll field with no SharePoint schema change
 - Added 11 tabs including Timeline, Analytics, Reports, Audit, Procedures, Shifts
 - Implemented batch operations (select, change status, archive, delete)
 - Added advanced search with quick filters

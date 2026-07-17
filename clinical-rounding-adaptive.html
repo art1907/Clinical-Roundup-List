@@ -3444,10 +3444,14 @@
                         displayValue = String(rawValue).trim();
                     }
                     if (!displayValue) return '';
+                    if (code.startsWith('imaging-') && rawValue && typeof rawValue === 'object') {
+                        displayValue = formatImagingEntryDisplay(rawValue);
+                    }
                     
                     // Phase 4: Use catalog label if available for data-driven display
                     const catalogEntry = getCatalogEntry(code);
-                    const catalogLabel = catalogEntry ? catalogEntry.label : code;
+                    const metaLabel = syntheticPatient.findingsMeta?.[code]?.label;
+                    const catalogLabel = metaLabel || (catalogEntry ? catalogEntry.label : code);
                     const hasLabel = catalogLabel !== code;
                     const labeledDisplay = hasLabel ? `${catalogLabel}: ${displayValue}` : displayValue;
                     
@@ -7657,7 +7661,10 @@
                 'f-md', 'f-plan', 'f-proc-status', 'f-priority', 'f-cpt-primary',
                 'f-icd-primary', 'f-charge-codes-secondary', 'f-followup-labs',
                 'f-followup-imaging', 'f-followup-consultation', 'f-followup-text', 'f-pending',
-                'f-procedure-other-surgeries'
+                'f-procedure-other-surgeries', 'f-subjective-text', 'f-objective-text',
+                'f-assessment-text', 'f-plan-observation', 'f-plan-investigation',
+                'f-plan-treatment', 'f-plan-procedure', 'f-plan-disposition',
+                'f-plan-success', 'f-plan-failure'
             ];
             lockedIds.forEach((id) => {
                 const el = document.getElementById(id);
@@ -7942,6 +7949,83 @@
             return true;
         };
 
+        function setImagingEntriesEditable(editable) {
+            document.querySelectorAll('#imaging-entries-container input, #imaging-entries-container select, #imaging-entries-container textarea, #imaging-entries-container button').forEach((control) => {
+                if (control.dataset.imagingRemove !== undefined) {
+                    control.disabled = !editable;
+                    control.classList.toggle('opacity-50', !editable);
+                    return;
+                }
+                if (control.tagName === 'SELECT' || control.type === 'date') {
+                    control.disabled = !editable;
+                } else {
+                    control.readOnly = !editable;
+                }
+                control.classList.toggle('opacity-70', !editable);
+            });
+            const addButton = document.getElementById('add-imaging-entry-btn');
+            if (addButton) {
+                addButton.disabled = !editable;
+                addButton.classList.toggle('opacity-50', !editable);
+            }
+        }
+
+        function renderImagingEntries(entries = [], options = {}) {
+            const container = document.getElementById('imaging-entries-container');
+            const hiddenInput = document.getElementById('f-imaging-entries');
+            if (!container) return;
+            const editable = options.editable ?? isFindingsModalEditable();
+            const normalizedEntries = entries.length ? entries : [];
+            container.innerHTML = normalizedEntries.map((entry, index) => {
+                const id = escapeInlineHtml(sanitizeImagingEntryId(entry.id, index));
+                const type = escapeInlineHtml(entry.type || '');
+                const date = escapeInlineHtml(entry.date || '');
+                const region = escapeInlineHtml(entry.region || '');
+                const organ = escapeInlineHtml(entry.organ || '');
+                const laterality = escapeInlineHtml(entry.laterality || '');
+                const overall = escapeInlineHtml(entry.overall || '');
+                const result = escapeInlineHtml(entry.result || '');
+                const comments = escapeInlineHtml(entry.comments || '');
+                return `
+                    <div class="border border-slate-200 rounded p-2 bg-white space-y-2" data-imaging-entry="${id}">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="text-[11px] font-bold text-blue-900 uppercase">Imaging ${index + 1}</div>
+                            <button type="button" data-imaging-remove onclick="globalThis.removeImagingEntry('${id}')" class="text-[11px] font-bold text-red-600 hover:underline">Remove</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input list="imaging-type-options" data-imaging-field="type" value="${type}" placeholder="Type: X-ray/US/CT/MRI/PET/Nuclear" class="imaging-entry-input text-xs px-2 py-1.5 border rounded">
+                            <input type="date" data-imaging-field="date" value="${date}" class="imaging-entry-input text-xs px-2 py-1.5 border rounded">
+                            <select data-imaging-field="overall" class="imaging-entry-input text-xs px-2 py-1.5 border rounded">
+                                <option value="" ${overall ? '' : 'selected'}>Overall</option>
+                                <option value="Normal" ${overall === 'Normal' ? 'selected' : ''}>Normal</option>
+                                <option value="Abnormal" ${overall === 'Abnormal' ? 'selected' : ''}>Abnormal</option>
+                                <option value="Indeterminate" ${overall === 'Indeterminate' ? 'selected' : ''}>Indeterminate</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input list="body-region-options" data-imaging-field="region" value="${region}" placeholder="Body region" class="imaging-entry-input text-xs px-2 py-1.5 border rounded">
+                            <input list="organ-options" data-imaging-field="organ" value="${organ}" placeholder="Organ/body part" class="imaging-entry-input text-xs px-2 py-1.5 border rounded">
+                            <input list="laterality-options" data-imaging-field="laterality" value="${laterality}" placeholder="Laterality/site" class="imaging-entry-input text-xs px-2 py-1.5 border rounded">
+                        </div>
+                        <textarea data-imaging-field="result" placeholder="Result / impression" class="imaging-entry-input w-full text-xs px-2 py-1.5 border rounded resize-none" rows="2">${result}</textarea>
+                        <textarea data-imaging-field="comments" placeholder="Comments" class="imaging-entry-input w-full text-xs px-2 py-1.5 border rounded resize-none" rows="1">${comments}</textarea>
+                    </div>`;
+            }).join('') || '<div class="text-xs text-slate-400 border border-dashed border-blue-200 rounded p-3 bg-white">No imaging entries yet.</div>';
+            if (hiddenInput) hiddenInput.value = JSON.stringify(normalizedEntries);
+            setImagingEntriesEditable(editable);
+        }
+
+        globalThis.addImagingEntry = () => {
+            const entries = collectImagingEntriesFromForm();
+            entries.push({ id: `imaging-${Date.now()}`, type: '', date: '', region: '', organ: '', laterality: '', overall: '', result: '', comments: '' });
+            renderImagingEntries(entries, { editable: true });
+        };
+
+        globalThis.removeImagingEntry = (entryId) => {
+            const entries = collectImagingEntriesFromForm().filter((entry) => String(entry.id) !== String(entryId));
+            renderImagingEntries(entries, { editable: isFindingsModalEditable() });
+        };
+
         globalThis.openModal = (id = null) => {
             const modal = document.getElementById('patient-modal');
             if (!modal) return;
@@ -8020,6 +8104,7 @@
                     el.readOnly = !proceduresEditable;
                     el.disabled = !proceduresEditable;
                 });
+                setImagingEntriesEditable(isEditing);
             };
 
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
@@ -8105,6 +8190,26 @@
                         }
                         el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
+                    const soapData = getPatientSoapData(p);
+                    const setSoapField = (inputId, value) => {
+                        const input = document.getElementById(inputId);
+                        if (input) input.value = value || '';
+                    };
+                    setSoapField('f-subjective-text', soapData.subjectiveText);
+                    setSoapField('f-objective-text', soapData.objectiveText);
+                    setSoapField('f-progress-notes', soapData.objectiveText);
+                    setSoapField('f-assessment-text', soapData.assessmentText);
+                    const planStructured = getPatientPlanStructured(p);
+                    setSoapField('f-plan-observation', planStructured.observation);
+                    setSoapField('f-plan-investigation', planStructured.investigation);
+                    setSoapField('f-plan-treatment', planStructured.treatment);
+                    setSoapField('f-plan-procedure', planStructured.procedure);
+                    setSoapField('f-plan-disposition', planStructured.disposition);
+                    setSoapField('f-plan-success', planStructured.success);
+                    setSoapField('f-plan-failure', planStructured.failure);
+                    const catchAllForPlan = parseCatchAllData(p.catchAll);
+                    setSoapField('f-plan', catchAllForPlan.planFreeText !== undefined ? catchAllForPlan.planFreeText : (p.plan || ''));
+                    renderImagingEntries(getPatientImagingEntries(p), { editable: isFindingsModalEditable() });
                     const followUpFields = parseFollowUpSummary(p);
                     const setFollowUpField = (inputId, value) => {
                         const input = document.getElementById(inputId);
@@ -8239,6 +8344,7 @@
                 if (typeof globalThis.clearPatientFiles === 'function') {
                     globalThis.clearPatientFiles();
                 }
+                renderImagingEntries([], { editable: true });
                 refreshReturningPatientBackfillPrompt();
             }
             if (typeof globalThis.syncFindingsUI === 'function') {
@@ -8303,6 +8409,7 @@
                 el.readOnly = false;
                 el.disabled = false;
             });
+            setImagingEntriesEditable(true);
             return true;
         };
 
@@ -8402,6 +8509,17 @@
 
             setTextValue('f-findings-text', '');
             setTextValue('f-progress-notes', '');
+            setTextValue('f-subjective-text', '');
+            setTextValue('f-objective-text', '');
+            setTextValue('f-assessment-text', '');
+            setTextValue('f-plan', '');
+            setTextValue('f-plan-observation', '');
+            setTextValue('f-plan-investigation', '');
+            setTextValue('f-plan-treatment', '');
+            setTextValue('f-plan-procedure', '');
+            setTextValue('f-plan-disposition', '');
+            setTextValue('f-plan-success', '');
+            setTextValue('f-plan-failure', '');
             setTextValue('f-pending', '');
             setTextValue('f-followup-labs', '');
             setTextValue('f-followup-imaging', '');
@@ -8410,6 +8528,8 @@
             setTextValue('f-findings-codes', '');
             setTextValue('f-findings-values', '{}');
             setTextValue('f-findings-dates', '{}');
+            setTextValue('f-imaging-entries', '[]');
+            renderImagingEntries([], { editable: true });
 
             const sourceProcedureState = getProcedureState(sourcePatient);
             setTextValue('f-procedure-codes', sourceProcedureState.procedureCodes.join(','));
@@ -8879,6 +8999,161 @@
         function getPatientVisitGroup(patient = {}) {
             const key = getPatientPersonKey(patient);
             return patients.filter(visit => getPatientPersonKey(visit) === key);
+        }
+
+        function parseCatchAllData(value = '') {
+            if (!value) return {};
+            if (typeof value === 'object' && !Array.isArray(value)) return { ...value };
+            if (typeof value !== 'string') return {};
+            try {
+                const parsed = JSON.parse(value);
+                return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+            } catch (error) {
+                console.debug('Could not parse catchAll data:', error?.message || error);
+                return {};
+            }
+        }
+
+        function getPatientSoapData(patient = {}) {
+            const catchAll = parseCatchAllData(patient.catchAll);
+            const soap = catchAll.soap && typeof catchAll.soap === 'object' ? catchAll.soap : {};
+            return {
+                subjectiveText: String(patient.subjectiveText || soap.subjectiveText || '').trim(),
+                objectiveText: String(patient.objectiveText || soap.objectiveText || getVisibleProgressNotes(patient) || '').trim(),
+                assessmentText: String(patient.assessmentText || soap.assessmentText || catchAll.assessmentText || '').trim()
+            };
+        }
+
+        function getPatientSubjectiveText(patient = {}) {
+            return getPatientSoapData(patient).subjectiveText;
+        }
+
+        function getPatientObjectiveText(patient = {}) {
+            return getPatientSoapData(patient).objectiveText;
+        }
+
+        function getPatientAssessmentText(patient = {}) {
+            return getPatientSoapData(patient).assessmentText;
+        }
+
+        function getPatientPlanStructured(patient = {}) {
+            const catchAll = parseCatchAllData(patient.catchAll);
+            const planStructured = patient.planStructured && typeof patient.planStructured === 'object'
+                ? patient.planStructured
+                : (catchAll.planStructured && typeof catchAll.planStructured === 'object' ? catchAll.planStructured : {});
+            return {
+                observation: String(planStructured.observation || '').trim(),
+                investigation: String(planStructured.investigation || '').trim(),
+                treatment: String(planStructured.treatment || '').trim(),
+                procedure: String(planStructured.procedure || '').trim(),
+                disposition: String(planStructured.disposition || '').trim(),
+                success: String(planStructured.success || '').trim(),
+                failure: String(planStructured.failure || '').trim()
+            };
+        }
+
+        function buildPlanSummaryFromStructured(planStructured = {}, freeTextPlan = '') {
+            const labels = {
+                observation: 'Observation',
+                investigation: 'Investigation',
+                treatment: 'Treatment',
+                procedure: 'Procedure',
+                disposition: 'Disposition/Follow-up',
+                success: 'Success indicators',
+                failure: 'Failure indicators'
+            };
+            const structuredLines = Object.entries(labels)
+                .map(([key, label]) => [label, String(planStructured[key] || '').trim()])
+                .filter(([, value]) => value)
+                .map(([label, value]) => `${label}: ${value}`);
+            const freeText = String(freeTextPlan || '').trim();
+            return [...structuredLines, freeText].filter(Boolean).join('\n');
+        }
+
+        function sanitizeImagingEntryId(value, index = 0) {
+            const cleanValue = String(value || '').trim().replace(/[^A-Za-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+            return cleanValue || `imaging-${Date.now()}-${index}`;
+        }
+
+        function getPatientImagingEntries(patient = {}) {
+            const catchAll = parseCatchAllData(patient.catchAll);
+            const entries = Array.isArray(patient.imagingEntries)
+                ? patient.imagingEntries
+                : (Array.isArray(catchAll.imagingEntries) ? catchAll.imagingEntries : []);
+            return entries
+                .filter((entry) => entry && typeof entry === 'object')
+                .map((entry, index) => ({
+                    id: sanitizeImagingEntryId(entry.id, index),
+                    type: String(entry.type || '').trim(),
+                    date: String(entry.date || '').trim(),
+                    region: String(entry.region || '').trim(),
+                    organ: String(entry.organ || '').trim(),
+                    laterality: String(entry.laterality || '').trim(),
+                    overall: String(entry.overall || '').trim(),
+                    result: String(entry.result || '').trim(),
+                    comments: String(entry.comments || '').trim()
+                }))
+                .filter((entry) => entry.type || entry.region || entry.organ || entry.result || entry.comments);
+        }
+
+        function formatImagingEntryDisplay(entry = {}) {
+            const parts = [];
+            if (entry.type) parts.push(entry.type);
+            const anatomy = [entry.laterality, entry.region, entry.organ].map(v => String(v || '').trim()).filter(Boolean).join(' ');
+            if (anatomy) parts.push(anatomy);
+            if (entry.overall) parts.push(entry.overall);
+            if (entry.result) parts.push(entry.result);
+            if (entry.comments) parts.push(`Comments: ${entry.comments}`);
+            return parts.join(' - ');
+        }
+
+        function getPatientImagingSummary(patient = {}) {
+            return getPatientImagingEntries(patient).map(formatImagingEntryDisplay).filter(Boolean).join('\n');
+        }
+
+        function collectImagingEntriesFromForm() {
+            return Array.from(document.querySelectorAll('#imaging-entries-container [data-imaging-entry]'))
+                .map((entryEl, index) => {
+                    const getValue = (field) => String(entryEl.querySelector(`[data-imaging-field="${field}"]`)?.value || '').trim();
+                    return {
+                        id: String(entryEl.dataset.imagingEntry || `imaging-${Date.now()}-${index}`),
+                        type: getValue('type'),
+                        date: getValue('date'),
+                        region: getValue('region'),
+                        organ: getValue('organ'),
+                        laterality: getValue('laterality'),
+                        overall: getValue('overall'),
+                        result: getValue('result'),
+                        comments: getValue('comments')
+                    };
+                })
+                .filter((entry) => entry.type || entry.region || entry.organ || entry.result || entry.comments);
+        }
+
+        function syncImagingEntriesIntoFindings(findingsCodes, findingsValues, findingsDates, findingsMeta, imagingEntries = []) {
+            const existingCodes = Array.isArray(findingsCodes) ? findingsCodes : [];
+            const codes = new Set(existingCodes.filter((code) => {
+                const isImagingCode = String(code || '').startsWith('imaging-') || findingsMeta?.[code]?.kind === 'imaging' || findingsMeta?.[code]?.category === 'imaging';
+                if (isImagingCode) {
+                    delete findingsValues[code];
+                    delete findingsDates[code];
+                    delete findingsMeta[code];
+                }
+                return !isImagingCode;
+            }));
+            imagingEntries.forEach((entry, index) => {
+                const code = `imaging-${sanitizeImagingEntryId(entry.id, index)}`;
+                codes.add(code);
+                findingsValues[code] = entry;
+                if (entry.date) findingsDates[code] = entry.date;
+                findingsMeta[code] = {
+                    ...(findingsMeta[code] || {}),
+                    kind: 'imaging',
+                    category: 'imaging',
+                    label: entry.type ? `Imaging: ${entry.type}` : 'Imaging'
+                };
+            });
+            return Array.from(codes).filter(Boolean);
         }
 
         function getLatestPatientRows(patientList = []) {
@@ -10346,10 +10621,7 @@ const findHeaderIndex = (rows, sheetLog) => {
         // Detect and fix version mismatches
         if (storedVersion && storedVersion !== CURRENT_VERSION) {
             console.warn('⚠️  Version mismatch detected! Stored:', storedVersion, 'Current:', CURRENT_VERSION);
-            console.log('🔄 Forcing fresh page load...');
             sessionStorage.setItem('appVersion', CURRENT_VERSION);
-            // Clear query params and reload
-            globalThis.location.href = globalThis.location.origin + globalThis.location.pathname + '?v=' + Date.now();
         } else {
             sessionStorage.setItem('appVersion', CURRENT_VERSION);
         }
@@ -11073,6 +11345,20 @@ const findHeaderIndex = (rows, sheetLog) => {
             const procedureValues = procValuesInput?.value ? JSON.parse(procValuesInput.value) : {};
             const procDatesInput = document.getElementById('f-procedure-dates');
             const procedureDates = procDatesInput?.value ? JSON.parse(procDatesInput.value) : {};
+            const imagingEntries = collectImagingEntriesFromForm();
+            const planStructured = {
+                observation: document.getElementById('f-plan-observation')?.value || '',
+                investigation: document.getElementById('f-plan-investigation')?.value || '',
+                treatment: document.getElementById('f-plan-treatment')?.value || '',
+                procedure: document.getElementById('f-plan-procedure')?.value || '',
+                disposition: document.getElementById('f-plan-disposition')?.value || '',
+                success: document.getElementById('f-plan-success')?.value || '',
+                failure: document.getElementById('f-plan-failure')?.value || ''
+            };
+            const planFreeText = document.getElementById('f-plan')?.value || '';
+            const subjectiveText = document.getElementById('f-subjective-text')?.value || '';
+            const objectiveText = document.getElementById('f-objective-text')?.value || '';
+            const assessmentText = document.getElementById('f-assessment-text')?.value || '';
             const otherSurgeriesInputValue = String(document.getElementById('f-procedure-other-surgeries')?.value || '').trim();
             if (otherSurgeriesInputValue) {
                 procedureValues.otherSurgeryText = otherSurgeriesInputValue;
@@ -11090,9 +11376,16 @@ const findHeaderIndex = (rows, sheetLog) => {
                 consultation: followUpConsultation,
                 text: followUpText
             });
+            const syncedFindingCodes = syncImagingEntriesIntoFindings(findingsCodes, findingsValues, findingsDates, findingsMeta, imagingEntries);
+            if (codesInput) codesInput.value = syncedFindingCodes.join(', ');
+            if (valuesInput) valuesInput.value = JSON.stringify(findingsValues);
+            if (datesInput) datesInput.value = JSON.stringify(findingsDates);
+            if (metaInput) metaInput.value = JSON.stringify(findingsMeta);
             
             const reviewMeta = getFormDateReviewMeta();
-            const visibleProgressNotes = document.getElementById('f-progress-notes').value;
+            const visibleProgressNotes = objectiveText;
+            const currentEditIdForCatchAll = document.getElementById('edit-id')?.value || '';
+            const existingCatchAll = parseCatchAllData(patients.find((patient) => patient.id === currentEditIdForCatchAll)?.catchAll || '');
             const parseSecondaryCodes = (raw) => {
                 if (Array.isArray(raw)) return raw.map(v => String(v || '').trim()).filter(Boolean);
                 return String(raw || '')
@@ -11110,7 +11403,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                 hospital: document.getElementById('f-hospital').value,
                 visitTime: document.getElementById('f-visit-time').value,
                 visitKey: document.getElementById('f-visit-key').value,
-                findingsCodes: findingsCodes,
+                subjectiveText,
+                objectiveText,
+                assessmentText,
+                planStructured,
+                imagingEntries,
+                findingsCodes: syncedFindingCodes,
                 findingsValues: findingsValues,
                 findingsDates: findingsDates,
                 findingsMeta: findingsMeta,
@@ -11119,7 +11417,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 procedureValues: procedureValues,
                 procedureDates: procedureDates,
                 procedureDate: primaryProcedureDate,
-                plan: document.getElementById('f-plan').value, 
+                plan: buildPlanSummaryFromStructured(planStructured, planFreeText), 
                 progressNotes: visibleProgressNotes,
                 supervisingMd: document.getElementById('f-md').value,
                 pending: document.getElementById('f-pending').value, 
@@ -11137,7 +11435,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                 archived: document.getElementById('f-archived')?.value === 'true',
                 notesHistory: [],
                 catchAll: JSON.stringify({
-                    procedureNotes: document.getElementById('f-procedure-notes')?.value || ''
+                    ...existingCatchAll,
+                    procedureNotes: document.getElementById('f-procedure-notes')?.value || '',
+                    soap: { subjectiveText, objectiveText, assessmentText },
+                    planStructured,
+                    planFreeText,
+                    imagingEntries
                 })
             };
 
@@ -11222,7 +11525,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                     'pending', 'followUp', 'procedureStatus', 'cptPrimary', 'icdPrimary',
                     'chargeCodesSecondary', 'findingsText', 'findingsCodes', 'findingsValues', 'procedureCodes', 'procedureValues', 'procedureDates',
                     'findingsDates', 'followUpLabs', 'followUpImaging', 'followUpConsultation',
-                    'followUpText', 'stat', 'priority', 'progressNotes', 'archived'
+                    'followUpText', 'stat', 'priority', 'progressNotes', 'subjectiveText',
+                    'objectiveText', 'assessmentText', 'planStructured', 'imagingEntries', 'archived'
                 ];
 
                 let finalChangeNote = changeNote;
@@ -11969,17 +12273,72 @@ const findHeaderIndex = (rows, sheetLog) => {
             const filtered = getLatestPatientRows(getFilteredData());
             
             if (filtered.length === 0) {
-                container.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 text-sm">No entries</td></tr>`;
+                const emptyRow = document.createElement('tr');
+                const emptyCell = document.createElement('td');
+                emptyCell.colSpan = 7;
+                emptyCell.className = 'p-4 text-center text-slate-400 text-sm';
+                emptyCell.textContent = 'No entries';
+                emptyRow.appendChild(emptyCell);
+                container.replaceChildren(emptyRow);
                 return;
             }
             
             // Get visible columns
             const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
 
-            const renderSectionRow = (label, count, isReviewSection) => `
-                <tr class="${isReviewSection ? 'bg-amber-100 border-y border-amber-200' : 'bg-slate-100 border-y border-slate-200'}">
-                    <td colspan="${visibleCols.filter(Boolean).length + 4}" class="px-3 py-2 text-xs font-bold uppercase tracking-wide ${isReviewSection ? 'text-amber-900' : 'text-slate-600'}">${label} (${count})</td>
-                </tr>`;
+            const createNode = (tagName, className = '', textValue = null) => {
+                const node = document.createElement(tagName);
+                if (className) node.className = className;
+                if (textValue !== null && textValue !== undefined) node.textContent = String(textValue);
+                return node;
+            };
+
+            const createCell = (className = '', child = null) => {
+                const cell = createNode('td', className);
+                if (child) cell.appendChild(child);
+                return cell;
+            };
+
+            const renderSectionRow = (label, count, isReviewSection) => {
+                const row = createNode('tr', isReviewSection ? 'bg-amber-100 border-y border-amber-200' : 'bg-slate-100 border-y border-slate-200');
+                const cell = createNode('td', `px-3 py-2 text-xs font-bold uppercase tracking-wide ${isReviewSection ? 'text-amber-900' : 'text-slate-600'}`, `${label} (${Number(count) || 0})`);
+                cell.colSpan = visibleCols.filter(Boolean).length + 4;
+                row.appendChild(cell);
+                return row;
+            };
+
+            const appendClassedText = (parent, tagName, className, textValue) => {
+                const child = createNode(tagName, className, textValue);
+                parent.appendChild(child);
+                return child;
+            };
+
+            const createStatusSelect = (patientId, status, statusObj) => {
+                const select = createNode('select', `text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-[16rem]`);
+                select.dataset.selectionLockExempt = '';
+                STATUS_OPTIONS.forEach((option) => {
+                    const optionNode = document.createElement('option');
+                    optionNode.value = option.value;
+                    optionNode.textContent = option.value;
+                    optionNode.selected = option.value === status;
+                    select.appendChild(optionNode);
+                });
+                select.addEventListener('change', (event) => {
+                    event.stopPropagation();
+                    globalThis.updateStatusQuick(patientId, select.value);
+                });
+                return select;
+            };
+
+            const createActionButton = (label, className, handler) => {
+                const button = createNode('button', className, label);
+                button.dataset.selectionLockExempt = '';
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    handler();
+                });
+                return button;
+            };
 
             const renderPatientRow = (p) => {
                 const reviewMeta = getPatientDateReviewMeta(p);
@@ -11990,7 +12349,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const visitTimeDisplay = p.visitTime ? formatLocalTimeWithZone(p.visitTime) : '';
                 const isCrossedOut = isPatientCrossedOut(p.id);
                 const crossedOutClass = isCrossedOut ? 'cross-out-target' : '';
-                
                 const isStat = (p.stat === true || p.stat === 'true');
                 const personKey = getPatientPersonKey(p);
                 const isExpanded = expandedPatientMrns.has(personKey);
@@ -12003,40 +12361,63 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const textSecondary = isStat ? 'text-red-100' : (needsDateReview ? 'text-amber-900' : 'text-slate-700');
                 const textMuted = isStat ? 'text-red-200' : (needsDateReview ? 'text-amber-700' : 'text-slate-500');
                 const textDark = isStat ? 'text-white' : 'text-slate-800';
-                const reviewBadge = needsDateReview
-                    ? `<div class="mt-1 inline-flex items-center rounded border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">Review date fields</div>`
-                    : '';
-                
-                const mainRow = `
-                <tr class="transition-colors ${statClass} ${isCrossedOut ? 'crossed-out-row' : ''}" oncontextmenu="globalThis.openContextMenu(event, '${p.id}')">
-                    <td class="p-3 align-top"><input type="checkbox" data-patient-checkbox value="${p.id}" onchange="updateBatchOpCount()" class="w-5 h-5 rounded cursor-pointer" ${selectedPatientIds.has(p.id)?'checked':''}></td>
-                    ${visibleCols.includes('room') ? `<td class="p-3 align-top w-20"><div class="font-bold text-sm ${textPrimary} ${crossedOutClass}">${p.room}</div></td>` : ''}
-                    ${visibleCols.includes('hospital') ? `<td class="p-3 align-top w-28"><div class="text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${p.hospital || 'N/A'}</div></td>` : ''}
-                    <td class="p-3 align-top w-48">
-                        <div class="text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}">${p.name || 'Anon'}</div>
-                        <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>
-                        ${visitCount > 1 ? `<button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.togglePatientHistory('${personKey}')" class="mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors">${isExpanded ? '▼' : '▶'} ${visitCount} visits</button>` : ''}
-                        ${reviewBadge}
-                    </td>
-                    ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
-                    <td class="p-3 align-top w-[20%] min-w-[16rem]">
-                        <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${p.plan || '-'}</div>
-                        <div class="flex items-start">
-                            <select data-selection-lock-exempt onchange="event.stopPropagation();globalThis.updateStatusQuick('${p.id}', this.value)" class="text-[10px] rounded px-2 py-1 ${statusObj.bg} ${statusObj.text} border font-bold w-full min-w-[16rem]">
-                                ${renderStatusOptionsMarkup(status)}
-                            </select>
-                        </div>
-                    </td>
-                    <td class="p-3 align-top w-52 min-w-[12rem]">
-                        <div class="flex flex-col items-stretch gap-1.5 w-full">
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openModalWithAmendWarning('${p.id}')" class="w-full text-center text-[10px] font-bold leading-snug whitespace-normal ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-3 py-1.5 rounded transition-colors">Amend Existing Record</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.openFollowUpModal('${p.id}')" class="w-full text-center text-[10px] font-bold leading-snug whitespace-normal bg-green-600 text-white hover:bg-green-700 px-3 py-1.5 rounded transition-colors">Add Follow Up</button>
-                            <button data-selection-lock-exempt onclick="event.stopPropagation();globalThis.printPatientRecord('${p.id}')" class="w-full text-center text-[10px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-3 py-1.5 rounded transition-colors">Print</button>
-                        </div>
-                    </td>
-                </tr>`;
-                const historyRow = isExpanded ? buildInlinePatientHistoryRow(p, personKey, visibleCols) : '';
-                return mainRow + historyRow;
+
+                const mainRow = createNode('tr', `transition-colors ${statClass} ${isCrossedOut ? 'crossed-out-row' : ''}`);
+                mainRow.addEventListener('contextmenu', (event) => globalThis.openContextMenu(event, p.id));
+
+                const checkbox = createNode('input', 'w-5 h-5 rounded cursor-pointer');
+                checkbox.type = 'checkbox';
+                checkbox.dataset.patientCheckbox = '';
+                checkbox.value = String(p.id || '');
+                checkbox.checked = selectedPatientIds.has(p.id);
+                checkbox.addEventListener('change', updateBatchOpCount);
+                mainRow.appendChild(createCell('p-3 align-top', checkbox));
+
+                if (visibleCols.includes('room')) {
+                    mainRow.appendChild(createCell('p-3 align-top w-20', createNode('div', `font-bold text-sm ${textPrimary} ${crossedOutClass}`, p.room || '')));
+                }
+
+                if (visibleCols.includes('hospital')) {
+                    mainRow.appendChild(createCell('p-3 align-top w-28', createNode('div', `text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}`, p.hospital || 'N/A')));
+                }
+
+                const patientCell = createNode('td', 'p-3 align-top w-48');
+                appendClassedText(patientCell, 'div', `text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}`, p.name || 'Anon');
+                appendClassedText(patientCell, 'div', `text-xs ${textMuted} mt-0.5 ${crossedOutClass}`, `${p.date || ''}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}`);
+                if (visitCount > 1) {
+                    const historyButton = createNode('button', `mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors`, `${isExpanded ? '▼' : '▶'} ${visitCount} visits`);
+                    historyButton.dataset.selectionLockExempt = '';
+                    historyButton.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        globalThis.togglePatientHistory(personKey);
+                    });
+                    patientCell.appendChild(historyButton);
+                }
+                if (needsDateReview) {
+                    appendClassedText(patientCell, 'div', 'mt-1 inline-flex items-center rounded border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900', 'Review date fields');
+                }
+                mainRow.appendChild(patientCell);
+
+                if (visibleCols.includes('findings')) {
+                    mainRow.appendChild(createCell('p-3 align-top w-[34%] min-w-[18rem]', createNode('div', `text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}`, findingsDisplay)));
+                }
+
+                const planCell = createNode('td', 'p-3 align-top w-[20%] min-w-[16rem]');
+                appendClassedText(planCell, 'div', `text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2`, p.plan || '-');
+                const selectWrap = createNode('div', 'flex items-start');
+                selectWrap.appendChild(createStatusSelect(p.id, status, statusObj));
+                planCell.appendChild(selectWrap);
+                mainRow.appendChild(planCell);
+
+                const actionsCell = createNode('td', 'p-3 align-top w-52 min-w-[12rem]');
+                const actionsWrap = createNode('div', 'flex flex-col items-stretch gap-1.5 w-full');
+                actionsWrap.appendChild(createActionButton('Amend Existing Record', `w-full text-center text-[10px] font-bold leading-snug whitespace-normal ${isStat ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'} px-3 py-1.5 rounded transition-colors`, () => globalThis.openModalWithAmendWarning(p.id)));
+                actionsWrap.appendChild(createActionButton('Add Follow Up', 'w-full text-center text-[10px] font-bold leading-snug whitespace-normal bg-green-600 text-white hover:bg-green-700 px-3 py-1.5 rounded transition-colors', () => globalThis.openFollowUpModal(p.id)));
+                actionsWrap.appendChild(createActionButton('Print', `w-full text-center text-[10px] font-bold ${isStat ? 'bg-red-900 text-white hover:bg-red-950' : 'bg-slate-700 text-white hover:bg-slate-800'} px-3 py-1.5 rounded transition-colors`, () => globalThis.printPatientRecord(p.id)));
+                actionsCell.appendChild(actionsWrap);
+                mainRow.appendChild(actionsCell);
+
+                return isExpanded ? [mainRow, buildInlinePatientHistoryRow(p, personKey, visibleCols, createNode)] : [mainRow];
             };
 
             const reviewPatients = filtered.filter(p => hasDateReviewIssues(getPatientDateReviewMeta(p)));
@@ -12045,16 +12426,18 @@ const findHeaderIndex = (rows, sheetLog) => {
             const renderedRows = [];
             if (reviewPatients.length) {
                 renderedRows.push(renderSectionRow('Human Review Needed', reviewPatients.length, true));
-                renderedRows.push(...reviewPatients.map(renderPatientRow));
+                renderedRows.push(...reviewPatients.flatMap(renderPatientRow));
             }
             if (standardPatients.length) {
                 if (reviewPatients.length) {
                     renderedRows.push(renderSectionRow('Ready Records', standardPatients.length, false));
                 }
-                renderedRows.push(...standardPatients.map(renderPatientRow));
+                renderedRows.push(...standardPatients.flatMap(renderPatientRow));
             }
 
-            container.innerHTML = renderedRows.join('');
+            const rowsFragment = document.createDocumentFragment();
+            renderedRows.forEach((row) => rowsFragment.appendChild(row));
+            container.replaceChildren(rowsFragment);
             
             // Apply header styling based on current sort state
             setTimeout(() => {
@@ -12069,52 +12452,75 @@ const findHeaderIndex = (rows, sheetLog) => {
         }
 
         // ─── Patient Inline History Expansion ────────────────────────────────────────
-        function buildInlinePatientHistoryRow(currentPatient, personKey, visibleCols) {
+        function buildInlinePatientHistoryRow(currentPatient, personKey, visibleCols, createNode = document.createElement.bind(document)) {
             const visits = patients
             .filter(v => getPatientPersonKey(v) === personKey)
             .sort(comparePatientVisitRecency);
-            const esc = v => String(v || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
             const colCount = (visibleCols.includes('room') ? 1 : 0) + (visibleCols.includes('hospital') ? 1 : 0) +
                              (visibleCols.includes('findings') ? 1 : 0) + 4;
-            const rows = visits.map((v, i) => {
+            const row = createNode('tr', 'bg-slate-50/80 border-b-2 border-blue-100 history-expansion-row');
+            const cell = createNode('td', 'px-6 pt-1 pb-3');
+            cell.colSpan = colCount;
+            const header = createNode('div', 'text-xs font-bold text-slate-600 mb-2 flex items-center gap-2');
+            const title = createNode('span');
+            title.append('📋 All visits — ');
+            title.appendChild(createNode('span', 'text-slate-900', currentPatient.name || currentPatient.mrn || 'Patient'));
+            header.appendChild(title);
+            header.appendChild(createNode('span', 'text-[10px] font-normal text-slate-400', `MRN: ${currentPatient.mrn || '—'} · ${visits.length} total · click any row to open`));
+            cell.appendChild(header);
+            const rowsWrap = createNode('div', 'space-y-0.5 max-h-52 overflow-y-auto pr-1');
+
+            visits.forEach((v, i) => {
                 const isCurrentVisit = v.id === currentPatient.id;
                 const st = getSafeConfiguredStatus(getPatientStatus(v));
                 const stObj = STATUS_COLORS[st] || STATUS_COLORS[DEFAULT_RECORD_STATUS] || {};
                 const isArchived = v.archived === true || v.archived === 'true';
                 const prevVisit = visits[i + 1]; // visits are newest-first, so [i+1] is chronologically older
                 const prevSt = prevVisit ? getSafeConfiguredStatus(getPatientStatus(prevVisit)) : null;
-                let deltaPill = '';
+                let deltaText = '';
+                let deltaClass = '';
+                let deltaTitle = '';
                 if (prevSt === null) {
-                    deltaPill = '<span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 flex-shrink-0 font-medium">initial visit</span>';
+                    deltaText = 'initial visit';
+                    deltaClass = 'text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 flex-shrink-0 font-medium';
                 } else if (prevSt === st) {
-                    deltaPill = '<span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 flex-shrink-0">= status unchanged</span>';
+                    deltaText = '= status unchanged';
+                    deltaClass = 'text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 flex-shrink-0';
                 } else {
-                    deltaPill = `<span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0 font-semibold" title="Status changed from previous visit">${esc(prevSt)} → ${esc(st)}</span>`;
+                    deltaText = `${prevSt} → ${st}`;
+                    deltaClass = 'text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0 font-semibold';
+                    deltaTitle = 'Status changed from previous visit';
                 }
                 const findingsDisplay = getFindingsDisplay(v);
                 const findingsSummary = findingsDisplay === '-' ? '' : findingsDisplay;
-                return `<div class="flex items-center gap-2 py-1.5 px-2 rounded-lg ${isCurrentVisit ? 'bg-blue-50 border border-blue-200' : 'hover:bg-white'} cursor-pointer group" onclick="globalThis.openModal('${esc(v.id)}')">
-                    <span class="text-[10px] text-slate-400 w-20 flex-shrink-0 font-mono">${esc(v.date)}</span>
-                    <span class="text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0">Rm&nbsp;${esc(v.room || '—')}</span>
-                    <span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">${esc(v.hospital || '')}</span>
-                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0 whitespace-nowrap">${esc(st)}</span>
-                    ${deltaPill}
-                    ${v.supervisingMd ? `<span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">👨‍⚕️&nbsp;${esc(v.supervisingMd)}</span>` : ''}
-                    <span class="text-[10px] text-slate-600 flex-1 min-w-0 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '...' : ''}${findingsSummary ? `<span class="text-slate-400 mx-1">|</span><span class="text-slate-700">Investigations: ${esc(findingsSummary.slice(0, 90))}${findingsSummary.length > 90 ? '...' : ''}</span>` : ''}</span>
-                    <span class="text-[9px] font-bold opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity flex-shrink-0">open ↗</span>
-                    ${isCurrentVisit ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded flex-shrink-0">current</span>' : ''}
-                    ${isArchived ? '<span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1 rounded flex-shrink-0">archived</span>' : ''}
-                </div>`;
-            }).join('');
-            return `<tr class="bg-slate-50/80 border-b-2 border-blue-100 history-expansion-row">
-                <td colspan="${colCount}" class="px-6 pt-1 pb-3">
-                    <div class="text-xs font-bold text-slate-600 mb-2 flex items-center gap-2">
-                        <span>📋 All visits — <span class="text-slate-900">${esc(currentPatient.name || currentPatient.mrn || 'Patient')}</span></span>
-                        <span class="text-[10px] font-normal text-slate-400">MRN: ${esc(currentPatient.mrn || '—')} · ${visits.length} total · click any row to open</span>
-                    </div>
-                    <div class="space-y-0.5 max-h-52 overflow-y-auto pr-1">${rows}</div>
-                </td>
-            </tr>`;
+                const visitRow = createNode('div', `flex items-center gap-2 py-1.5 px-2 rounded-lg ${isCurrentVisit ? 'bg-blue-50 border border-blue-200' : 'hover:bg-white'} cursor-pointer group`);
+                visitRow.addEventListener('click', () => globalThis.openModal(v.id));
+                visitRow.appendChild(createNode('span', 'text-[10px] text-slate-400 w-20 flex-shrink-0 font-mono', v.date || ''));
+                visitRow.appendChild(createNode('span', 'text-[10px] font-semibold text-slate-600 w-10 flex-shrink-0', `Rm ${v.room || '—'}`));
+                visitRow.appendChild(createNode('span', 'text-[10px] text-slate-500 w-24 flex-shrink-0 truncate', v.hospital || ''));
+                visitRow.appendChild(createNode('span', `text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0 whitespace-nowrap`, st));
+                const deltaPill = createNode('span', deltaClass, deltaText);
+                if (deltaTitle) deltaPill.title = deltaTitle;
+                visitRow.appendChild(deltaPill);
+                if (v.supervisingMd) {
+                    visitRow.appendChild(createNode('span', 'text-[10px] text-slate-500 w-24 flex-shrink-0 truncate', `👨‍⚕️ ${v.supervisingMd}`));
+                }
+                const summary = createNode('span', 'text-[10px] text-slate-600 flex-1 min-w-0 truncate');
+                const planSummary = String(v.plan || '');
+                summary.append(`${planSummary.slice(0, 70)}${planSummary.length > 70 ? '...' : ''}`);
+                if (findingsSummary) {
+                    summary.appendChild(createNode('span', 'text-slate-400 mx-1', '|'));
+                    summary.appendChild(createNode('span', 'text-slate-700', `Investigations: ${findingsSummary.slice(0, 90)}${findingsSummary.length > 90 ? '...' : ''}`));
+                }
+                visitRow.appendChild(summary);
+                visitRow.appendChild(createNode('span', 'text-[9px] font-bold opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity flex-shrink-0', 'open ↗'));
+                if (isCurrentVisit) visitRow.appendChild(createNode('span', 'text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded flex-shrink-0', 'current'));
+                if (isArchived) visitRow.appendChild(createNode('span', 'text-[9px] font-bold text-slate-400 bg-slate-100 px-1 rounded flex-shrink-0', 'archived'));
+                rowsWrap.appendChild(visitRow);
+            });
+            cell.appendChild(rowsWrap);
+            row.appendChild(cell);
+            return row;
         }
 
         globalThis.togglePatientHistory = (mrnKey) => {
@@ -14613,14 +15019,70 @@ const findHeaderIndex = (rows, sheetLog) => {
                     </div>
                 </div>
 
-                <div>
-                    <textarea id="f-progress-notes" placeholder="Subjective & Objective Findings" class="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm" rows="3"></textarea>
-                    <div class="mt-1 text-[11px] text-slate-400">Subjective & Objective Findings = ongoing clinical narrative</div>
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-700">SOAP Note</h3>
+                    <div>
+                        <label for="f-subjective-text" class="text-xs font-bold text-slate-600">Subjective</label>
+                        <textarea id="f-subjective-text" placeholder="Symptoms, history, patient-reported concerns" class="w-full mt-2 p-3 bg-white rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
+                    </div>
+                    <div>
+                        <label for="f-objective-text" class="text-xs font-bold text-slate-600">Objective</label>
+                        <textarea id="f-objective-text" placeholder="Exam, observed findings, objective clinical narrative" class="w-full mt-2 p-3 bg-white rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
+                    </div>
+                    <input type="hidden" id="f-progress-notes">
                 </div>
 
                 <!-- Investigations -->
                 <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-3">
                     <h3 class="text-xs font-bold text-blue-900">Investigations</h3>
+                    <details open class="space-y-2">
+                        <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">Imaging</summary>
+                        <div class="pl-2 space-y-2 text-xs">
+                            <datalist id="imaging-type-options">
+                                <option value="X-ray"></option>
+                                <option value="Ultrasound"></option>
+                                <option value="CT"></option>
+                                <option value="MRI"></option>
+                                <option value="PET"></option>
+                                <option value="CT-PET"></option>
+                                <option value="Nuclear Medicine"></option>
+                                <option value="Bone Scan"></option>
+                                <option value="Renal Scan"></option>
+                                <option value="Perfusion Scan"></option>
+                            </datalist>
+                            <datalist id="body-region-options">
+                                <option value="Head/Neck"></option>
+                                <option value="Chest"></option>
+                                <option value="Abdomen"></option>
+                                <option value="Pelvis"></option>
+                                <option value="Spine"></option>
+                                <option value="Upper Extremity"></option>
+                                <option value="Lower Extremity"></option>
+                                <option value="Whole Body"></option>
+                            </datalist>
+                            <datalist id="organ-options">
+                                <option value="Brain"></option>
+                                <option value="Lung"></option>
+                                <option value="Heart"></option>
+                                <option value="Kidney"></option>
+                                <option value="Bladder"></option>
+                                <option value="Prostate"></option>
+                                <option value="Liver"></option>
+                                <option value="Bone"></option>
+                            </datalist>
+                            <datalist id="laterality-options">
+                                <option value="Left"></option>
+                                <option value="Right"></option>
+                                <option value="Bilateral"></option>
+                                <option value="Midline"></option>
+                                <option value="Upper"></option>
+                                <option value="Lower"></option>
+                            </datalist>
+                            <div id="imaging-entries-container" class="space-y-2"></div>
+                            <input type="hidden" id="f-imaging-entries" value="[]">
+                            <button id="add-imaging-entry-btn" type="button" onclick="globalThis.addImagingEntry()" class="w-full rounded border border-blue-300 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Add Imaging Entry</button>
+                        </div>
+                    </details>
                     <details class="space-y-2">
                         <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🩸 CBC</summary>
                         <div class="pl-2 space-y-2 text-xs">
@@ -14742,175 +15204,6 @@ const findHeaderIndex = (rows, sheetLog) => {
                             </div>
                         </div>
                     </details>
-                    <details class="space-y-2">
-                        <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">📷 X-Ray</summary>
-                        <div class="pl-2 space-y-2 text-xs">
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-chest">
-                                    <span class="flex-1 font-medium">Chest (71045-48)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-chest" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-chest" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-spine">
-                                    <span class="flex-1 font-medium">Spine (72020-110)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-spine" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-spine" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="xray-extremity">
-                                    <span class="flex-1 font-medium">Extremity (73000+)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="xray-extremity" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="xray-extremity" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                        </div>
-                    </details>
-                    <details class="space-y-2">
-                        <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🔊 Ultrasound</summary>
-                        <div class="pl-2 space-y-2 text-xs">
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76700">
-                                    <span class="flex-1 font-medium">Abd complete (76700)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76700" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76700" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-76705">
-                                    <span class="flex-1 font-medium">Abd limited (76705)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-76705" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-76705" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="us-93306">
-                                    <span class="flex-1 font-medium">Echo (93306)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="us-93306" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="us-93306" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                        </div>
-                    </details>
-                    <details class="space-y-2">
-                        <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🖼️ CT Scan</summary>
-                        <div class="pl-2 space-y-2 text-xs">
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-head">
-                                    <span class="flex-1 font-medium">Head/Brain (70450-70)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-head" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-head" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-chest">
-                                    <span class="flex-1 font-medium">Chest (71250-75)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-chest" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-chest" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-abd">
-                                    <span class="flex-1 font-medium">Abdomen (74150-78)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-abd" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-abd" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="ct-pelvis">
-                                    <span class="flex-1 font-medium">Pelvis (72192-94)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="ct-pelvis" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="ct-pelvis" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                        </div>
-                    </details>
-                    <details class="space-y-2">
-                        <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">🧲 MRI</summary>
-                        <div class="pl-2 space-y-2 text-xs">
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-brain">
-                                    <span class="flex-1 font-medium">Brain (70551-53)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-brain" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-brain" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-c-spine">
-                                    <span class="flex-1 font-medium">C-Spine (72141-42)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-c-spine" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-c-spine" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-l-spine">
-                                    <span class="flex-1 font-medium">L-Spine (72148-49)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-l-spine" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-l-spine" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="mri-abd">
-                                    <span class="flex-1 font-medium">Abdomen (74181-83)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="mri-abd" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="mri-abd" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                        </div>
-                    </details>
-                    <details class="space-y-2">
-                        <summary class="text-xs font-bold cursor-pointer p-2 bg-white rounded hover:bg-slate-100">☢️ Nuclear Medicine</summary>
-                        <div class="pl-2 space-y-2 text-xs">
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78306">
-                                    <span class="flex-1 font-medium">Bone scan (78306)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78306" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78306" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78451">
-                                    <span class="flex-1 font-medium">Cardiac perf (78451-54)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78451" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78451" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-78815">
-                                    <span class="flex-1 font-medium">PET scan (78815)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-78815" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-78815" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                            <div class="border border-slate-200 rounded p-2 bg-white">
-                                <div class="flex items-center gap-2 mb-1.5">
-                                    <input type="checkbox" class="findings-checkbox w-4 h-4" value="nuc-thyroid">
-                                    <span class="flex-1 font-medium">Thyroid (78012-14)</span>
-                                    <input type="text" class="findings-date text-xs px-2 py-1 border rounded" data-code="nuc-thyroid" placeholder="MM/DD/YYYY">
-                                </div>
-                                <textarea class="findings-value w-full text-xs px-2 py-1.5 border rounded resize-none" data-code="nuc-thyroid" placeholder="Results..." rows="1"></textarea>
-                            </div>
-                        </div>
-                    </details>
                     <input type="hidden" id="f-findings-codes">
                     <input type="hidden" id="f-findings-values">
                     <input type="hidden" id="f-findings-dates">
@@ -14918,9 +15211,24 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <textarea id="f-findings-text" placeholder="Additional Comments" class="w-full p-3 bg-white rounded-lg border border-blue-200 text-xs" rows="2"></textarea>
                 </div>
 
+                <!-- Assessment -->
+                <div class="bg-amber-50 p-4 rounded-lg border border-amber-200 space-y-2">
+                    <h3 class="text-xs font-bold text-amber-900">Assessment</h3>
+                    <textarea id="f-assessment-text" placeholder="Clinical assessment / diagnosis narrative" class="w-full p-3 bg-white rounded-lg border border-amber-200 text-sm" rows="2"></textarea>
+                </div>
+
                 <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                    <h3 class="text-xs font-bold text-slate-700">📋 Plan</h3>
-                    <textarea id="f-plan" placeholder="Plan" class="w-full p-3 bg-white rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
+                    <h3 class="text-xs font-bold text-slate-700">Plan</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <textarea id="f-plan-observation" placeholder="Observation / monitoring" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200" rows="2"></textarea>
+                        <textarea id="f-plan-investigation" placeholder="Investigation / labs / imaging to follow" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200" rows="2"></textarea>
+                        <textarea id="f-plan-treatment" placeholder="Treatment: behavioral / medical / surgical" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200" rows="2"></textarea>
+                        <textarea id="f-plan-procedure" placeholder="Procedure plan" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200" rows="2"></textarea>
+                        <textarea id="f-plan-disposition" placeholder="Disposition / follow-up" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200" rows="2"></textarea>
+                        <textarea id="f-plan-success" placeholder="Indicators of success" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200" rows="2"></textarea>
+                        <textarea id="f-plan-failure" placeholder="Indicators of failure / escalation" class="w-full p-2.5 bg-white rounded text-xs border border-slate-200 md:col-span-2" rows="2"></textarea>
+                    </div>
+                    <textarea id="f-plan" placeholder="Additional plan notes" class="w-full p-3 bg-white rounded-lg border border-slate-200 text-sm" rows="2"></textarea>
 
                     <!-- Procedures Section -->
                     <div class="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
