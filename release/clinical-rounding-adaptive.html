@@ -8197,7 +8197,7 @@
             return true;
         };
 
-        globalThis.openFollowUpModal = (id) => {
+        globalThis.openFollowUpModal = (id, statusOverride = '') => {
             const sourcePatient = patients.find((p) => p.id === id);
             if (!sourcePatient) {
                 showToast('Unable to load source visit for follow up');
@@ -8234,8 +8234,12 @@
 
             const statusInput = document.getElementById('f-proc-status');
             if (statusInput) {
+                const requestedStatus = String(statusOverride || '').trim();
+                const hasRequestedStatus = requestedStatus && Array.from(statusInput.options || []).some((opt) => opt.value === requestedStatus);
                 const hasFollowUpStatus = Array.from(statusInput.options || []).some((opt) => opt.value === 'FOLLOW UP (CONSULT)');
-                statusInput.value = hasFollowUpStatus
+                statusInput.value = hasRequestedStatus
+                    ? requestedStatus
+                    : hasFollowUpStatus
                     ? 'FOLLOW UP (CONSULT)'
                     : getSafeConfiguredStatus(sourcePatient.procedureStatus || DEFAULT_RECORD_STATUS);
             }
@@ -11064,7 +11068,22 @@ const findHeaderIndex = (rows, sheetLog) => {
             return false;
         };
 
+        function isFollowUpWorkflowStatus(status) {
+            return String(status || '').trim().toUpperCase().startsWith('FOLLOW UP');
+        }
+
         globalThis.updateStatusQuick = async (id, newStatus) => {
+            const sourcePatient = patients.find(p => p.id === id);
+            const currentStatus = sourcePatient ? getSafeConfiguredStatus(getPatientStatus(sourcePatient)) : '';
+            if (sourcePatient && isFollowUpWorkflowStatus(newStatus) && !isFollowUpWorkflowStatus(currentStatus)) {
+                const opened = globalThis.openFollowUpModal(id, newStatus);
+                if (opened) {
+                    showToast('Follow-up status opens a new visit draft. Save it to add collapsible visit history.');
+                } else {
+                    renderUI();
+                }
+                return;
+            }
             const changeNote = await getRequiredChangeNote('status update');
             if (!changeNote) return;
             if (!isConnected || !useM365) {
@@ -11598,7 +11617,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 <tr class="transition-colors ${statClass} ${isCrossedOut ? 'crossed-out-row' : ''}" oncontextmenu="globalThis.openContextMenu(event, '${p.id}')">
                     <td class="p-3 align-top"><input type="checkbox" data-patient-checkbox value="${p.id}" onchange="updateBatchOpCount()" class="w-5 h-5 rounded cursor-pointer" ${selectedPatientIds.has(p.id)?'checked':''}></td>
                     ${visibleCols.includes('room') ? `<td class="p-3 align-top w-20"><div class="font-bold text-sm ${textPrimary} ${crossedOutClass}">${p.room}</div></td>` : ''}
-                    ${visibleCols.includes('hospital') ? `<td class="p-3 align-top w-28"><div class="text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${p.hospital || 'N/A'}</div></td>` : ''}
+                    ${visibleCols.includes('hospital') ? `<td class="p-3 align-top w-28"><div class="text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${p.hospital || 'Unassigned'}</div></td>` : ''}
                     <td class="p-3 align-top w-48">
                         <div class="text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}">${p.name || 'Anon'}</div>
                         <div class="text-xs ${textMuted} mt-0.5 ${crossedOutClass}">${p.date}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}</div>

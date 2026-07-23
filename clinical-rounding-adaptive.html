@@ -8508,7 +8508,7 @@
             return globalThis.enableModalEdit();
         };
 
-        globalThis.openFollowUpModal = (id) => {
+        globalThis.openFollowUpModal = (id, statusOverride = '') => {
             const sourcePatient = patients.find((p) => p.id === id);
             if (!sourcePatient) {
                 showToast('Unable to load source visit for follow up');
@@ -8545,8 +8545,12 @@
 
             const statusInput = document.getElementById('f-proc-status');
             if (statusInput) {
+                const requestedStatus = String(statusOverride || '').trim();
+                const hasRequestedStatus = requestedStatus && Array.from(statusInput.options || []).some((opt) => opt.value === requestedStatus);
                 const hasFollowUpStatus = Array.from(statusInput.options || []).some((opt) => opt.value === 'FOLLOW UP (CONSULT)');
-                statusInput.value = hasFollowUpStatus
+                statusInput.value = hasRequestedStatus
+                    ? requestedStatus
+                    : hasFollowUpStatus
                     ? 'FOLLOW UP (CONSULT)'
                     : getSafeConfiguredStatus(sourcePatient.procedureStatus || DEFAULT_RECORD_STATUS);
             }
@@ -11801,7 +11805,22 @@ const findHeaderIndex = (rows, sheetLog) => {
             return false;
         };
 
+        function isFollowUpWorkflowStatus(status) {
+            return String(status || '').trim().toUpperCase().startsWith('FOLLOW UP');
+        }
+
         globalThis.updateStatusQuick = async (id, newStatus) => {
+            const sourcePatient = patients.find(p => p.id === id);
+            const currentStatus = sourcePatient ? getSafeConfiguredStatus(getPatientStatus(sourcePatient)) : '';
+            if (sourcePatient && isFollowUpWorkflowStatus(newStatus) && !isFollowUpWorkflowStatus(currentStatus)) {
+                const opened = globalThis.openFollowUpModal(id, newStatus);
+                if (opened) {
+                    showToast('Follow-up status opens a new visit draft. Save it to add collapsible visit history.');
+                } else {
+                    renderUI();
+                }
+                return;
+            }
             const changeNote = await getRequiredChangeNote('status update');
             if (!changeNote) return;
             if (!isConnected || !useM365) {
@@ -12429,7 +12448,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
 
                 if (visibleCols.includes('hospital')) {
-                    mainRow.appendChild(createCell('p-3 align-top w-28', createNode('div', `text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}`, p.hospital || 'N/A')));
+                    mainRow.appendChild(createCell('p-3 align-top w-28', createNode('div', `text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}`, p.hospital || 'Unassigned')));
                 }
 
                 const patientCell = createNode('td', 'p-3 align-top w-48');
