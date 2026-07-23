@@ -4127,6 +4127,52 @@
         // PHASE 1: SETTINGS, SEARCH, SHORTCUTS, BATCH OPERATIONS
         // ============================================================================= 
 
+        const DEFAULT_VISIBLE_CENSUS_COLUMNS = ['room', 'hospital', 'findings', 'plan', 'followUp'];
+
+        function getVisibleCensusColumns() {
+            let visibleCols = DEFAULT_VISIBLE_CENSUS_COLUMNS.slice();
+            try {
+                const storedCols = JSON.parse(localStorage.getItem('app-visible-columns') || 'null');
+                if (Array.isArray(storedCols)) {
+                    visibleCols = storedCols.filter(Boolean);
+                    const migrationKey = 'app-visible-columns-followup-v1';
+                    if (!localStorage.getItem(migrationKey)) {
+                        ['hospital', 'followUp'].forEach((column) => {
+                            if (!visibleCols.includes(column)) visibleCols.push(column);
+                        });
+                        localStorage.setItem('app-visible-columns', JSON.stringify(visibleCols));
+                        localStorage.setItem(migrationKey, 'true');
+                    }
+                }
+            } catch (err) {
+                console.debug('Resetting invalid census column settings:', err?.message || err);
+                visibleCols = DEFAULT_VISIBLE_CENSUS_COLUMNS.slice();
+                localStorage.setItem('app-visible-columns', JSON.stringify(visibleCols));
+            }
+            return visibleCols;
+        }
+
+        function syncMainTableColumnHeaders(visibleCols) {
+            const selectors = {
+                room: 'th[data-sort-column="room"]',
+                hospital: 'th[data-sort-column="hospital"]',
+                findings: 'th[data-census-column="findings"]',
+                followUp: 'th[data-census-column="followUp"]'
+            };
+            Object.entries(selectors).forEach(([column, selector]) => {
+                const header = document.querySelector(selector);
+                if (header) header.style.display = visibleCols.includes(column) ? '' : 'none';
+            });
+        }
+
+        function getMainTableColumnCount(visibleCols) {
+            return (visibleCols.includes('room') ? 1 : 0) +
+                (visibleCols.includes('hospital') ? 1 : 0) +
+                (visibleCols.includes('findings') ? 1 : 0) +
+                (visibleCols.includes('followUp') ? 1 : 0) +
+                4;
+        }
+
         // Load settings from localStorage
         function loadSettings() {
             const theme = localStorage.getItem('app-theme') || 'light';
@@ -4147,7 +4193,7 @@
             }
             
             // Load column visibility
-            const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
+            const visibleCols = getVisibleCensusColumns();
             document.querySelectorAll('.column-vis').forEach(cb => {
                 cb.checked = visibleCols.includes(cb.value);
             });
@@ -7376,6 +7422,7 @@
                         <div class="mobile-card-body">
                             <div class="mobile-card-section ${crossedOutClass}"><strong>${findingsLabel}</strong>${renderFindingSegments(patient, true)}</div>
                             ${patient.pending ? `<div class="mobile-card-section ${crossedOutClass}"><strong>Pending</strong>${summarizeMobileText(patient.pending, 90)}</div>` : ''}
+                            ${patient.followUp ? `<div class="mobile-card-section ${crossedOutClass}"><strong>Follow-up</strong>${summarizeMobileText(patient.followUp, 90)}</div>` : ''}
                             <div class="mobile-card-section ${crossedOutClass}"><strong>Plan</strong>${planSummary}</div>
                         </div>
 
@@ -7776,6 +7823,8 @@
             modal.dataset.returningPatientBackfilledFrom = '';
             modal.dataset.pendingDateReviewReasons = '[]';
             modal.dataset.dateReviewScanning = 'false';
+            delete modal.dataset.forceNewVisit;
+            delete modal.dataset.followUpSourceId;
             hideReturningPatientBackfillPrompt();
             const prevCard = document.getElementById('previous-visit-reference-card');
             if (prevCard) prevCard.classList.add('hidden');
@@ -8498,6 +8547,8 @@
                     return;
                 }
                 modal.classList.add('hidden');
+                delete modal.dataset.forceNewVisit;
+                delete modal.dataset.followUpSourceId;
                 document.body.classList.remove('no-scroll');
                 clearDraft();// Clear draft on close
                 const form = document.getElementById('patient-form');
@@ -10763,7 +10814,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                         : buildImportIdentityKey(data);
                 }
                 let resolvedEditId = editId;
-                if (!resolvedEditId) {
+                const patientModal = document.getElementById('patient-modal');
+                const forceNewVisit = patientModal?.dataset.forceNewVisit === 'true';
+                if (!resolvedEditId && !forceNewVisit) {
                     const matchedIndex = findExistingImportedPatientIndex(patients, data);
                     if (matchedIndex >= 0) {
                         resolvedEditId = patients[matchedIndex].id;
@@ -11502,18 +11555,17 @@ const findHeaderIndex = (rows, sheetLog) => {
             const container = document.getElementById('table-body');
             if (!container) return;
             const filtered = getLatestPatientRows(getFilteredData());
+            const visibleCols = getVisibleCensusColumns();
+            syncMainTableColumnHeaders(visibleCols);
             
             if (filtered.length === 0) {
-                container.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 text-sm">No entries</td></tr>`;
+                container.innerHTML = `<tr><td colspan="${getMainTableColumnCount(visibleCols)}" class="p-4 text-center text-slate-400 text-sm">No entries</td></tr>`;
                 return;
             }
-            
-            // Get visible columns
-            const visibleCols = JSON.parse(localStorage.getItem('app-visible-columns') || '["room","hospital","findings","plan"]');
 
             const renderSectionRow = (label, count, isReviewSection) => `
                 <tr class="${isReviewSection ? 'bg-amber-100 border-y border-amber-200' : 'bg-slate-100 border-y border-slate-200'}">
-                    <td colspan="${visibleCols.filter(Boolean).length + 4}" class="px-3 py-2 text-xs font-bold uppercase tracking-wide ${isReviewSection ? 'text-amber-900' : 'text-slate-600'}">${label} (${count})</td>
+                    <td colspan="${getMainTableColumnCount(visibleCols)}" class="px-3 py-2 text-xs font-bold uppercase tracking-wide ${isReviewSection ? 'text-amber-900' : 'text-slate-600'}">${label} (${count})</td>
                 </tr>`;
 
             const renderPatientRow = (p) => {
@@ -11554,6 +11606,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         ${reviewBadge}
                     </td>
                     ${visibleCols.includes('findings') ? `<td class="p-3 align-top w-[34%] min-w-[18rem]"><div class="text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}">${findingsDisplay}</div></td>` : ''}
+                    ${visibleCols.includes('followUp') ? `<td class="p-3 align-top w-[18%] min-w-[14rem]"><div class="text-xs leading-relaxed ${isStat ? 'text-white' : 'text-teal-700'} whitespace-pre-wrap break-words ${crossedOutClass}">${String(p.followUp || '').trim() || '-'}</div></td>` : ''}
                     <td class="p-3 align-top w-[20%] min-w-[16rem]">
                         <div class="text-xs font-bold ${textDark} whitespace-normal break-words ${crossedOutClass} mb-2">${p.plan || '-'}</div>
                         <div class="flex items-start">
@@ -11609,8 +11662,7 @@ const findHeaderIndex = (rows, sheetLog) => {
             .filter(v => getPatientPersonKey(v) === personKey)
             .sort(comparePatientVisitRecency);
             const esc = v => String(v || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-            const colCount = (visibleCols.includes('room') ? 1 : 0) + (visibleCols.includes('hospital') ? 1 : 0) +
-                             (visibleCols.includes('findings') ? 1 : 0) + 4;
+            const colCount = getMainTableColumnCount(visibleCols);
             const rows = visits.map((v, i) => {
                 const isCurrentVisit = v.id === currentPatient.id;
                 const st = getSafeConfiguredStatus(getPatientStatus(v));
@@ -11635,7 +11687,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${stObj.bg || 'bg-slate-100'} ${stObj.text || 'text-slate-600'} flex-shrink-0 whitespace-nowrap">${esc(st)}</span>
                     ${deltaPill}
                     ${v.supervisingMd ? `<span class="text-[10px] text-slate-500 w-24 flex-shrink-0 truncate">👨‍⚕️&nbsp;${esc(v.supervisingMd)}</span>` : ''}
-                    <span class="text-[10px] text-slate-600 flex-1 min-w-0 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '...' : ''}${findingsSummary ? `<span class="text-slate-400 mx-1">|</span><span class="text-slate-700">Investigations: ${esc(findingsSummary.slice(0, 90))}${findingsSummary.length > 90 ? '...' : ''}</span>` : ''}</span>
+                    <span class="text-[10px] text-slate-600 flex-1 min-w-0 truncate">${esc((v.plan || '').slice(0, 70))}${(v.plan || '').length > 70 ? '...' : ''}${findingsSummary ? `<span class="text-slate-400 mx-1">|</span><span class="text-slate-700">Investigations: ${esc(findingsSummary.slice(0, 90))}${findingsSummary.length > 90 ? '...' : ''}</span>` : ''}${v.followUp ? `<span class="text-slate-400 mx-1">|</span><span class="text-teal-700">Follow-up: ${esc(String(v.followUp).slice(0, 90))}${String(v.followUp).length > 90 ? '...' : ''}</span>` : ''}</span>
                     <span class="text-[9px] font-bold opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity flex-shrink-0">open ↗</span>
                     ${isCurrentVisit ? '<span class="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded flex-shrink-0">current</span>' : ''}
                     ${isArchived ? '<span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1 rounded flex-shrink-0">archived</span>' : ''}
@@ -13243,6 +13295,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                         <label><input type="checkbox" class="column-vis" value="room" checked onchange="globalThis.updateColumnVisibility()"> Room</label>
                         <label><input type="checkbox" class="column-vis" value="hospital" checked onchange="globalThis.updateColumnVisibility()"> Hospital</label>
                         <label><input type="checkbox" class="column-vis" value="findings" checked onchange="globalThis.updateColumnVisibility()"> Findings</label>
+                        <label><input type="checkbox" class="column-vis" value="followUp" checked onchange="globalThis.updateColumnVisibility()"> Follow-up</label>
                         <label><input type="checkbox" class="column-vis" value="plan" checked onchange="globalThis.updateColumnVisibility()"> Plan</label>
                     </div>
                 </div>
@@ -13662,7 +13715,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                                 <th class="p-3 w-20 align-top text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-28 align-top text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-48 align-top text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
-                                <th class="p-3 w-[34%] min-w-[18rem] align-top text-left font-bold text-slate-700">Findings</th>
+                                <th class="p-3 w-[34%] min-w-[18rem] align-top text-left font-bold text-slate-700" data-census-column="findings">Findings</th>
+                                <th class="p-3 w-[18%] min-w-[14rem] align-top text-left font-bold text-slate-700" data-census-column="followUp">Follow-up</th>
                                 <th class="p-3 w-[20%] min-w-[16rem] align-top text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-52 min-w-[12rem] align-top text-left font-bold text-slate-700">Actions</th>
                             </tr>

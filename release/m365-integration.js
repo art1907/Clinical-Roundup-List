@@ -76,7 +76,8 @@ const M365_CONFIG = {
             contentType: 'ContentType'
         },
         fields: {
-            visitTime: 'VisitTime'
+            visitTime: 'VisitTime',
+            hospital: 'Hospital_x0028_s_x0029_'
         }
     },
     
@@ -95,6 +96,7 @@ const M365_CONFIG = {
 };
 
 const VISIT_TIME_FIELD = (M365_CONFIG.sharepoint.fields && M365_CONFIG.sharepoint.fields.visitTime) || 'VisitTime';
+const HOSPITAL_FIELD = (M365_CONFIG.sharepoint.fields && M365_CONFIG.sharepoint.fields.hospital) || 'Hospital';
 let patientDocsDriveIdCache = null;
 const UNSUPPORTED_PATIENT_FIELDS = new Set();
 
@@ -913,7 +915,7 @@ async function api_fetchPatients(dateFilter = null) {
             createdBy: item.fields.CreatedBy || item.fields.Created_x0020_By || '',
             dob: item.fields.DateofBirth || item.fields.DOB || '',
             mrn: item.fields.MRN || '',
-            hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
+            hospital: item.fields[HOSPITAL_FIELD] || item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
             visitTime: item.fields[VISIT_TIME_FIELD] || item.fields.Visit_x0020_Time || '',
             visitKey: item.fields.VisitKey || '',
             findingsValues,
@@ -1074,7 +1076,8 @@ async function api_savePatient(patientData) {
         Name: patientData.name || '',
         DateofBirth: patientData.dob || '',
         MRN: patientData.mrn || '',
-        Hospital: patientData.hospital || '',
+        [HOSPITAL_FIELD]: patientData.hospital || '',
+        ...(HOSPITAL_FIELD !== 'Hospital' ? { Hospital: patientData.hospital || '' } : {}),
         VisitKey: visitKeyValue,
         [VISIT_TIME_FIELD]: visitTimeValue,
         FindingsCodes: Array.isArray(patientData.findingsCodes)
@@ -1121,7 +1124,7 @@ async function api_savePatient(patientData) {
         console.warn('DEBUG minimal save disabled; sending full payload');
     }
 
-    ['Hospital', 'ProcedureStatus', 'Archived', 'Date', 'MRN', VISIT_TIME_FIELD].forEach((key) => {
+    [HOSPITAL_FIELD, 'Hospital', 'ProcedureStatus', 'Archived', 'Date', 'MRN', VISIT_TIME_FIELD].forEach((key) => {
         if (fieldsToSend[key] === '' || fieldsToSend[key] === null) {
             delete fieldsToSend[key];
         }
@@ -1135,7 +1138,7 @@ async function api_savePatient(patientData) {
         throw new Error('Missing required fields: Date and visit identity are required to create a record');
     }
 
-    console.log('SAVE fields', { visitKey: fieldsToSend.VisitKey, hospital: fieldsToSend.Hospital });
+    console.log('SAVE fields', { visitKey: fieldsToSend.VisitKey, hospital: fieldsToSend[HOSPITAL_FIELD] || fieldsToSend.Hospital });
 
     const logAndValidateResponse = (resp, context) => {
         console.log(`RESP ${context}`, resp);
@@ -1396,7 +1399,7 @@ async function api_getBackfeedData(mrn) {
                 name: item.fields.Name || '',
                 dob: item.fields.DateofBirth || item.fields.DOB || '',
                 mrn: item.fields.MRN || '',
-                hospital: item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
+                hospital: item.fields[HOSPITAL_FIELD] || item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
                 plan: stripProcedureDateToken(rawPlan),
                 procedureDate: extractProcedureDateToken(rawPlan),
                 supervisingMd: item.fields.SupervisingMD || '',
