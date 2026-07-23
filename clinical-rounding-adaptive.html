@@ -8099,6 +8099,8 @@
             modal.dataset.dateReviewScanning = 'false';
             modal.dataset.amendConfirmed = '';
             modal.dataset.amendAuthorizationNote = '';
+            delete modal.dataset.forceNewVisit;
+            delete modal.dataset.followUpSourceId;
             hideReturningPatientBackfillPrompt();
             const prevCard = document.getElementById('previous-visit-reference-card');
             if (prevCard) prevCard.classList.add('hidden');
@@ -8870,6 +8872,8 @@
                 }
                 modal.classList.add('hidden');
                 delete modal.dataset.flaggedId; // Clear flag tracking
+                delete modal.dataset.forceNewVisit;
+                delete modal.dataset.followUpSourceId;
                 document.body.classList.remove('no-scroll');
                 clearDraft();// Clear draft on close
                 const form = document.getElementById('patient-form');
@@ -11532,7 +11536,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                         : buildImportIdentityKey(data);
                 }
                 let resolvedEditId = editId;
-                if (!resolvedEditId) {
+                const patientModal = document.getElementById('patient-modal');
+                const forceNewVisit = patientModal?.dataset.forceNewVisit === 'true';
+                if (!resolvedEditId && !forceNewVisit) {
                     const matchedIndex = findExistingImportedPatientIndex(patients, data);
                     if (matchedIndex >= 0) {
                         resolvedEditId = patients[matchedIndex].id;
@@ -11546,9 +11552,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const previousPatient = resolvedEditId ? (patients.find(p => p.id === resolvedEditId) || null) : null;
                 const hadDateReviewIssuesAtSave = hasDateReviewIssues(reviewMeta);
                 const changeActionLabel = resolvedEditId ? 'update' : 'create';
-                const modal = document.getElementById('patient-modal');
-                const amendAuthorizationNote = resolvedEditId && modal?.dataset.amendConfirmed === 'true'
-                    ? String(modal.dataset.amendAuthorizationNote || '').trim()
+                const amendAuthorizationNote = resolvedEditId && patientModal?.dataset.amendConfirmed === 'true'
+                    ? String(patientModal.dataset.amendAuthorizationNote || '').trim()
                     : '';
 
                 const changeNote = amendAuthorizationNote || await getRequiredChangeNote(changeActionLabel);
