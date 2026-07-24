@@ -11035,15 +11035,17 @@ const findHeaderIndex = (rows, sheetLog) => {
             });
         }
 
-        function appendPatientChangeNote(existingHistory, noteText, author, actionLabel) {
+        function appendPatientChangeNote(existingHistory, noteText, author, actionLabel, fieldChanges = null) {
             const history = Array.isArray(existingHistory) ? [...existingHistory] : [];
             if (!noteText || !String(noteText).trim()) return history;
-            history.push({
+            const entry = {
                 note: String(noteText).trim(),
                 author: author || 'unknown',
                 action: actionLabel || 'update',
                 timestamp: new Date().toISOString()
-            });
+            };
+            if (fieldChanges && Object.keys(fieldChanges).length) entry.fieldChanges = fieldChanges;
+            history.push(entry);
             return history;
         }
 
@@ -11155,6 +11157,26 @@ const findHeaderIndex = (rows, sheetLog) => {
                 .join(' ');
         }
 
+        function renderChangeFieldRows(fieldChanges, esc) {
+            if (!fieldChanges || typeof fieldChanges !== 'object') return '';
+            const rows = Object.entries(fieldChanges)
+                .filter(([, change]) => change && typeof change === 'object')
+                .map(([field, change]) => {
+                    const previous = change.previous || '(blank)';
+                    const next = change.next || '(blank)';
+                    return `
+                        <div class="grid grid-cols-1 gap-1 border-t border-slate-100 py-2 first:border-t-0 md:grid-cols-[9rem_1fr]">
+                            <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500">${esc(humanizeHistoryField(field))}</div>
+                            <div class="grid gap-1 text-xs leading-5">
+                                <div><span class="font-semibold text-slate-500">From:</span> <span class="whitespace-pre-wrap text-slate-700">${esc(previous)}</span></div>
+                                <div><span class="font-semibold text-slate-500">To:</span> <span class="whitespace-pre-wrap text-slate-900">${esc(next)}</span></div>
+                            </div>
+                        </div>`;
+                })
+                .join('');
+            return rows ? `<div class="mt-2 rounded border border-slate-200 bg-slate-50 px-3">${rows}</div>` : '';
+        }
+
         function renderFindingsSnapshotHistoryEntry(entry, when, esc) {
             const findingsRecord = {
                 findingsText: entry.findingsText || '',
@@ -11195,9 +11217,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                 if (entry.type === 'findings_snapshot') {
                     return renderFindingsSnapshotHistoryEntry(entry, when, esc);
                 }
+                const fieldRows = renderChangeFieldRows(entry.fieldChanges, esc);
                 return `
                     <div class="border border-slate-200 rounded-lg p-3 bg-white">
                         <div class="text-xs text-slate-700 whitespace-pre-wrap leading-5">${esc(line)}</div>
+                        ${fieldRows}
                     </div>`;
             }).join('');
         }
@@ -11585,11 +11609,28 @@ const findHeaderIndex = (rows, sheetLog) => {
                     'objectiveText', 'assessmentText', 'planStructured', 'imagingEntries', 'archived'
                 ];
 
+                const formatHistoryValue = (value) => {
+                    if (value == null || value === '' || value === 'undefined' || value === 'null') return '';
+                    if (Array.isArray(value)) return value.map(item => String(item ?? '').trim()).filter(Boolean).join(', ');
+                    if (typeof value === 'object') return JSON.stringify(value);
+                    return String(value).trim();
+                };
+                const buildFieldChanges = (previous, next, fields) => Object.fromEntries(
+                    fields
+                        .filter((field) => toComparable(previous[field]) !== toComparable(next[field]))
+                        .map((field) => [field, {
+                            previous: formatHistoryValue(previous[field]),
+                            next: formatHistoryValue(next[field])
+                        }])
+                );
+
                 let finalChangeNote = changeNote;
+                let fieldChanges = null;
                 if (resolvedEditId && previousPatient) {
                     const changedFieldsForNote = USER_DIFF_FIELDS.filter(f => toComparable(previousPatient[f]) !== toComparable(data[f]));
                     if (changedFieldsForNote.length > 0) {
                         finalChangeNote += `\n[Changed: ${changedFieldsForNote.map(humanizeHistoryField).join(', ')}]`;
+                        fieldChanges = buildFieldChanges(previousPatient, data, changedFieldsForNote);
                     }
                 }
 
@@ -11598,7 +11639,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 consumePendingDateReviewReasons().forEach((dateReviewNote) => {
                     data.notesHistory = appendPatientChangeNote(data.notesHistory, dateReviewNote, auditUser, 'date review confirmation');
                 });
-                data.notesHistory = appendPatientChangeNote(data.notesHistory, finalChangeNote, auditUser, changeActionLabel);
+                data.notesHistory = appendPatientChangeNote(data.notesHistory, finalChangeNote, auditUser, changeActionLabel, fieldChanges);
                 data.lastChangeNote = finalChangeNote;
                 data.lastChangeNoteAt = new Date().toISOString();
                 data.lastChangeNoteBy = auditUser;
