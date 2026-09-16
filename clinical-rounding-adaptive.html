@@ -12276,7 +12276,6 @@ const findHeaderIndex = (rows, sheetLog) => {
             for (let d = 1; d <= days; d++) {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const { holidays, shift, statPts, procEvents, otherPatients } = getCalendarDayData(dateStr);
-                const otherCount = otherPatients.length;
 
                 const isHoliday = holidays.length > 0;
                 const dow = new Date(year, month, d).getDay();
@@ -12305,6 +12304,9 @@ const findHeaderIndex = (rows, sheetLog) => {
                     ),
                     ...procEvents.map(event =>
                         `<div class="font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-blue-200 hover:underline truncate" onclick="globalThis.openModal('${event.patient.id}')" title="Procedure: ${formatProcedureLabel(event.procedure)} - ${event.patient.hospital || ''}: ${event.patient.plan || ''}">🔗 ${event.patient.name} - ${formatProcedureLabel(event.procedure)}</div>`
+                    ),
+                    ...otherPatients.map(p =>
+                        `<div class="bg-slate-100 text-slate-600 px-1 py-0.5 rounded text-[8px] font-semibold cursor-pointer hover:bg-slate-200 truncate" onclick="globalThis.openModal('${p.id}')" title="${p.name}${p.hospital ? ' - ' + p.hospital : ''}">👤 ${p.name}</div>`
                     )
                 ];
 
@@ -12312,18 +12314,13 @@ const findHeaderIndex = (rows, sheetLog) => {
                 const visibleChipsHtml = patientChips.slice(0, MAX_CALENDAR_CHIPS).join('');
                 const hiddenChipCount = patientChips.length - MAX_CALENDAR_CHIPS;
                 const moreChipHtml = hiddenChipCount > 0
-                    ? `<div class="bg-slate-200 text-slate-700 px-1 py-0.5 rounded text-[8px] font-bold text-center cursor-pointer hover:bg-slate-300" onclick="globalThis.openDayDetail('${dateStr}')" title="Show all entries for this day">+${hiddenChipCount} more</div>`
+                    ? `<div class="bg-slate-200 text-slate-700 px-1 py-0.5 rounded text-[8px] font-bold text-center cursor-pointer hover:bg-slate-300" onclick="globalThis.openDayDetail('${dateStr}')" title="Show all ${patientChips.length} entries for this day">+${hiddenChipCount} more</div>`
                     : '';
-
-                let othersHtml = '';
-                if (otherCount > 0) {
-                    othersHtml = `<div class="bg-slate-100 text-slate-600 px-1 py-0.5 rounded text-[8px] font-semibold cursor-pointer hover:bg-slate-200" onclick="globalThis.filterToDate('${dateStr}')">👥 ${otherCount} visit${pluralSuffix(otherCount)}</div>`;
-                }
 
                 html += `<div class="${dayClass}">
                     <div class="font-bold text-slate-500 mb-0.5">${d}</div>
                     ${holidaysHtml}${dividerHtml}
-                    <div class="space-y-0.5">${oncallHtml}${visibleChipsHtml}${moreChipHtml}${othersHtml}</div>
+                    <div class="space-y-0.5">${oncallHtml}${visibleChipsHtml}${moreChipHtml}</div>
                 </div>`;
             }
 
