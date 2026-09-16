@@ -931,6 +931,7 @@ async function api_fetchPatients(dateFilter = null) {
             name: item.fields.Name || item.fields.Title || '',
             createdBy: item.fields.CreatedBy || item.fields.Created_x0020_By || '',
             dob: item.fields.DateofBirth || item.fields.DOB || '',
+            gender: item.fields.Gender || '',
             mrn: item.fields.MRN || '',
             hospital: item.fields[HOSPITAL_FIELD] || item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
             visitTime: item.fields[VISIT_TIME_FIELD] || item.fields.Visit_x0020_Time || '',
@@ -1093,6 +1094,7 @@ async function api_savePatient(patientData) {
         Title: patientData.name || '',
         Name: patientData.name || '',
         DateofBirth: patientData.dob || '',
+        Gender: patientData.gender || '',
         MRN: patientData.mrn || '',
         [HOSPITAL_FIELD]: patientData.hospital || '',
         ...(HOSPITAL_FIELD !== 'Hospital' ? { Hospital: patientData.hospital || '' } : {}),
@@ -1141,7 +1143,7 @@ async function api_savePatient(patientData) {
         console.warn('DEBUG minimal save disabled; sending full payload');
     }
 
-    [HOSPITAL_FIELD, 'Hospital', 'ProcedureStatus', 'Archived', 'Date', 'MRN', VISIT_TIME_FIELD].forEach((key) => {
+    [HOSPITAL_FIELD, 'Hospital', 'ProcedureStatus', 'Archived', 'Date', 'MRN', 'Gender', VISIT_TIME_FIELD].forEach((key) => {
         if (fieldsToSend[key] === '' || fieldsToSend[key] === null) {
             delete fieldsToSend[key];
         }

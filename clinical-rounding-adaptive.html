@@ -7704,7 +7704,7 @@
 
         function lockBackfilledFields(locked) {
             const lockedIds = [
-                'f-room', 'f-date', 'f-hospital', 'f-name', 'f-dob', 'f-mrn',
+                'f-room', 'f-date', 'f-hospital', 'f-name', 'f-dob', 'f-mrn', 'f-gender',
                 'f-md', 'f-plan', 'f-proc-status', 'f-priority', 'f-cpt-primary',
                 'f-icd-primary', 'f-charge-codes-secondary', 'f-followup-labs',
                 'f-followup-imaging', 'f-followup-consultation', 'f-followup-text', 'f-pending',
@@ -7963,6 +7963,7 @@
                 'f-name': 'name',
                 'f-dob': 'dob',
                 'f-mrn': 'mrn',
+                'f-gender': 'gender',
                 'f-hospital': 'hospital',
                 'f-md': 'supervisingMd',
                 'f-plan': 'plan',
@@ -8226,7 +8227,7 @@
                     AuditLogger.logDataAccess(auditUser, id, 'view');
                 }
                 if (p) {
-                    ['room', 'name', 'dob', 'mrn', 'hospital', 'plan', 'progress-notes', 'md', 'pending', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
+                    ['room', 'name', 'dob', 'mrn', 'gender', 'hospital', 'plan', 'progress-notes', 'md', 'pending', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
                         if (!el) return;
                         if (field === 'progress-notes') {
@@ -8237,7 +8238,7 @@
                             el.value = getAdditionalFindingsComments(p);
                             return;
                         }
-                        el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
+                        el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'gender': 'gender', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
                     const soapData = getPatientSoapData(p);
                     const setSoapField = (inputId, value) => {
@@ -8535,6 +8536,7 @@
             setTextValue('f-dob', sourcePatient.dob || '');
             setTextValue('f-mrn', sourcePatient.mrn || '');
             setTextValue('f-md', sourcePatient.supervisingMd || '');
+            setTextValue('f-gender', sourcePatient.gender || '');
             setTextValue('f-plan', sourcePatient.plan || '');
             setTextValue('f-cpt-primary', sourcePatient.cptPrimary || '');
             setTextValue('f-icd-primary', sourcePatient.icdPrimary || '');
@@ -8896,6 +8898,7 @@
                 name: document.getElementById('f-name')?.value || '',
                 dob: document.getElementById('f-dob')?.value || '',
                 mrn: document.getElementById('f-mrn')?.value || '',
+                gender: document.getElementById('f-gender')?.value || '',
                 hospital: document.getElementById('f-hospital')?.value || '',
                 plan: document.getElementById('f-plan')?.value || '',
                 supervisingMd: document.getElementById('f-md')?.value || '',
@@ -11479,6 +11482,7 @@ const findHeaderIndex = (rows, sheetLog) => {
                 name: document.getElementById('f-name').value, 
                 dob: document.getElementById('f-dob').value,
                 mrn: document.getElementById('f-mrn').value,
+                gender: document.getElementById('f-gender')?.value || '',
                 hospital: document.getElementById('f-hospital').value,
                 visitTime: document.getElementById('f-visit-time').value,
                 visitKey: document.getElementById('f-visit-key').value,
@@ -12220,6 +12224,35 @@ const findHeaderIndex = (rows, sheetLog) => {
             renderCalendar();
         };
 
+        function getCalendarDayData(dateStr) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const holidays = getHolidaysForDate(y, m, d);
+            const shift = onCallSchedule.find(s => s.date === dateStr);
+            const dayPatients = patients.filter(p => p.date === dateStr && !p.archived);
+            const statPts = dayPatients.filter(p => p.stat === true || p.stat === 'true');
+            const procEventMap = new Map();
+            patients
+                .filter(p => !p.archived && isDatedProcedureCase(p))
+                .forEach(p => {
+                    getProcedureDateEntries(p)
+                        .filter(entry => entry.date === dateStr)
+                        .forEach(entry => {
+                            const event = { patient: p, ...entry };
+                            const key = getProcedureCalendarKey(p, entry);
+                            if (!procEventMap.has(key) || shouldReplaceProcedureCalendarEvent(procEventMap.get(key), event)) {
+                                procEventMap.set(key, event);
+                            }
+                        });
+                });
+            const procEvents = Array.from(procEventMap.values());
+            const otherPatients = dayPatients.filter(p => {
+                const isStat = p.stat === true || p.stat === 'true';
+                const hasProcedureOnThisDate = getProcedureDateEntries(p).some(entry => entry.date === dateStr);
+                return !isStat && !hasProcedureOnThisDate;
+            });
+            return { holidays, shift, dayPatients, statPts, procEvents, otherPatients };
+        }
+
         function renderCalendar() {
             const year = calDate.getFullYear();
             const month = calDate.getMonth();
@@ -12242,30 +12275,8 @@ const findHeaderIndex = (rows, sheetLog) => {
 
             for (let d = 1; d <= days; d++) {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const holidays = getHolidaysForDate(year, month + 1, d);
-                const shift = onCallSchedule.find(s => s.date === dateStr);
-                const dayPatients = patients.filter(p => p.date === dateStr && !p.archived);
-                const statPts = dayPatients.filter(p => p.stat === true || p.stat === 'true');
-                const procEventMap = new Map();
-                patients
-                    .filter(p => !p.archived && isDatedProcedureCase(p))
-                    .forEach(p => {
-                        getProcedureDateEntries(p)
-                            .filter(entry => entry.date === dateStr)
-                            .forEach(entry => {
-                                const event = { patient: p, ...entry };
-                                const key = getProcedureCalendarKey(p, entry);
-                                if (!procEventMap.has(key) || shouldReplaceProcedureCalendarEvent(procEventMap.get(key), event)) {
-                                    procEventMap.set(key, event);
-                                }
-                            });
-                    });
-                const procEvents = Array.from(procEventMap.values());
-                const otherCount = dayPatients.filter(p => {
-                    const isStat = p.stat === true || p.stat === 'true';
-                    const hasProcedureOnThisDate = getProcedureDateEntries(p).some(entry => entry.date === dateStr);
-                    return !isStat && !hasProcedureOnThisDate;
-                }).length;
+                const { holidays, shift, statPts, procEvents, otherPatients } = getCalendarDayData(dateStr);
+                const otherCount = otherPatients.length;
 
                 const isHoliday = holidays.length > 0;
                 const dow = new Date(year, month, d).getDay();
@@ -12288,13 +12299,21 @@ const findHeaderIndex = (rows, sheetLog) => {
                     ? `<div class="bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded text-[8px] font-semibold cursor-pointer hover:bg-indigo-200 truncate" onclick="globalThis.setTab('oncall')" title="On Call: ${shift.provider}">📋 ${shift.provider}</div>`
                     : '';
 
-                const statHtml = statPts.map(p =>
-                    `<div class="font-bold bg-red-600 text-white px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-red-700 truncate" onclick="globalThis.openModal('${p.id}')" title="STAT: ${p.name}">🔴 ${p.name}</div>`
-                ).join('');
+                const patientChips = [
+                    ...statPts.map(p =>
+                        `<div class="font-bold bg-red-600 text-white px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-red-700 truncate" onclick="globalThis.openModal('${p.id}')" title="STAT: ${p.name}">🔴 ${p.name}</div>`
+                    ),
+                    ...procEvents.map(event =>
+                        `<div class="font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-blue-200 hover:underline truncate" onclick="globalThis.openModal('${event.patient.id}')" title="Procedure: ${formatProcedureLabel(event.procedure)} - ${event.patient.hospital || ''}: ${event.patient.plan || ''}">🔗 ${event.patient.name} - ${formatProcedureLabel(event.procedure)}</div>`
+                    )
+                ];
 
-                const procHtml = procEvents.map(event =>
-                    `<div class="font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded text-[8px] cursor-pointer hover:bg-blue-200 hover:underline truncate" onclick="globalThis.openModal('${event.patient.id}')" title="Procedure: ${formatProcedureLabel(event.procedure)} - ${event.patient.hospital || ''}: ${event.patient.plan || ''}">🔗 ${event.patient.name} - ${formatProcedureLabel(event.procedure)}</div>`
-                ).join('');
+                const MAX_CALENDAR_CHIPS = 3;
+                const visibleChipsHtml = patientChips.slice(0, MAX_CALENDAR_CHIPS).join('');
+                const hiddenChipCount = patientChips.length - MAX_CALENDAR_CHIPS;
+                const moreChipHtml = hiddenChipCount > 0
+                    ? `<div class="bg-slate-200 text-slate-700 px-1 py-0.5 rounded text-[8px] font-bold text-center cursor-pointer hover:bg-slate-300" onclick="globalThis.openDayDetail('${dateStr}')" title="Show all entries for this day">+${hiddenChipCount} more</div>`
+                    : '';
 
                 let othersHtml = '';
                 if (otherCount > 0) {
@@ -12304,12 +12323,72 @@ const findHeaderIndex = (rows, sheetLog) => {
                 html += `<div class="${dayClass}">
                     <div class="font-bold text-slate-500 mb-0.5">${d}</div>
                     ${holidaysHtml}${dividerHtml}
-                    <div class="space-y-0.5">${oncallHtml}${statHtml}${procHtml}${othersHtml}</div>
+                    <div class="space-y-0.5">${oncallHtml}${visibleChipsHtml}${moreChipHtml}${othersHtml}</div>
                 </div>`;
             }
 
             grid.innerHTML = html;
         }
+
+        globalThis.openDayDetail = (dateStr) => {
+            const existing = document.getElementById('day-detail-overlay');
+            if (existing) existing.remove();
+
+            const esc = (value) => String(value == null ? '' : value)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+            const { holidays, shift, statPts, procEvents, otherPatients } = getCalendarDayData(dateStr);
+            const dateObj = new Date(`${dateStr}T00:00:00`);
+            const titleDate = dateObj.toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+            const rows = [];
+            holidays.forEach(h => {
+                rows.push(`<div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 font-bold text-sm">${h.emoji} ${esc(h.name)}</div>`);
+            });
+            if (shift) {
+                rows.push(`<button type="button" onclick="globalThis.closeDayDetail(); globalThis.setTab('oncall');" class="w-full text-left px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 font-semibold text-sm hover:bg-indigo-100">📋 On Call: ${esc(shift.provider)}</button>`);
+            }
+            statPts.forEach(p => {
+                rows.push(`<button type="button" onclick="globalThis.openDayDetailRecord('${p.id}')" class="w-full text-left px-3 py-2 rounded-lg bg-red-600 text-white font-bold text-sm hover:bg-red-700">🔴 ${esc(p.name)} — STAT${p.hospital ? ' · ' + esc(p.hospital) : ''}</button>`);
+            });
+            procEvents.forEach(event => {
+                rows.push(`<button type="button" onclick="globalThis.openDayDetailRecord('${event.patient.id}')" class="w-full text-left px-3 py-2 rounded-lg bg-blue-50 text-blue-700 font-semibold text-sm hover:bg-blue-100">🔗 ${esc(event.patient.name)} — ${esc(formatProcedureLabel(event.procedure))}${event.patient.hospital ? ' · ' + esc(event.patient.hospital) : ''}</button>`);
+            });
+            otherPatients.forEach(p => {
+                rows.push(`<button type="button" onclick="globalThis.openDayDetailRecord('${p.id}')" class="w-full text-left px-3 py-2 rounded-lg bg-slate-50 text-slate-700 font-medium text-sm hover:bg-slate-100">👤 ${esc(p.name)}${p.room ? ' · Room ' + esc(p.room) : ''}${p.hospital ? ' · ' + esc(p.hospital) : ''}</button>`);
+            });
+
+            const bodyHtml = rows.length
+                ? rows.join('')
+                : '<div class="text-slate-400 text-sm text-center py-6">No entries for this day</div>';
+
+            const overlay = document.createElement('div');
+            overlay.id = 'day-detail-overlay';
+            overlay.className = 'fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col" role="dialog" aria-modal="true" aria-label="Day schedule">
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+                        <h3 class="font-bold text-slate-700 text-sm">📅 ${esc(titleDate)}</h3>
+                        <button type="button" onclick="globalThis.closeDayDetail()" aria-label="Close" class="text-slate-400 hover:text-slate-600 text-xl leading-none px-2">&times;</button>
+                    </div>
+                    <div class="overflow-y-auto p-3 space-y-1.5">${bodyHtml}</div>
+                </div>`;
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) globalThis.closeDayDetail();
+            });
+            document.body.appendChild(overlay);
+        };
+
+        globalThis.closeDayDetail = () => {
+            const overlay = document.getElementById('day-detail-overlay');
+            if (overlay) overlay.remove();
+        };
+
+        globalThis.openDayDetailRecord = (id) => {
+            globalThis.closeDayDetail();
+            globalThis.openModal(id);
+        };
 
         globalThis.filterToDate = (dateStr) => {
             globalThis._quickFilterType = 'date';
@@ -15117,6 +15196,16 @@ const findHeaderIndex = (rows, sheetLog) => {
                 <div class="grid grid-cols-2 gap-3">
                     <input type="text" id="f-dob" placeholder="DOB" aria-label="Date of Birth" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
                     <input type="text" id="f-mrn" placeholder="MRN" aria-label="Medical Record Number" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                </div>
+                <div>
+                    <label for="f-gender" class="text-xs font-bold text-slate-600">Gender</label>
+                    <select id="f-gender" aria-label="Gender" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                        <option value="Unknown">Unknown</option>
+                    </select>
                 </div>
                 <div id="returning-patient-backfill" class="hidden rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
                     <div class="flex items-start justify-between gap-3">
