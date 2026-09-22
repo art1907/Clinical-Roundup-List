@@ -932,6 +932,8 @@ async function api_fetchPatients(dateFilter = null) {
             createdBy: item.fields.CreatedBy || item.fields.Created_x0020_By || '',
             dob: item.fields.DateofBirth || item.fields.DOB || '',
             gender: item.fields.Gender || '',
+            zipCode: item.fields.ZipCode || '',
+            finance: item.fields.Finance ?? '',
             mrn: item.fields.MRN || '',
             hospital: item.fields[HOSPITAL_FIELD] || item.fields.Hospital_x0028_s_x0029_ || item.fields.Hospital || '',
             visitTime: item.fields[VISIT_TIME_FIELD] || item.fields.Visit_x0020_Time || '',
@@ -1095,6 +1097,10 @@ async function api_savePatient(patientData) {
         Name: patientData.name || '',
         DateofBirth: patientData.dob || '',
         Gender: patientData.gender || '',
+        ZipCode: patientData.zipCode || '',
+        Finance: (patientData.finance === '' || patientData.finance == null || isNaN(Number(patientData.finance)))
+            ? null
+            : Number(patientData.finance),
         MRN: patientData.mrn || '',
         [HOSPITAL_FIELD]: patientData.hospital || '',
         ...(HOSPITAL_FIELD !== 'Hospital' ? { Hospital: patientData.hospital || '' } : {}),

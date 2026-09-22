@@ -6104,6 +6104,214 @@
                 const icdRows = topIcd.map(([code, cnt]) => `ICD ${code}: ${cnt} diagnoses`);
                 const divider = cptRows.length && icdRows.length ? ['──── ICD Diagnoses ────'] : [];
                 renderAnalyticsDetails('CPT & ICD Code Frequency', [...cptRows, ...divider, ...icdRows].length ? [...cptRows, ...divider, ...icdRows] : ['No billing codes recorded']);
+                return;
+            }
+
+            // ─── COHORT PROFILE HELPERS ──────────────────────────────────────────────────
+            const genderSplitOf = (arr) => {
+                const g = {};
+                arr.forEach(p => { const k = (String(p.gender || '').trim()) || 'Unknown'; g[k] = (g[k] || 0) + 1; });
+                return Object.entries(g).sort((a, b) => b[1] - a[1]);
+            };
+            const avgAgeOf = (arr) => {
+                const withDob = arr.filter(p => p.dob);
+                return withDob.length ? Math.round(withDob.reduce((s, p) => s + (globalThis.calculateAge(p.dob) || 0), 0) / withDob.length) : 0;
+            };
+            const avgLosOf = (arr) => {
+                const v = arr.map(p => globalThis.calculateLOS(p.date) || 0).filter(x => x > 0);
+                return v.length ? Math.round(v.reduce((s, x) => s + x, 0) / v.length) : 0;
+            };
+            const ageBandsOf = (arr) => {
+                const bands = { '0-17': 0, '18-39': 0, '40-64': 0, '65-79': 0, '80+': 0, 'Unknown': 0 };
+                arr.forEach(p => {
+                    const a = p.dob ? globalThis.calculateAge(p.dob) : null;
+                    if (a == null || isNaN(a)) bands['Unknown']++;
+                    else if (a < 18) bands['0-17']++;
+                    else if (a < 40) bands['18-39']++;
+                    else if (a < 65) bands['40-64']++;
+                    else if (a < 80) bands['65-79']++;
+                    else bands['80+']++;
+                });
+                return bands;
+            };
+            const topDxOf = (arr) => {
+                const dx = {};
+                arr.forEach(p => { if (p.icdPrimary && String(p.icdPrimary).trim()) { const c = String(p.icdPrimary).trim().toUpperCase(); dx[c] = (dx[c] || 0) + 1; } });
+                const sorted = Object.entries(dx).sort((a, b) => b[1] - a[1]);
+                return sorted[0] ? `${sorted[0][0]} (${sorted[0][1]})` : '—';
+            };
+            const financeOf = (arr) => arr
+                .map(p => (p.finance === '' || p.finance == null) ? null : Number(p.finance))
+                .filter(v => v != null && !isNaN(v));
+
+            // ─── BASIC PROFILE (Age, Gender, ZIP, Finance) ───────────────────────────────
+            if (preset === 'profile-basic') {
+                const genders = genderSplitOf(data.activePatients);
+                const bands = ageBandsOf(data.activePatients);
+                const financeVals = financeOf(data.activePatients);
+                const financeTotal = financeVals.reduce((s, v) => s + v, 0);
+                const financeAvg = financeVals.length ? Math.round(financeTotal / financeVals.length) : 0;
+                const zipCounts = {};
+                data.activePatients.forEach(p => { const z = String(p.zipCode || '').trim(); if (z) zipCounts[z] = (zipCounts[z] || 0) + 1; });
+                const zipSorted = Object.entries(zipCounts).sort((a, b) => b[1] - a[1]);
+                renderAnalyticsCards([
+                    { title: 'Cohort Size', value: data.activePatients.length, subtitle: 'Active patients profiled' },
+                    { title: 'Average Age', value: data.avgAge || 'N/A', subtitle: 'Across patients with DOB' },
+                    { title: 'Top Gender', value: genders[0]?.[0] || 'N/A', subtitle: `${genders[0]?.[1] || 0} patients` },
+                    { title: 'Age 65+', value: (bands['65-79'] + bands['80+']), subtitle: 'Older-adult cohort' },
+                    { title: 'Avg Finance', value: financeVals.length ? `$${financeAvg.toLocaleString()}` : 'N/A', subtitle: `${financeVals.length} records with amount` },
+                    { title: 'Top ZIP', value: zipSorted[0]?.[0] || 'N/A', subtitle: `${zipSorted[0]?.[1] || 0} patients` }
+                ]);
+                renderAnalyticsDetails('Demographic Breakdown (Age · Gender · ZIP · Finance)', [
+                    '=== Gender ===',
+                    ...genders.map(([g, c]) => `${g}: ${c}`),
+                    '',
+                    '=== Age Bands ===',
+                    ...Object.entries(bands).map(([band, c]) => `${band}: ${c}`),
+                    '',
+                    '=== Top ZIP Codes ===',
+                    ...(zipSorted.length ? zipSorted.slice(0, 10).map(([z, c]) => `${z}: ${c}`) : ['No ZIP codes recorded']),
+                    '',
+                    '=== Finance ===',
+                    financeVals.length ? `Total: $${financeTotal.toLocaleString()} | Average: $${financeAvg.toLocaleString()} | ${financeVals.length} records` : 'No finance amounts recorded'
+                ]);
+                return;
+            }
+
+            // ─── HOSPITAL PROFILE (Age, Gender, Diagnosis, Procedure, LOS by hospital) ────
+            if (preset === 'profile-hospital') {
+                const rows = hospitalsSorted.map(([hospital]) => {
+                    const grp = data.activePatients.filter(p => (p.hospital || 'Unassigned') === hospital);
+                    const genders = genderSplitOf(grp);
+                    const procCount = grp.filter(p => isSurgicalCase(p)).length;
+                    return `${hospital}: ${grp.length} pts | Avg age ${avgAgeOf(grp)} | Top gender ${genders[0]?.[0] || '—'} | Top dx ${topDxOf(grp)} | ${procCount} procedures | Avg LOS ${avgLosOf(grp)}d`;
+                });
+                renderAnalyticsCards([
+                    { title: 'Hospitals', value: hospitalsSorted.length, subtitle: 'Distinct facilities' },
+                    { title: 'Largest Site', value: hospitalsSorted[0]?.[0] || 'N/A', subtitle: `${hospitalsSorted[0]?.[1] || 0} patients` },
+                    { title: 'Avg LOS', value: `${data.avgLos}d`, subtitle: 'System-wide average' },
+                    { title: 'Avg Age', value: data.avgAge || 'N/A', subtitle: 'Across all sites' }
+                ]);
+                renderAnalyticsDetails('Hospital Profile (Age · Gender · Diagnosis · Procedure · LOS)', rows.length ? rows : ['No hospital data']);
+                return;
+            }
+
+            // ─── DIAGNOSIS PROFILE (group by ICD: Age, Gender, Procedure, LOS) ────────────
+            if (preset === 'profile-diagnosis') {
+                const dxGroups = {};
+                data.activePatients.forEach(p => {
+                    const key = (p.icdPrimary && String(p.icdPrimary).trim()) ? String(p.icdPrimary).trim().toUpperCase() : 'Uncoded';
+                    (dxGroups[key] = dxGroups[key] || []).push(p);
+                });
+                const dxSorted = Object.entries(dxGroups).sort((a, b) => b[1].length - a[1].length);
+                const dxCohort = data.activePatients.filter(p => p.icdPrimary && String(p.icdPrimary).trim());
+                renderAnalyticsCards([
+                    { title: 'Unique Diagnoses', value: dxSorted.filter(([k]) => k !== 'Uncoded').length, subtitle: 'Distinct ICD codes' },
+                    { title: 'Top Diagnosis', value: dxSorted[0]?.[0] || 'N/A', subtitle: `${dxSorted[0]?.[1].length || 0} patients` },
+                    { title: 'Avg Age (Dx)', value: avgAgeOf(dxCohort) || 'N/A', subtitle: 'Coded-diagnosis cohort' },
+                    { title: 'Avg LOS (Dx)', value: `${avgLosOf(dxCohort)}d`, subtitle: 'Coded-diagnosis cohort' }
+                ]);
+                const rows = dxSorted.map(([code, grp]) => {
+                    const genders = genderSplitOf(grp);
+                    const procCount = grp.filter(p => isSurgicalCase(p)).length;
+                    return `${code}: ${grp.length} pts | Avg age ${avgAgeOf(grp)} | Top gender ${genders[0]?.[0] || '—'} | ${procCount} procedures | Avg LOS ${avgLosOf(grp)}d`;
+                });
+                renderAnalyticsDetails('Diagnosis Profile (Age · Gender · Procedure · LOS)', rows.length ? rows : ['No diagnosis data']);
+                return;
+            }
+
+            // ─── PROCEDURE PROFILE (group by CPT: Age, Gender, Diagnosis, LOS) ────────────
+            if (preset === 'profile-procedure') {
+                const procGroups = {};
+                data.procedurePatients.forEach(p => {
+                    const key = (p.cptPrimary && String(p.cptPrimary).trim()) ? String(p.cptPrimary).trim().toUpperCase() : 'Uncoded';
+                    (procGroups[key] = procGroups[key] || []).push(p);
+                });
+                const procSorted = Object.entries(procGroups).sort((a, b) => b[1].length - a[1].length);
+                renderAnalyticsCards([
+                    { title: 'Unique Procedures', value: procSorted.filter(([k]) => k !== 'Uncoded').length, subtitle: 'Distinct CPT codes' },
+                    { title: 'Top Procedure', value: procSorted[0]?.[0] || 'N/A', subtitle: `${procSorted[0]?.[1].length || 0} cases` },
+                    { title: 'Procedure Cases', value: data.procedurePatients.length, subtitle: 'Procedure-eligible patients' },
+                    { title: 'Avg LOS (Proc)', value: `${avgLosOf(data.procedurePatients)}d`, subtitle: 'Procedure cohort' }
+                ]);
+                const rows = procSorted.map(([code, grp]) => {
+                    const genders = genderSplitOf(grp);
+                    return `${code}: ${grp.length} cases | Avg age ${avgAgeOf(grp)} | Top gender ${genders[0]?.[0] || '—'} | Top dx ${topDxOf(grp)} | Avg LOS ${avgLosOf(grp)}d`;
+                });
+                renderAnalyticsDetails('Procedure Profile (Age · Gender · Diagnosis · LOS)', rows.length ? rows : ['No procedure data']);
+                return;
+            }
+
+            // ─── TIME MANAGEMENT (LOS & throughput across dimensions) ────────────────────
+            if (preset === 'profile-time') {
+                const losValues = data.activePatients
+                    .map(p => globalThis.calculateLOS(p.date) || 0)
+                    .filter(los => los > 0)
+                    .sort((a, b) => a - b);
+                const medianLos = losValues.length ? losValues[Math.floor(losValues.length / 2)] : 0;
+                const outliers = losValues.filter(los => los > data.avgLos * 1.5);
+                renderAnalyticsCards([
+                    { title: 'Average LOS', value: `${data.avgLos}d`, subtitle: 'Mean length of stay' },
+                    { title: 'Median LOS', value: `${medianLos}d`, subtitle: 'Middle value' },
+                    { title: 'Extended Stays', value: outliers.length, subtitle: `> ${Math.round(data.avgLos * 1.5)}d` },
+                    { title: 'Avg Age', value: data.avgAge || 'N/A', subtitle: 'Cohort average' }
+                ]);
+                const byHospital = hospitalsSorted.map(([hospital]) => {
+                    const grp = data.activePatients.filter(p => (p.hospital || 'Unassigned') === hospital);
+                    return `${hospital}: Avg LOS ${avgLosOf(grp)}d | ${grp.length} pts`;
+                });
+                const procLos = avgLosOf(data.procedurePatients);
+                const nonProc = data.activePatients.filter(p => !isSurgicalCase(p));
+                const financeByHospital = hospitalsSorted.map(([hospital]) => {
+                    const grp = data.activePatients.filter(p => (p.hospital || 'Unassigned') === hospital);
+                    const vals = financeOf(grp);
+                    const total = vals.reduce((s, v) => s + v, 0);
+                    return `${hospital}: ${vals.length ? `$${total.toLocaleString()} total | $${Math.round(total / vals.length).toLocaleString()} avg` : 'No finance data'} (${grp.length} pts)`;
+                });
+                renderAnalyticsDetails('Time Management (LOS by Hospital · Procedure · Finance)', [
+                    '=== Avg LOS by Hospital ===',
+                    ...byHospital,
+                    '',
+                    '=== Procedure vs Non-Procedure ===',
+                    `Procedure cases: Avg LOS ${procLos}d (${data.procedurePatients.length} pts)`,
+                    `Non-procedure: Avg LOS ${avgLosOf(nonProc)}d (${nonProc.length} pts)`,
+                    '',
+                    '=== Finance by Hospital ===',
+                    ...financeByHospital
+                ]);
+                return;
+            }
+
+            // ─── TASK MANAGEMENT (open tasks by Diagnosis & Procedure) ───────────────────
+            if (preset === 'profile-task') {
+                const hasPending = (p) => p.pending && String(p.pending).trim().length > 0;
+                const hasFollowUp = (p) => p.followUp && String(p.followUp).trim().length > 0;
+                const pendingPatients = data.activePatients.filter(hasPending);
+                const followUpPatients = data.activePatients.filter(hasFollowUp);
+                const procTasks = data.activePatients.filter(p => isSurgicalCase(p) && (hasPending(p) || hasFollowUp(p)));
+                const dxWithTasks = new Set(
+                    data.activePatients
+                        .filter(p => (hasPending(p) || hasFollowUp(p)) && p.icdPrimary && String(p.icdPrimary).trim())
+                        .map(p => String(p.icdPrimary).trim().toUpperCase())
+                );
+                renderAnalyticsCards([
+                    { title: 'Open Pending', value: pendingPatients.length, subtitle: 'Awaiting results/action' },
+                    { title: 'Open Follow-ups', value: followUpPatients.length, subtitle: 'Scheduled follow-up items' },
+                    { title: 'Procedure Tasks', value: procTasks.length, subtitle: 'Procedures with open tasks' },
+                    { title: 'Diagnoses w/ Tasks', value: dxWithTasks.size, subtitle: 'Distinct ICD codes flagged' }
+                ]);
+                const taskRows = data.activePatients
+                    .filter(p => hasPending(p) || hasFollowUp(p))
+                    .slice(0, 30)
+                    .map(p => {
+                        const tags = [];
+                        if (hasPending(p)) tags.push('Pending');
+                        if (hasFollowUp(p)) tags.push('Follow-up');
+                        if (isSurgicalCase(p)) tags.push('Procedure');
+                        return `${p.name || 'Unknown'} | Dx ${p.icdPrimary || '—'} | CPT ${p.cptPrimary || '—'} | [${tags.join(', ')}] | ${p.hospital || '—'}`;
+                    });
+                renderAnalyticsDetails('Task Management (Diagnosis · Procedure)', taskRows.length ? taskRows : ['✓ No open pending or follow-up tasks']);
+                return;
             }
         }
 
@@ -7731,6 +7939,7 @@
         function lockBackfilledFields(locked) {
             const lockedIds = [
                 'f-room', 'f-date', 'f-hospital', 'f-name', 'f-dob', 'f-mrn', 'f-gender',
+                'f-zip', 'f-finance',
                 'f-md', 'f-plan', 'f-proc-status', 'f-priority', 'f-cpt-primary',
                 'f-icd-primary', 'f-charge-codes-secondary', 'f-followup-labs',
                 'f-followup-imaging', 'f-followup-consultation', 'f-followup-text', 'f-pending',
@@ -7990,6 +8199,8 @@
                 'f-dob': 'dob',
                 'f-mrn': 'mrn',
                 'f-gender': 'gender',
+                'f-zip': 'zipCode',
+                'f-finance': 'finance',
                 'f-hospital': 'hospital',
                 'f-md': 'supervisingMd',
                 'f-plan': 'plan',
@@ -8253,7 +8464,7 @@
                     AuditLogger.logDataAccess(auditUser, id, 'view');
                 }
                 if (p) {
-                    ['room', 'name', 'dob', 'mrn', 'gender', 'hospital', 'plan', 'progress-notes', 'md', 'pending', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
+                    ['room', 'name', 'dob', 'mrn', 'gender', 'zip', 'finance', 'hospital', 'plan', 'progress-notes', 'md', 'pending', 'findings-text', 'cpt-primary', 'icd-primary', 'charge-codes-secondary'].forEach(field => {
                         const el = document.getElementById(`f-${field}`);
                         if (!el) return;
                         if (field === 'progress-notes') {
@@ -8264,7 +8475,7 @@
                             el.value = getAdditionalFindingsComments(p);
                             return;
                         }
-                        el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'gender': 'gender', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
+                        el.value = p[{'room': 'room', 'name': 'name', 'dob': 'dob', 'mrn': 'mrn', 'gender': 'gender', 'zip': 'zipCode', 'finance': 'finance', 'hospital': 'hospital', 'plan': 'plan', 'md': 'supervisingMd', 'pending': 'pending', 'findings-text': 'findingsText', 'cpt-primary': 'cptPrimary', 'icd-primary': 'icdPrimary', 'charge-codes-secondary': 'chargeCodesSecondary'}[field]] || "";
                     });
                     const soapData = getPatientSoapData(p);
                     const setSoapField = (inputId, value) => {
@@ -8563,6 +8774,8 @@
             setTextValue('f-mrn', sourcePatient.mrn || '');
             setTextValue('f-md', sourcePatient.supervisingMd || '');
             setTextValue('f-gender', sourcePatient.gender || '');
+            setTextValue('f-zip', sourcePatient.zipCode || '');
+            setTextValue('f-finance', sourcePatient.finance ?? '');
             setTextValue('f-plan', sourcePatient.plan || '');
             setTextValue('f-cpt-primary', sourcePatient.cptPrimary || '');
             setTextValue('f-icd-primary', sourcePatient.icdPrimary || '');
@@ -8925,6 +9138,8 @@
                 dob: document.getElementById('f-dob')?.value || '',
                 mrn: document.getElementById('f-mrn')?.value || '',
                 gender: document.getElementById('f-gender')?.value || '',
+                zip: document.getElementById('f-zip')?.value || '',
+                finance: document.getElementById('f-finance')?.value || '',
                 hospital: document.getElementById('f-hospital')?.value || '',
                 plan: document.getElementById('f-plan')?.value || '',
                 supervisingMd: document.getElementById('f-md')?.value || '',
@@ -11509,6 +11724,8 @@ const findHeaderIndex = (rows, sheetLog) => {
                 dob: document.getElementById('f-dob').value,
                 mrn: document.getElementById('f-mrn').value,
                 gender: document.getElementById('f-gender')?.value || '',
+                zipCode: document.getElementById('f-zip')?.value || '',
+                finance: document.getElementById('f-finance')?.value || '',
                 hospital: document.getElementById('f-hospital').value,
                 visitTime: document.getElementById('f-visit-time').value,
                 visitKey: document.getElementById('f-visit-key').value,
@@ -14899,6 +15116,14 @@ const findHeaderIndex = (rows, sheetLog) => {
                                     <option value="followup">📌 Follow-up Workload</option>
                                     <option value="complexity">🔴 Patient Complexity</option>
                                     <option value="performance">📊 Hospital Performance</option>
+                                    <optgroup label="── Cohort Profiles ──">
+                                    <option value="profile-basic">🧬 Basic Profile</option>
+                                    <option value="profile-hospital">🏨 Hospital Profile</option>
+                                    <option value="profile-diagnosis">🩻 Diagnosis Profile</option>
+                                    <option value="profile-procedure">🔧 Procedure Profile</option>
+                                    <option value="profile-time">⏱️ Time Management</option>
+                                    <option value="profile-task">✅ Task Management</option>
+                                    </optgroup>
                                     <optgroup label="── Practice Reports ──">
                                     <option value="provider-detail">🩺 Practitioner Detail Report</option>
                                     <option value="billing-complete">📋 Billing Completeness Audit</option>
@@ -15234,6 +15459,16 @@ const findHeaderIndex = (rows, sheetLog) => {
                         <option value="Other">Other</option>
                         <option value="Unknown">Unknown</option>
                     </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="f-zip" class="text-xs font-bold text-slate-600">ZIP Code</label>
+                        <input type="text" id="f-zip" inputmode="numeric" placeholder="ZIP Code" aria-label="ZIP Code" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    </div>
+                    <div>
+                        <label for="f-finance" class="text-xs font-bold text-slate-600">Finance</label>
+                        <input type="number" id="f-finance" step="0.01" min="0" placeholder="Finance" aria-label="Finance amount" class="w-full mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    </div>
                 </div>
                 <div id="returning-patient-backfill" class="hidden rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
                     <div class="flex items-start justify-between gap-3">
