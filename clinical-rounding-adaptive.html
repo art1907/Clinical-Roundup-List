@@ -6332,22 +6332,14 @@
             if (!input) {
                 return { valid: false, message: 'Query is required.' };
             }
-            if (input.length > 80) {
-                return { valid: false, message: 'Query is too long (max 80 chars).' };
+            if (input.length > 200) {
+                return { valid: false, message: 'Query is too long (max 200 chars).' };
             }
-            if (!/^[a-zA-Z0-9\s:_\-./]+$/.test(input)) {
+            if (!/^[a-zA-Z0-9\s:_\-./(),;]+$/.test(input)) {
                 return { valid: false, message: 'Invalid characters in query.' };
             }
 
-            const splitIndex = input.indexOf(':');
-            if (splitIndex <= 0 || splitIndex === input.length - 1) {
-                return { valid: false, message: 'Use format key:value (example: hospital:WGMC).' };
-            }
-
-            const key = input.slice(0, splitIndex).trim();
-            const value = input.slice(splitIndex + 1).trim();
             const normalize = (v) => String(v || '').toLowerCase().replaceAll(/[^a-z0-9]/g, '');
-            const keyNorm = normalize(key);
 
             const aliasToField = {
                 any: '__any__',
@@ -6386,16 +6378,32 @@
                 ...patients.flatMap((p) => Object.keys(p || {}))
             ]);
             const fieldByNorm = new Map(Array.from(knownFields).map((field) => [normalize(field), field]));
-            const resolvedField = aliasToField[keyNorm] || fieldByNorm.get(keyNorm);
 
-            if (!resolvedField) {
-                return { valid: false, message: 'Unknown key. Use any patient column key (examples: cpt, icd, hospital, procedureStatus, supervisingMd).' };
-            }
-            if (!value) {
-                return { valid: false, message: 'Value is required after colon.' };
+            const segments = input.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+            if (!segments.length) {
+                return { valid: false, message: 'Use format key:value (example: hospital:WGMC).' };
             }
 
-            return { valid: true, key, keyNorm, field: resolvedField, value };
+            const conditions = [];
+            for (const segment of segments) {
+                const splitIndex = segment.indexOf(':');
+                if (splitIndex <= 0 || splitIndex === segment.length - 1) {
+                    return { valid: false, message: `Use format key:value in "${segment}" (example: hospital:WGMC).` };
+                }
+                const key = segment.slice(0, splitIndex).trim();
+                const value = segment.slice(splitIndex + 1).trim();
+                const keyNorm = normalize(key);
+                const resolvedField = aliasToField[keyNorm] || fieldByNorm.get(keyNorm);
+                if (!resolvedField) {
+                    return { valid: false, message: `Unknown key "${key}". Use any patient column key (examples: cpt, icd, hospital, procedureStatus, supervisingMd).` };
+                }
+                if (!value) {
+                    return { valid: false, message: `Value is required after colon in "${segment}".` };
+                }
+                conditions.push({ key, keyNorm, field: resolvedField, value });
+            }
+
+            return { valid: true, conditions };
         };
 
         globalThis.runCustomAnalytics = () => {
@@ -6412,14 +6420,10 @@
                 return;
             }
 
-            const valueLower = result.value.toLowerCase();
-            let matches = [];
-
-            const isTruthyInput = ['true', 'yes', '1', 'on', 'y'].includes(valueLower);
-            const isFalsyInput = ['false', 'no', '0', 'off', 'n'].includes(valueLower);
-
-            const patientFieldMatches = (patient, fieldName) => {
+            const valueMatchesField = (patient, fieldName, valueLower) => {
                 const raw = patient[fieldName];
+                const isTruthyInput = ['true', 'yes', '1', 'on', 'y'].includes(valueLower);
+                const isFalsyInput = ['false', 'no', '0', 'off', 'n'].includes(valueLower);
                 if (fieldName === 'stat' || fieldName === 'archived') {
                     const boolValue = raw === true || raw === 'true';
                     if (isTruthyInput) return boolValue === true;
@@ -6437,21 +6441,29 @@
                 return String(raw || '').toLowerCase().includes(valueLower);
             };
 
-            if (result.field === '__any__') {
-                const fieldsToSearch = Array.from(new Set([
-                    'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd', 'pending',
-                    'followUp', 'stat', 'procedureStatus', 'cptPrimary', 'icdPrimary', 'chargeCodesSecondary',
-                    'findingsText', 'findingsCodes', ...patients.flatMap((p) => Object.keys(p || {}))
-                ]));
-                matches = patients.filter((p) => !p.archived && fieldsToSearch.some((field) => patientFieldMatches(p, field)));
-            } else {
-                matches = patients.filter((p) => !p.archived && patientFieldMatches(p, result.field));
-            }
+            const anyFieldsToSearch = Array.from(new Set([
+                'room', 'date', 'name', 'dob', 'mrn', 'hospital', 'plan', 'supervisingMd', 'pending',
+                'followUp', 'stat', 'procedureStatus', 'cptPrimary', 'icdPrimary', 'chargeCodesSecondary',
+                'findingsText', 'findingsCodes', ...patients.flatMap((p) => Object.keys(p || {}))
+            ]));
+
+            const conditionMatches = (patient, condition) => {
+                const valueLower = condition.value.toLowerCase();
+                if (condition.field === '__any__') {
+                    return anyFieldsToSearch.some((field) => valueMatchesField(patient, field, valueLower));
+                }
+                return valueMatchesField(patient, condition.field, valueLower);
+            };
+
+            const conditions = result.conditions;
+            const matches = patients.filter((p) => !p.archived && conditions.every((condition) => conditionMatches(p, condition)));
 
             const activeCount = patients.filter((p) => !p.archived).length;
+            const filterLabel = conditions.map((c) => `${c.key}:${c.value}`).join(', ');
+            const fieldLabel = conditions.map((c) => (c.field === '__any__' ? 'any' : c.field)).join(', ');
             renderAnalyticsCards([
-                { title: 'Custom Filter', value: `${result.key}:${result.value}`, subtitle: `Field: ${result.field === '__any__' ? 'any field' : result.field}` },
-                { title: 'Matching Patients', value: matches.length, subtitle: 'Active records returned' },
+                { title: 'Custom Filter', value: filterLabel, subtitle: `Field(s): ${fieldLabel}` },
+                { title: 'Matching Patients', value: matches.length, subtitle: `${conditions.length} condition${conditions.length > 1 ? 's' : ''} (AND)` },
                 { title: 'Total Active Census', value: activeCount, subtitle: 'Current active denominator' },
                 { title: 'Match Rate', value: `${activeCount ? Math.round((matches.length / activeCount) * 100) : 0}%`, subtitle: 'Match percentage' }
             ]);
@@ -6461,7 +6473,7 @@
 
             if (messageEl) {
                 messageEl.className = 'text-xs text-green-700 mt-2';
-                messageEl.textContent = 'Query accepted and executed.';
+                messageEl.textContent = `Query accepted — ${conditions.length} condition${conditions.length > 1 ? 's' : ''} applied (AND).`;
             }
             showToast('✓ Custom analytics complete');
         };
@@ -15137,13 +15149,13 @@ const findHeaderIndex = (rows, sheetLog) => {
                             </div>
                             <div>
                                 <label for="analytics-custom-input" class="block text-xs font-bold text-slate-600 mb-1">Custom Query (validated)</label>
-                                <input id="analytics-custom-input" type="text" placeholder="key:value (hospital:WGMC)" class="w-full p-2 text-xs border border-slate-300 rounded" />
+                                <input id="analytics-custom-input" type="text" placeholder="key:value, key:value (hospital:WGMC, cpt:52356)" class="w-full p-2 text-xs border border-slate-300 rounded" />
                             </div>
                         </div>
                         <div class="mt-2 flex justify-end">
                             <button onclick="globalThis.runCustomAnalytics()" class="px-3 py-2 bg-slate-700 text-white text-xs font-bold rounded hover:bg-slate-800">Run Custom Query</button>
                         </div>
-                        <div id="analytics-validation-message" class="text-xs text-slate-500 mt-2">Use key:value across patient columns (examples: icd: N20, cpt: 52356, supervisingMd: smith, procedureStatus: FOLLOW UP (POST OP), any: westgate).</div>
+                        <div id="analytics-validation-message" class="text-xs text-slate-500 mt-2">Combine multiple key:value pairs with commas — all must match (AND). Examples: hospital:WGMC, cpt:52356 · icd:N20, supervisingMd:smith · procedureStatus:FOLLOW UP (POST OP), any:westgate.</div>
                     </div>
                     <div id="analytics-content" class="analytics-dashboard"></div>
                     <div id="analytics-details" class="mt-4"></div>
