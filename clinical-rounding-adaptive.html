@@ -7457,6 +7457,10 @@
                 const personKey = getPatientPersonKey(p);
                 const visitCount = getPatientVisitCount(p);
                 const isExpanded = expandedPatientMrns.has(personKey);
+                const escCard = (v) => escapeInlineHtml(String(v == null ? '' : v));
+                const subjectiveText = getPatientSubjectiveText(p);
+                const objectiveText = getPatientObjectiveText(p);
+                const assessmentText = getPatientAssessmentText(p);
                 
                 return `
                     <div class="patient-card ${statClass} ${crossedOutCardClass}">
@@ -7491,25 +7495,47 @@
                             <div class="card-field-value">${age} years</div>
                         </div>` : ''}
                         
+                        ${p.gender ? `<div class="card-field">
+                            <div class="card-field-label">⚧ Gender</div>
+                            <div class="card-field-value">${escCard(p.gender)}</div>
+                        </div>` : ''}
+                        
                         <div class="card-field">
                             <div class="card-field-label">📅 Admitted</div>
                             <div class="card-field-value">${p.date} (${los} days ago)</div>
                         </div>
-                        
+
+                        <div style="margin:10px 0 4px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#64748b;border-top:1px solid #e2e8f0;padding-top:6px;">Clinical (SOAP)</div>
+
+                        ${subjectiveText ? `<div class="card-field">
+                            <div class="card-field-label">📝 Subjective</div>
+                            <div class="card-field-value">${escCard(subjectiveText)}</div>
+                        </div>` : ''}
+
+                        ${objectiveText ? `<div class="card-field">
+                            <div class="card-field-label">🔬 Objective</div>
+                            <div class="card-field-value">${escCard(objectiveText)}</div>
+                        </div>` : ''}
+
                         <div class="card-field">
                             <div class="card-field-label">${findingsLabel}</div>
                             <div class="card-field-value">${renderFindingSegments(p)}</div>
                         </div>
-                        
-                        ${p.pending ? `<div class="card-field">
-                            <div class="card-field-label">⏳ Pending</div>
-                            <div class="card-field-value">${p.pending}</div>
+
+                        ${assessmentText ? `<div class="card-field">
+                            <div class="card-field-label">🧠 Assessment</div>
+                            <div class="card-field-value">${escCard(assessmentText)}</div>
                         </div>` : ''}
 
                         <div class="card-field">
                             <div class="card-field-label">📋 Plan</div>
                             <div class="card-field-value">${p.plan || '-'}</div>
                         </div>
+                        
+                        ${p.pending ? `<div class="card-field">
+                            <div class="card-field-label">⏳ Pending</div>
+                            <div class="card-field-value">${p.pending}</div>
+                        </div>` : ''}
 
                         ${p.followUp ? `<div class="card-field">
                             <div class="card-field-label">📌 Follow-up</div>
@@ -12560,17 +12586,14 @@ const findHeaderIndex = (rows, sheetLog) => {
                 checkbox.addEventListener('change', updateBatchOpCount);
                 mainRow.appendChild(createCell('p-3 align-top', checkbox));
 
-                if (visibleCols.includes('room')) {
-                    mainRow.appendChild(createCell('p-3 align-top w-20', createNode('div', `font-bold text-sm ${textPrimary} ${crossedOutClass}`, p.room || '')));
-                }
-
-                if (visibleCols.includes('hospital')) {
-                    mainRow.appendChild(createCell('p-3 align-top w-28', createNode('div', `text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}`, p.hospital || 'Unassigned')));
-                }
-
                 const patientCell = createNode('td', 'p-3 align-top w-48');
                 appendClassedText(patientCell, 'div', `text-sm font-bold ${textPrimary} whitespace-normal break-words ${crossedOutClass}`, p.name || 'Anon');
                 appendClassedText(patientCell, 'div', `text-xs ${textMuted} mt-0.5 ${crossedOutClass}`, `${p.date || ''}${visitTimeDisplay ? ` ${visitTimeDisplay}` : ''}`);
+                const patientAge = globalThis.calculateAge(p.dob);
+                const demoLine = [patientAge ? `${patientAge}y` : '', p.gender ? String(p.gender) : ''].filter(Boolean).join(' · ');
+                if (demoLine) {
+                    appendClassedText(patientCell, 'div', `text-[10px] ${textMuted} mt-0.5 ${crossedOutClass}`, demoLine);
+                }
                 if (visitCount > 1) {
                     const historyButton = createNode('button', `mt-1 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${isExpanded ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-100 text-slate-500 border border-slate-200'} hover:bg-blue-100 hover:text-blue-700 transition-colors`, `${isExpanded ? '▼' : '▶'} ${visitCount} visits`);
                     historyButton.dataset.selectionLockExempt = '';
@@ -12585,13 +12608,16 @@ const findHeaderIndex = (rows, sheetLog) => {
                 }
                 mainRow.appendChild(patientCell);
 
-                if (visibleCols.includes('findings')) {
-                    mainRow.appendChild(createCell('p-3 align-top w-[34%] min-w-[18rem]', createNode('div', `text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}`, findingsDisplay)));
+                if (visibleCols.includes('hospital')) {
+                    mainRow.appendChild(createCell('p-3 align-top w-28', createNode('div', `text-xs font-semibold ${textSecondary} whitespace-normal break-words ${crossedOutClass}`, p.hospital || 'Unassigned')));
                 }
 
-                if (visibleCols.includes('followUp')) {
-                    const followUpText = String(p.followUp || '').trim();
-                    mainRow.appendChild(createCell('p-3 align-top w-[18%] min-w-[14rem]', createNode('div', `text-xs leading-relaxed ${isStat ? 'text-white' : 'text-teal-700'} whitespace-pre-wrap break-words ${crossedOutClass}`, followUpText || '-')));
+                if (visibleCols.includes('room')) {
+                    mainRow.appendChild(createCell('p-3 align-top w-20', createNode('div', `font-bold text-sm ${textPrimary} ${crossedOutClass}`, p.room || '')));
+                }
+
+                if (visibleCols.includes('findings')) {
+                    mainRow.appendChild(createCell('p-3 align-top w-[34%] min-w-[18rem]', createNode('div', `text-xs leading-relaxed ${textSecondary} whitespace-normal break-words ${crossedOutClass}`, findingsDisplay)));
                 }
 
                 const planCell = createNode('td', 'p-3 align-top w-[20%] min-w-[16rem]');
@@ -12600,6 +12626,11 @@ const findHeaderIndex = (rows, sheetLog) => {
                 selectWrap.appendChild(createStatusSelect(p.id, status, statusObj));
                 planCell.appendChild(selectWrap);
                 mainRow.appendChild(planCell);
+
+                if (visibleCols.includes('followUp')) {
+                    const followUpText = String(p.followUp || '').trim();
+                    mainRow.appendChild(createCell('p-3 align-top w-[18%] min-w-[14rem]', createNode('div', `text-xs leading-relaxed ${isStat ? 'text-white' : 'text-teal-700'} whitespace-pre-wrap break-words ${crossedOutClass}`, followUpText || '-')));
+                }
 
                 const actionsCell = createNode('td', 'p-3 align-top w-52 min-w-[12rem]');
                 const actionsWrap = createNode('div', 'flex flex-col items-stretch gap-1.5 w-full');
@@ -14741,12 +14772,12 @@ const findHeaderIndex = (rows, sheetLog) => {
                         <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
                                 <th class="p-3 w-12 align-top"><label for="select-all-patients" class="sr-only">Select all patient rows</label><input id="select-all-patients" type="checkbox" data-select-all-checkbox onchange="globalThis.toggleAllSelection(event)" class="w-5 h-5 rounded cursor-pointer" aria-label="Select all patient rows" title="Select all patient rows"></th>
-                                <th class="p-3 w-20 align-top text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
-                                <th class="p-3 w-28 align-top text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
                                 <th class="p-3 w-48 align-top text-left font-bold text-slate-700 sortable" data-sort-column="name">Patient <span class="sort-indicator"></span></th>
-                                <th class="p-3 w-[34%] min-w-[18rem] align-top text-left font-bold text-slate-700" data-census-column="findings">Findings</th>
-                                <th class="p-3 w-[18%] min-w-[14rem] align-top text-left font-bold text-slate-700" data-census-column="followUp">Follow-up</th>
+                                <th class="p-3 w-28 align-top text-left font-bold text-slate-700 sortable" data-sort-column="hospital">Hospital <span class="sort-indicator"></span></th>
+                                <th class="p-3 w-20 align-top text-left font-bold text-slate-700 sortable" data-sort-column="room">Room <span class="sort-indicator"></span></th>
+                                <th class="p-3 w-[34%] min-w-[18rem] align-top text-left font-bold text-slate-700" data-census-column="findings">Investigations</th>
                                 <th class="p-3 w-[20%] min-w-[16rem] align-top text-left font-bold text-slate-700 sortable" data-sort-column="procedureStatus">Plan/Status <span class="sort-indicator"></span></th>
+                                <th class="p-3 w-[18%] min-w-[14rem] align-top text-left font-bold text-slate-700" data-census-column="followUp">Follow-up</th>
                                 <th class="p-3 w-52 min-w-[12rem] align-top text-left font-bold text-slate-700">Actions</th>
                             </tr>
                         </thead>
