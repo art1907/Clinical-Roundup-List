@@ -234,6 +234,12 @@
         }
         
         .no-scroll { overflow: hidden !important; }
+
+        /* Keep bottom nav/action bar from covering an open full-screen modal */
+        body.no-scroll .mobile-bottom-nav,
+        body.no-scroll .mobile-action-bar {
+            display: none !important;
+        }
         
         .findings-value {
             min-height: 28px;
@@ -1488,6 +1494,41 @@
 
         .scroll-hint-right {
             right: 0.5rem;
+        }
+
+        /* Prominent indicator for the primary mobile scroll area */
+        .scroll-hint-chevron.scroll-hint-main {
+            z-index: 60;
+            width: auto;
+            height: auto;
+            padding: 0.35rem 0.85rem;
+            font-size: 0.78rem;
+            letter-spacing: 0.02em;
+            background: rgba(37, 99, 235, 0.96);
+            box-shadow: 0 10px 22px rgba(37, 99, 235, 0.38);
+        }
+
+        .scroll-hint-main.scroll-hint-down {
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 5rem);
+        }
+
+        .scroll-hint-main.scroll-hint-up {
+            top: 0.65rem;
+        }
+
+        .scroll-hint-main.scroll-hint-down.visible {
+            animation: scroll-hint-bounce 1.6s ease-in-out infinite;
+        }
+
+        @keyframes scroll-hint-bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+            50% { transform: translateX(-50%) translateY(0.22rem) scale(1); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .scroll-hint-main.scroll-hint-down.visible {
+                animation: none;
+            }
         }
 
         .cross-out-target {
@@ -8775,16 +8816,35 @@
             if (!parent) return;
             parent.classList.add('scroll-hint-parent');
 
+            const isMainContent = target.classList.contains('content-area');
+            const isModalForm = target.id === 'patient-form';
+            const isProminent = isMainContent || isModalForm;
+
             if (!target.dataset[datasetKey]) {
                 const hintNames = axis === 'x' ? ['left', 'right'] : ['up', 'down'];
                 const hints = hintNames.map((name) => {
                     const hint = document.createElement('div');
                     hint.className = `scroll-hint-chevron scroll-hint-${name}`;
+                    if (isProminent) hint.classList.add('scroll-hint-main');
                     const hintSymbolMap = { left: '‹', right: '›', up: '⌃', down: '⌄' };
-                    hint.textContent = hintSymbolMap[name] || '⌄';
+                    if (isProminent && name === 'down') {
+                        hint.textContent = 'More ⌄';
+                    } else {
+                        hint.textContent = hintSymbolMap[name] || '⌄';
+                    }
                     parent.appendChild(hint);
                     return hint;
                 });
+
+                const positionModalHints = () => {
+                    if (!isModalForm || axis !== 'y') return;
+                    const header = target.previousElementSibling;
+                    const footer = target.nextElementSibling;
+                    const headerH = header ? header.offsetHeight : 0;
+                    const footerH = footer ? footer.offsetHeight : 0;
+                    hints[0].style.top = `${headerH + 10}px`;
+                    hints[1].style.bottom = `${footerH + 10}px`;
+                };
 
                 const updateHints = () => {
                     const isVisible = target.offsetParent !== null;
@@ -8797,6 +8857,8 @@
                         hints.forEach((hint) => hint.classList.remove('visible'));
                         return;
                     }
+
+                    positionModalHints();
 
                     if (axis === 'x') {
                         hints[0].classList.toggle('visible', target.scrollLeft > 8);
@@ -8838,7 +8900,8 @@
                 '#procedure-log-section',
                 '#shift-report-section',
                 '.card-scroll-body',
-                '.settings-content'
+                '.settings-content',
+                '.content-area'
             ].forEach((selector) => {
                 document.querySelectorAll(selector).forEach((element) => attachScrollHint(element, 'y'));
             });
