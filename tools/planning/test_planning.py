@@ -155,10 +155,20 @@ class PackageTests(unittest.TestCase):
         charts = [chart for ws in self.wb for chart in ws._charts]
         self.assertEqual(len(charts), 7)
         for chart in charts:
+            self.assertFalse(chart.visible_cells_only, "Grouped source columns must remain plotted")
             for series in chart.series:
                 self.assertIn("!", series.val.numRef.f)
                 self.assertNotIn("#REF!", series.val.numRef.f)
         self.assertIn("$AC$6:$AC$65", charts[1].series[0].val.numRef.f)
+
+    def test_founder_salary_is_linked_not_unused_editable_input(self):
+        ws = self.wb["Staffing"]
+        founder_rows = [row for row in ws.iter_rows(min_row=6) if row[1].value == "FOUNDER"]
+        self.assertEqual(len(founder_rows), 3)
+        for row in founder_rows:
+            self.assertEqual(row[11].data_type, "f")
+            self.assertIn("'Assumptions'!", row[11].value)
+            self.assertEqual(row[11].fill.fgColor.rgb, "00E5F2E2")
 
     def test_traceability_and_source_ids(self):
         source_ids = {s["id"] for s in self.sources}
@@ -226,6 +236,8 @@ def validate_cached(path, data=None):
             raise AssertionError("Invalid or externally linked package")
     if sum(len(ws._charts) for ws in formulas) != 7:
         raise AssertionError("Charts lost in recalculation")
+    if any(chart.visible_cells_only for ws in formulas for chart in ws._charts):
+        raise AssertionError("Hidden chart sources would be suppressed")
     for ws in formulas:
         for row in ws:
             for cell in row:

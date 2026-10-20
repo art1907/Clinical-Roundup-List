@@ -310,8 +310,9 @@ class Planner:
             for staff in self.data["staff"]:
                 r = ws.max_row + 1
                 start, end, *ramp = staff["ramps"][scenario]
+                salary = f'={self.a("founder_salary", scenario)}' if staff["type"] == "Founder" else staff["salary"]
                 ws.append([scenario, staff["id"], staff["role"], staff["type"], staff["scope"], start, end, *ramp,
-                           staff["salary"], staff["source"],
+                           salary, staff["source"],
                            f'={self.a("burden", scenario)}' if staff["type"] == "Employee" else 0,
                            f'={self.a("recruiting", scenario)}' if staff["type"] == "Employee" else 0,
                            f'={self.a("equipment", scenario)}'])
@@ -584,6 +585,7 @@ class Planner:
         chart = BarChart() if bar or stacked else LineChart()
         chart.title = title
         chart.style = 13
+        chart.visible_cells_only = False
         chart.width, chart.height = 22, 8
         if stacked:
             chart.grouping = "stacked"

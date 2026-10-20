@@ -33,7 +33,7 @@ Optional sensitivity retains the same core customer/revenue assumptions: there i
 ## Use the workbook
 
 1. Start on **Start Here**. Select Lean/Base/Growth, start date (first of month), Azure **or** AWS, optional scope and founder paid/unpaid status.
-2. Review blue editable cells on **Assumptions**, **Staffing** and **Nonlabor**. Green cells are formulas; amber identifies price/evidence uncertainty. Selected assumptions are distinct from historical/public benchmarks.
+2. Review blue editable cells on **Assumptions**, **Staffing** and **Nonlabor**. Green cells are formulas; amber identifies price/evidence uncertainty. Founder salary is authoritative in **Assumptions**, with a green reference in Staffing. Selected assumptions are distinct from historical/public benchmarks.
 3. Read **Requirements**, **Migration WBS**, **Architecture**, **Roadmap** and **Risks and Funding** before committing capital. Follow IDs from requirements → WBS → staffing/non-labor pools. Source IDs link the cost rows to **Sources**; public URLs are clickable.
 4. Inspect **Monthly Model**, **Annual Summary**, **Scenario Comparison** and **Charts**. Expand grouped columns to see workload/category detail. **Staff Months** and **Vendor Months** expose quantity/rate/date/scope calculations for audit.
 5. Resolve unresolved source/quote lines, update assumptions and obtain specialist/customer approvals. Review cash monthly and reforecast quarterly. Gates override optimistic dates.
