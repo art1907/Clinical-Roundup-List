@@ -4,6 +4,11 @@
 *.xlsm
 *.xlsb
 *.csv
+!documents/saas-plan/Clinical-Roundup-SaaS-Build-and-Scale.xlsx
+
+# Python planning generator local artifacts
+__pycache__/
+*.pyc
 
 # Node dependencies
 node_modules/
